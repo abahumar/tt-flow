@@ -1,0 +1,63 @@
+{
+  "manifest_version": 3,
+  "name": "TikTok Affiliate Flow",
+  "version": "1.0.0",
+  "description": "Automate TikTok affiliate video creation via Google Flow and posting via TikTok Studio",
+  "permissions": [
+    "activeTab",
+    "sidePanel",
+    "storage",
+    "scripting",
+    "tabs",
+    "alarms",
+    "debugger"
+  ],
+  "host_permissions": [
+    "https://labs.google/*",
+    "https://*.tiktok.com/*",
+    "http://localhost:3000/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://labs.google/fx/*", "https://labs.google/flow/*"],
+      "js": ["content/dom-helpers.js", "content/google-flow.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.tiktok.com/tiktokstudio/*",
+        "https://tiktok.com/tiktokstudio/*"
+      ],
+      "js": ["content/dom-helpers.js", "content/tiktok-studio.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://shop.tiktok.com/*",
+        "https://www.tiktok.com/*/product/*",
+        "https://www.tiktok.com/shop/*",
+        "https://vt.tiktok.com/*"
+      ],
+      "js": ["content/dom-helpers.js", "content/tiktok-shop.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "TikTok Affiliate Flow"
+  },
+  "externally_connectable": {
+    "matches": ["http://localhost:3000/*"]
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

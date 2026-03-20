@@ -1,0 +1,63 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id          String     @id @default(cuid())
+  url         String     @unique
+  title       String
+  description String     @default("")
+  images      String     @default("[]") // JSON array of image URLs
+  price       String     @default("")
+  shopName    String     @default("")
+  scrapedAt   DateTime   @default(now())
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  videoJobs   VideoJob[]
+}
+
+model VideoJob {
+  id            String   @id @default(cuid())
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  status        String   @default("pending") // pending, generating_image, generating_video, ready, posting, posted, failed
+  videoType     String   @default("fungsi_produk") // marketing angle
+  imagePrompt   String   @default("")
+  videoPrompt   String   @default("")
+  imageUrl      String   @default("")
+  videoUrl      String   @default("")
+  tiktokPostUrl String   @default("")
+  errorMessage  String   @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model ScrapeRequest {
+  id        String   @id @default(cuid())
+  url       String
+  status    String   @default("pending") // pending, scraping, done, failed
+  error     String   @default("")
+  productId String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CustomPrompt {
+  id          String   @id @default(cuid())
+  name        String
+  imagePrompt String   @default("")
+  videoPrompt String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
