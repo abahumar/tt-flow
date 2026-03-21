@@ -8,6 +8,8 @@ import {
   Trash2,
   ChevronDown,
   ChevronUp,
+  Pencil,
+  X,
 } from "lucide-react";
 
 interface SettingEntry {
@@ -82,6 +84,11 @@ export default function SettingsPage() {
   const [addingPrompt, setAddingPrompt] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [expandedPromptId, setExpandedPromptId] = useState<string | null>(null);
+  const [editingPromptId, setEditingPromptId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editImagePrompt, setEditImagePrompt] = useState("");
+  const [editVideoPrompt, setEditVideoPrompt] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const fetchCustomPrompts = async () => {
     const res = await fetch("/api/custom-prompts");
@@ -132,6 +139,36 @@ export default function SettingsPage() {
     setNewVideoPrompt("");
     setShowAddForm(false);
     setAddingPrompt(false);
+    fetchCustomPrompts();
+  };
+
+  const startEditing = (prompt: CustomPrompt) => {
+    setEditingPromptId(prompt.id);
+    setEditName(prompt.name);
+    setEditImagePrompt(prompt.imagePrompt);
+    setEditVideoPrompt(prompt.videoPrompt);
+    setExpandedPromptId(prompt.id);
+  };
+
+  const handleEditPrompt = async () => {
+    if (
+      !editingPromptId ||
+      !editName.trim() ||
+      (!editImagePrompt.trim() && !editVideoPrompt.trim())
+    )
+      return;
+    setSavingEdit(true);
+    await fetch(`/api/custom-prompts/${editingPromptId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: editName,
+        imagePrompt: editImagePrompt,
+        videoPrompt: editVideoPrompt,
+      }),
+    });
+    setEditingPromptId(null);
+    setSavingEdit(false);
     fetchCustomPrompts();
   };
 
@@ -325,34 +362,108 @@ export default function SettingsPage() {
                     )}
                     {prompt.name}
                   </button>
-                  <button
-                    onClick={() => handleDeletePrompt(prompt.id)}
-                    className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => startEditing(prompt)}
+                      className="rounded p-1 text-gray-400 hover:bg-blue-50 hover:text-blue-500 transition-colors"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeletePrompt(prompt.id)}
+                      className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
                 {expandedPromptId === prompt.id && (
                   <div className="border-t border-gray-200 p-3 space-y-2">
-                    {prompt.imagePrompt && (
-                      <div>
-                        <span className="text-xs font-medium text-gray-500 uppercase">
-                          Image Prompt
-                        </span>
-                        <p className="mt-0.5 text-xs text-gray-700 whitespace-pre-wrap">
-                          {prompt.imagePrompt}
-                        </p>
-                      </div>
-                    )}
-                    {prompt.videoPrompt && (
-                      <div>
-                        <span className="text-xs font-medium text-gray-500 uppercase">
-                          Video Prompt
-                        </span>
-                        <p className="mt-0.5 text-xs text-gray-700 whitespace-pre-wrap">
-                          {prompt.videoPrompt}
-                        </p>
-                      </div>
+                    {editingPromptId === prompt.id ? (
+                      <>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-700">
+                            Name
+                          </label>
+                          <input
+                            type="text"
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-700">
+                            Image Prompt
+                          </label>
+                          <textarea
+                            rows={3}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                            value={editImagePrompt}
+                            onChange={(e) => setEditImagePrompt(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-700">
+                            Video Prompt
+                          </label>
+                          <textarea
+                            rows={3}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                            value={editVideoPrompt}
+                            onChange={(e) => setEditVideoPrompt(e.target.value)}
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleEditPrompt}
+                            disabled={
+                              savingEdit ||
+                              !editName.trim() ||
+                              (!editImagePrompt.trim() &&
+                                !editVideoPrompt.trim())
+                            }
+                            className="flex items-center gap-1.5 rounded-lg bg-rose-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-rose-600 transition-colors disabled:opacity-50"
+                          >
+                            {savingEdit ? (
+                              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Save className="h-3.5 w-3.5" />
+                            )}
+                            {savingEdit ? "Saving..." : "Save Changes"}
+                          </button>
+                          <button
+                            onClick={() => setEditingPromptId(null)}
+                            className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium hover:bg-gray-50 transition-colors"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                            Cancel
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        {prompt.imagePrompt && (
+                          <div>
+                            <span className="text-xs font-medium text-gray-500 uppercase">
+                              Image Prompt
+                            </span>
+                            <p className="mt-0.5 text-xs text-gray-700 whitespace-pre-wrap">
+                              {prompt.imagePrompt}
+                            </p>
+                          </div>
+                        )}
+                        {prompt.videoPrompt && (
+                          <div>
+                            <span className="text-xs font-medium text-gray-500 uppercase">
+                              Video Prompt
+                            </span>
+                            <p className="mt-0.5 text-xs text-gray-700 whitespace-pre-wrap">
+                              {prompt.videoPrompt}
+                            </p>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 )}

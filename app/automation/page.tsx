@@ -13,6 +13,8 @@ import {
   Sparkles,
   ChevronDown,
   ChevronUp,
+  RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 
 interface VideoJob {
@@ -25,6 +27,10 @@ interface VideoJob {
   imageUrl: string;
   videoUrl: string;
   errorMessage: string;
+  retryCount: number;
+  maxRetries: number;
+  lastError: string;
+  startedAt: string | null;
   createdAt: string;
   product: {
     id: string;
@@ -233,6 +239,21 @@ export default function AutomationPage() {
 
   const handleDeleteJob = async (jobId: string) => {
     await fetch(`/api/jobs/${jobId}`, { method: "DELETE" });
+    fetchJobs();
+  };
+
+  const handleRetryJob = async (jobId: string) => {
+    await fetch(`/api/jobs/${jobId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: "pending",
+        errorMessage: "",
+        lastError: "",
+        retryCount: 0,
+        startedAt: null,
+      }),
+    });
     fetchJobs();
   };
 
@@ -517,6 +538,8 @@ export default function AutomationPage() {
               const cfg = STATUS_CONFIG[job.status] || STATUS_CONFIG.pending;
               const Icon = cfg.icon;
               const images: string[] = JSON.parse(job.product.images || "[]");
+              const isFatal = job.lastError === "fatal";
+              const isRetrying = job.retryCount > 0 && job.status === "pending";
               return (
                 <div
                   key={job.id}
@@ -541,6 +564,11 @@ export default function AutomationPage() {
                     </p>
                     <p className="text-xs text-gray-400">
                       {VIDEO_TYPES[job.videoType] || job.videoType}
+                      {job.retryCount > 0 && (
+                        <span className="ml-1 text-amber-500">
+                          · retry {job.retryCount}/{job.maxRetries}
+                        </span>
+                      )}
                     </p>
                   </div>
                   <span
@@ -550,14 +578,29 @@ export default function AutomationPage() {
                       className={`h-3 w-3 ${job.status.includes("generating") || job.status === "posting" ? "animate-spin" : ""}`}
                     />
                     {cfg.label}
+                    {isRetrying && (
+                      <RefreshCw className="h-2.5 w-2.5 animate-spin ml-0.5" />
+                    )}
                   </span>
                   {job.errorMessage && (
                     <span
-                      className="text-[10px] text-red-500 max-w-37.5 truncate"
+                      className={`text-[10px] max-w-37.5 truncate ${isFatal ? "text-red-700 font-medium" : "text-red-500"}`}
                       title={job.errorMessage}
                     >
+                      {isFatal && (
+                        <AlertTriangle className="inline h-2.5 w-2.5 mr-0.5" />
+                      )}
                       {job.errorMessage}
                     </span>
+                  )}
+                  {job.status === "failed" && (
+                    <button
+                      onClick={() => handleRetryJob(job.id)}
+                      className="rounded-md p-1 text-amber-500 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                      title="Retry this job"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    </button>
                   )}
                   {(job.status === "pending" || job.status === "failed") && (
                     <button

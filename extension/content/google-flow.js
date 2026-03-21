@@ -12,6 +12,40 @@ console.log(
   window.location.href,
 );
 
+// ---- Retry utility for flaky DOM operations ----
+async function withRetry(
+  fn,
+  { maxAttempts = 3, delayMs = 1000, label = "" } = {},
+) {
+  let lastError;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn(attempt);
+    } catch (err) {
+      lastError = err;
+      console.warn(
+        `[TikTok Flow] ${label || fn.name} attempt ${attempt}/${maxAttempts} failed:`,
+        err.message,
+      );
+      if (attempt < maxAttempts) {
+        await sleep(delayMs * attempt); // linear backoff
+      }
+    }
+  }
+  throw lastError;
+}
+
+// ---- Check if we're on a valid Google Flow page ----
+function verifyFlowPage() {
+  const url = window.location.href;
+  if (!url.includes("labs.google")) {
+    throw new Error(
+      "Not on Google Flow page. Navigate to https://labs.google/fx/tools/flow first.",
+    );
+  }
+  return true;
+}
+
 // ---- Message listener ----
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const { type, payload } = message;
@@ -106,8 +140,47 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         .then((result) => sendResponse(result))
         .catch((err) => sendResponse({ error: err.message }));
       return true;
+
+    case "TEST_ADD_TO_PROMPT":
+      testAddToPrompt(payload?.imageUrl)
+        .then((result) => sendResponse(result))
+        .catch((err) => sendResponse({ error: err.message }));
+      return true;
   }
 });
+
+// ---- Quick test: right-click uploaded reference image → "Add to Prompt" ----
+// Assumes a reference image is already uploaded on the page.
+// If imageUrl is provided, uploads it first; otherwise just does the right-click → Add to Prompt.
+async function testAddToPrompt(imageUrl) {
+  console.log("[TikTok Flow] === TEST ADD TO PROMPT ===");
+
+  try {
+    if (imageUrl) {
+      // Upload first, then Add to Prompt
+      console.log(
+        "[TikTok Flow] Uploading image first:",
+        imageUrl.substring(0, 80),
+      );
+      await uploadAndAddReferenceToPrompt(imageUrl);
+    } else {
+      // Just right-click existing reference image and Add to Prompt
+      console.log(
+        "[TikTok Flow] No imageUrl — right-clicking existing reference image...",
+      );
+      await clickAddToPromptOnReferenceImage();
+    }
+
+    return {
+      success: true,
+      message:
+        "✅ Add to Prompt: right-clicked reference image → clicked 'Add to Prompt' in context menu.",
+    };
+  } catch (err) {
+    console.error("[TikTok Flow] Test Add to Prompt failed:", err.message);
+    return { error: err.message };
+  }
+}
 
 // ---- Diagnose mode switch: dump everything about the current page ----
 async function diagnoseModeSwitch() {
@@ -1487,7 +1560,10 @@ async function fillPrompt(promptEl, text) {
       await sleep(500);
       return;
     } catch (err) {
-      console.warn("[TikTok Flow] Content-script Slate API error:", err.message);
+      console.warn(
+        "[TikTok Flow] Content-script Slate API error:",
+        err.message,
+      );
     }
   }
 
@@ -1676,10 +1752,14 @@ async function generateImage({ jobId, prompt, productImages }) {
   );
 
   try {
+    verifyFlowPage();
     await sleep(2000);
 
     // Step 0: ALWAYS start a fresh project — select Image from the dropdown
-    await navigateToNewProject("image");
+    await withRetry(() => navigateToNewProject("image"), {
+      maxAttempts: 3,
+      label: "Navigate to new project",
+    });
     await sleep(1500);
 
     // Step 1: Open settings dropdown → switch to Image mode → close dropdown
@@ -1711,23 +1791,37 @@ async function generateImage({ jobId, prompt, productImages }) {
     await closeSettingsDropdown();
     await sleep(1000);
 
-    // Step 2: Upload the product image as reference so the generated image
-    // matches the REAL product (not an AI-imagined one)
+    // Step 2: Upload reference image → right-click → "Add to Prompt" (same pattern as Animate)
     if (productImages && productImages.length > 0) {
       console.log(
         "[TikTok Flow] Uploading product reference image:",
         productImages[0].substring(0, 80),
       );
-      const uploadSuccess = await uploadReferenceImageForImageMode(
-        productImages[0],
+      await withRetry(() => uploadAndAddReferenceToPrompt(productImages[0]), {
+        maxAttempts: 2,
+        delayMs: 2000,
+        label: "Upload reference image",
+      });
+      console.log(
+        "[TikTok Flow] ✅ Reference image uploaded and added to prompt",
       );
-      if (!uploadSuccess) {
-        throw new Error(
-          "Reference image upload failed — cannot proceed without the product image. " +
-            "The generated image must match the actual product.",
+
+      // Verify we are still in Image mode after "Add to Prompt"
+      console.log(
+        "[TikTok Flow] Verifying still in Image mode after Add to Prompt...",
+      );
+      switched = false;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        switched = await switchToMode("image");
+        if (switched) break;
+        await sleep(1000);
+      }
+      if (!switched) {
+        console.warn(
+          "[TikTok Flow] Could not confirm Image mode after Add to Prompt — proceeding anyway",
         );
       }
-      console.log("[TikTok Flow] ✅ Reference image confirmed uploaded");
+      await closeSettingsDropdown();
       await sleep(1000);
     } else {
       console.warn(
@@ -1773,11 +1867,11 @@ async function generateImage({ jobId, prompt, productImages }) {
     simulateClick(createBtn);
     console.log("[TikTok Flow] Create clicked, waiting for image result...");
 
-    // Step 5: Wait for the generated image
+    // Step 6: Wait for the generated image
     await sleep(3000);
     const resultEl = await waitForImageResult(180000); // 3 min timeout
 
-    // Step 6: Extract URL
+    // Step 7: Extract URL
     const imageUrl = extractMediaUrl(resultEl);
     if (!imageUrl) {
       throw new Error("Image appeared but could not extract URL");
@@ -1932,28 +2026,14 @@ async function uploadReferenceImageForImageMode(imageUrl) {
 async function verifyReferenceImageUploaded() {
   console.log("[TikTok Flow] Verifying reference image upload...");
 
-  // Wait a bit for the UI to update after upload
-  await sleep(2000);
+  // Wait for Google Flow to process the uploaded file (needs time to upload to server)
+  await sleep(5000);
 
-  for (let attempt = 0; attempt < 5; attempt++) {
-    // Strategy 1: Look for a thumbnail/preview img near the Start area
-    // After a successful upload, Google Flow shows a small preview image
-    const refImages = document.querySelectorAll(
-      'img[alt*="reference" i], img[alt*="uploaded" i], img[alt*="start" i], img[alt*="Reference" i]',
-    );
-    for (const img of refImages) {
-      const rect = img.getBoundingClientRect();
-      if (rect.width > 20 && rect.height > 20) {
-        console.log(
-          "[TikTok Flow] ✅ Reference image verified via img alt attribute",
-        );
-        return true;
-      }
-    }
-
-    // Strategy 2: The "Start" text disappears or changes when an image is uploaded
-    const startDivs = document.querySelectorAll("div");
+  for (let attempt = 0; attempt < 10; attempt++) {
+    // Check if the "Start" text is still visible — if so, the image has NOT
+    // been processed yet regardless of what other strategies detect.
     let startTextStillShowing = false;
+    const startDivs = document.querySelectorAll("div");
     for (const div of startDivs) {
       const text = div.textContent.trim().toLowerCase();
       const rect = div.getBoundingClientRect();
@@ -1968,7 +2048,40 @@ async function verifyReferenceImageUploaded() {
       }
     }
 
-    // Strategy 3: Check for any new image elements that appeared in the reference area
+    if (startTextStillShowing) {
+      console.log(
+        `[TikTok Flow] "Start" text still visible — image not processed yet (attempt ${attempt + 1}/10)`,
+      );
+      await sleep(3000);
+      continue;
+    }
+
+    // Strategy 1: Look for a thumbnail/preview img near the Start area
+    // After a successful upload, Google Flow shows a small preview image.
+    // Note: alt may be "Generated image" (same as generated output) — use size to distinguish.
+    const refImages = document.querySelectorAll(
+      'img[alt*="reference" i], img[alt*="uploaded" i], img[alt*="start" i], img[alt*="Reference" i], img[alt="Generated image"]',
+    );
+    for (const img of refImages) {
+      const rect = img.getBoundingClientRect();
+      if (
+        rect.width > 20 &&
+        rect.height > 20 &&
+        rect.width < 500 &&
+        rect.height < 500
+      ) {
+        console.log(
+          "[TikTok Flow] ✅ Reference image verified via img alt attribute:",
+          img.alt,
+          `${Math.round(rect.width)}x${Math.round(rect.height)}`,
+        );
+        // Extra wait to ensure Google Flow has fully registered the reference
+        await sleep(3000);
+        return true;
+      }
+    }
+
+    // Strategy 2: Check for any new image elements that appeared in the reference area
     // (images with blob: or data: or googleusercontent URLs loaded after upload)
     const allImgs = document.querySelectorAll("img");
     for (const img of allImgs) {
@@ -1987,33 +2100,306 @@ async function verifyReferenceImageUploaded() {
         console.log(
           "[TikTok Flow] ✅ Reference image verified via thumbnail image",
         );
+        // Extra wait to ensure Google Flow has fully registered the reference
+        await sleep(3000);
         return true;
       }
     }
 
-    // Strategy 4: Check if a file input has files assigned
-    const fileInputs = document.querySelectorAll('input[type="file"]');
-    for (const fi of fileInputs) {
-      if (fi.files && fi.files.length > 0) {
-        console.log(
-          "[TikTok Flow] ✅ Reference image verified via file input state",
-        );
-        return true;
-      }
-    }
+    // NOTE: We intentionally do NOT check fileInput.files here.
+    // Having files set on the input only means we injected the file,
+    // NOT that Google Flow has finished processing/uploading it.
 
-    if (attempt < 4) {
+    if (attempt < 9) {
       console.log(
-        `[TikTok Flow] Reference image not confirmed yet (attempt ${attempt + 1}/5), waiting...`,
+        `[TikTok Flow] Reference image not confirmed yet (attempt ${attempt + 1}/10), waiting...`,
       );
-      await sleep(2000);
+      await sleep(3000);
     }
   }
 
   console.warn(
-    "[TikTok Flow] ❌ Could not verify reference image upload after 5 attempts",
+    "[TikTok Flow] ❌ Could not verify reference image upload after 10 attempts",
   );
   return false;
+}
+
+// ---- Find the uploaded reference image element ----
+// After uploading, Google Flow shows a thumbnail. From the recording, this is
+// an <a> element (class sc-3ab8616e-0) ~400x400 containing the reference image,
+// or an <img> with blob:/googleusercontent/data: src.
+function findUploadedReferenceImage() {
+  // Strategy 1: <a> element ~400x400 containing an img (the Radix ContextMenuTrigger container)
+  // From recording: a.sc-3ab8616e-0, rect 400x400. The context menu trigger is on the <a>,
+  // NOT on the <img> inside. So we MUST prefer this container.
+  const links = document.querySelectorAll("a");
+  for (const a of links) {
+    const rect = a.getBoundingClientRect();
+    if (
+      rect.width > 100 &&
+      rect.width < 500 &&
+      rect.height > 100 &&
+      rect.height < 500 &&
+      a.querySelector("img")
+    ) {
+      console.log(
+        "[TikTok Flow] Found reference image via <a> container with img:",
+        `${Math.round(rect.width)}x${Math.round(rect.height)} at (${Math.round(rect.x)},${Math.round(rect.y)})`,
+        a.className?.substring(0, 30),
+      );
+      return a;
+    }
+  }
+
+  // Strategy 2: img with alt containing "reference", "uploaded", "start", or "Generated image"
+  // Note: Google Flow sets alt="Generated image" on BOTH uploaded reference images and generated outputs.
+  const altImgs = document.querySelectorAll(
+    'img[alt*="reference" i], img[alt*="uploaded" i], img[alt*="start" i], img[alt*="Reference" i], img[alt="Generated image"]',
+  );
+  for (const img of altImgs) {
+    const rect = img.getBoundingClientRect();
+    // Filter: reference images are medium-sized (30-500px), not the large generated output (>500px)
+    if (
+      rect.width > 20 &&
+      rect.height > 20 &&
+      rect.width < 500 &&
+      rect.height < 500
+    ) {
+      console.log(
+        "[TikTok Flow] Found reference image via alt attribute:",
+        img.alt,
+        `${Math.round(rect.width)}x${Math.round(rect.height)}`,
+      );
+      return img;
+    }
+  }
+
+  // Strategy 3: Small-medium thumbnail with blob/googleusercontent/data URL
+  const allImgs = document.querySelectorAll("img");
+  for (const img of allImgs) {
+    const src = img.src || "";
+    const rect = img.getBoundingClientRect();
+    if (
+      rect.width > 30 &&
+      rect.width < 500 &&
+      rect.height > 30 &&
+      rect.height < 500 &&
+      (src.startsWith("blob:") ||
+        src.includes("googleusercontent") ||
+        src.startsWith("data:"))
+    ) {
+      console.log("[TikTok Flow] Found reference image via thumbnail URL");
+      return img;
+    }
+  }
+
+  return null;
+}
+
+// ---- Find the "Add to Prompt" menu item in the right-click Radix context menu ----
+// Same context menu as "Animate". After right-clicking an uploaded reference image,
+// Google Flow shows a Radix popup menu with items including "Add to Prompt".
+// HTML: <button role="menuitem" class="sc-16c4830a-1 ..."><i>add</i>Add to Prompt</button>
+// The button text reads "addAdd to Prompt" (material icon "add" + label).
+function findAddToPromptMenuItem() {
+  // Strategy 1: Look inside any open Radix popup menu for "Add to Prompt"
+  const menus = document.querySelectorAll(
+    '[role="menu"], [data-radix-menu-content], [data-radix-popper-content-wrapper]',
+  );
+  for (const menu of menus) {
+    const items = menu.querySelectorAll(
+      'button[role="menuitem"], [role="menuitem"]',
+    );
+    for (const item of items) {
+      const text = item.textContent.trim().toLowerCase();
+      if (
+        text.includes("add to prompt") &&
+        item.getBoundingClientRect().width > 0
+      ) {
+        console.log(
+          "[TikTok Flow] Found 'Add to Prompt' in Radix context menu:",
+          item.textContent.trim().substring(0, 40),
+        );
+        return item;
+      }
+    }
+  }
+
+  // Strategy 2: Any visible button/menuitem on page containing "add to prompt"
+  const candidates = document.querySelectorAll(
+    'button[role="menuitem"], [role="menuitem"], button',
+  );
+  for (const el of candidates) {
+    const text = el.textContent.trim().toLowerCase();
+    const rect = el.getBoundingClientRect();
+    if (rect.width > 20 && rect.height > 10 && text.includes("add to prompt")) {
+      console.log(
+        "[TikTok Flow] Found 'Add to Prompt' menu item:",
+        el.textContent.trim().substring(0, 40),
+        `at (${Math.round(rect.x)},${Math.round(rect.y)})`,
+      );
+      return el;
+    }
+  }
+
+  return null;
+}
+
+// ---- Right-click the uploaded reference image and click "Add to Prompt" ----
+// Same pattern as clickAnimateAndWaitForVideoMode:
+//   find image → right-click to open Radix context menu → click "Add to Prompt"
+async function clickAddToPromptOnReferenceImage() {
+  console.log("[TikTok Flow] Looking for uploaded reference image...");
+
+  // Step 1: Find the uploaded reference image
+  let refImg = null;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    refImg = findUploadedReferenceImage();
+    if (refImg) break;
+    console.log(
+      "[TikTok Flow] Reference image not found yet, retry",
+      attempt + 1,
+      "of 10...",
+    );
+    await sleep(1500);
+  }
+  if (!refImg) {
+    throw new Error("Uploaded reference image not found on page.");
+  }
+
+  console.log(
+    "[TikTok Flow] Found reference image:",
+    refImg.tagName,
+    refImg.className?.substring(0, 40),
+    `${Math.round(refImg.getBoundingClientRect().width)}x${Math.round(refImg.getBoundingClientRect().height)}`,
+  );
+
+  // Scroll image into view
+  refImg.scrollIntoView({ block: "center", behavior: "instant" });
+  await sleep(500);
+
+  // Step 2: Right-click to open context menu and find "Add to Prompt"
+  // Uses same multi-strategy approach as triggerContextMenuOnImage (Animate flow)
+  console.log(
+    "[TikTok Flow] Right-clicking reference image to open context menu...",
+  );
+  let addToPromptItem = null;
+
+  for (let bigAttempt = 0; bigAttempt < 3; bigAttempt++) {
+    // Strategy A: Right-click directly on the found element
+    console.log("[TikTok Flow] Strategy A: right-click on element itself...");
+    simulateRightClick(refImg);
+    await sleep(1500);
+    addToPromptItem = findAddToPromptMenuItem();
+    if (addToPromptItem) break;
+
+    // Strategy B: Right-click parent containers (Radix trigger may be on wrapper)
+    let parent = refImg.parentElement;
+    for (let i = 0; i < 5 && parent && !addToPromptItem; i++) {
+      const rect = parent.getBoundingClientRect();
+      if (rect.width > 50 && rect.height > 50) {
+        console.log(
+          "[TikTok Flow] Strategy B: right-click parent level",
+          i + 1,
+          parent.tagName,
+          parent.className?.substring(0, 30),
+        );
+        simulateRightClick(parent);
+        await sleep(1500);
+        addToPromptItem = findAddToPromptMenuItem();
+        if (addToPromptItem) break;
+      }
+      parent = parent.parentElement;
+    }
+    if (addToPromptItem) break;
+
+    // Strategy C: If refImg is an <img>, find its closest <a> ancestor and right-click that
+    if (refImg.tagName === "IMG") {
+      const closestLink = refImg.closest("a");
+      if (closestLink) {
+        console.log(
+          "[TikTok Flow] Strategy C: right-click closest <a> ancestor...",
+          closestLink.className?.substring(0, 30),
+        );
+        simulateRightClick(closestLink);
+        await sleep(1500);
+        addToPromptItem = findAddToPromptMenuItem();
+        if (addToPromptItem) break;
+      }
+    }
+
+    // Strategy D: Hover to trigger overlay, then check for visible "Add to Prompt"
+    console.log("[TikTok Flow] Strategy D: hover to trigger overlay...");
+    const hoverTarget = refImg;
+    const hoverRect = hoverTarget.getBoundingClientRect();
+    const hoverOpts = {
+      bubbles: true,
+      clientX: hoverRect.left + hoverRect.width / 2,
+      clientY: hoverRect.top + hoverRect.height / 2,
+    };
+    hoverTarget.dispatchEvent(new MouseEvent("mouseover", hoverOpts));
+    hoverTarget.dispatchEvent(
+      new MouseEvent("mouseenter", { ...hoverOpts, bubbles: false }),
+    );
+    hoverTarget.dispatchEvent(new MouseEvent("mousemove", hoverOpts));
+    await sleep(1000);
+    addToPromptItem = findAddToPromptMenuItem();
+    if (addToPromptItem) break;
+
+    // Dismiss any menu that opened without "Add to Prompt"
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    );
+    await sleep(500);
+
+    // Re-find the image (DOM may have changed)
+    refImg = findUploadedReferenceImage() || refImg;
+    console.log(
+      "[TikTok Flow] 'Add to Prompt' not found, big retry",
+      bigAttempt + 1,
+      "of 3...",
+    );
+    await sleep(1000);
+  }
+
+  if (!addToPromptItem) {
+    throw new Error(
+      "'Add to Prompt' not found in context menu. The right-click menu may not have opened.",
+    );
+  }
+
+  // Step 3: Click "Add to Prompt"
+  simulateClick(addToPromptItem);
+  console.log("[TikTok Flow] ✅ Clicked 'Add to Prompt' in context menu");
+
+  // Wait for Google Flow to attach the reference image to the prompt
+  await sleep(3000);
+  console.log("[TikTok Flow] ✅ Reference image added to prompt");
+  return true;
+}
+
+// ---- Upload reference image and click "Add to Prompt" ----
+// Full flow: upload → wait → right-click image → click "Add to Prompt" in context menu.
+// Same pattern as Animate: the Radix context menu has both "Animate" and "Add to Prompt".
+async function uploadAndAddReferenceToPrompt(imageUrl) {
+  console.log("[TikTok Flow] === UPLOAD & ADD REFERENCE TO PROMPT ===");
+  console.log("[TikTok Flow] Image URL:", imageUrl.substring(0, 80));
+
+  // Step 1: Upload the reference image (via Start area / file input)
+  const uploadSuccess = await uploadReferenceImageForImageMode(imageUrl);
+  if (!uploadSuccess) {
+    throw new Error(
+      "Reference image upload failed — cannot proceed without the product image as reference.",
+    );
+  }
+  console.log("[TikTok Flow] ✅ Reference image uploaded");
+
+  // Step 2: Wait for upload to fully process
+  await sleep(2000);
+
+  // Step 3: Right-click the uploaded image → click "Add to Prompt" in context menu
+  await clickAddToPromptOnReferenceImage();
+  return true;
 }
 
 // ---- Find the generated image element on the page ----
@@ -2356,11 +2742,15 @@ async function generateVideo({ jobId, prompt, imageUrl }) {
   console.log("[TikTok Flow] Prompt:", prompt.substring(0, 100) + "...");
 
   try {
+    verifyFlowPage();
     await sleep(2000);
 
-    // Step 1: Click "Animate" on the generated image
-    // This auto-switches to video mode with the image already selected.
-    await clickAnimateAndWaitForVideoMode();
+    // Step 1: Click "Animate" on the generated image (with retry)
+    await withRetry(() => clickAnimateAndWaitForVideoMode(), {
+      maxAttempts: 3,
+      delayMs: 2000,
+      label: "Click Animate for video mode",
+    });
     await sleep(2000);
 
     // Step 1.5: Ensure 9:16 (PORTRAIT) aspect ratio for video
@@ -2481,24 +2871,27 @@ async function testGenerate(prompt, productImages) {
     await sleep(500);
     console.log("[TikTok Flow] Step 1 OK: Image mode selected (9:16 PORTRAIT)");
 
-    // Step 1.5: Upload product reference image if available
+    // Step 1.5: Upload product reference image → right-click → "Add to Prompt" (same pattern as Animate)
     if (productImages && productImages.length > 0) {
       console.log(
         "[TikTok Flow] Step 1.5: Uploading product reference image...",
       );
-      const uploadSuccess = await uploadReferenceImageForImageMode(
-        productImages[0],
-      );
-      if (!uploadSuccess) {
-        throw new Error(
-          "Step 1.5 FAILED: Reference image upload could not be verified. " +
-            "Cannot proceed without the product image as reference.",
-        );
-      }
-      await sleep(1000);
+      await uploadAndAddReferenceToPrompt(productImages[0]);
       console.log(
-        "[TikTok Flow] Step 1.5 OK: Reference image uploaded and verified",
+        "[TikTok Flow] Step 1.5 OK: Reference image uploaded and added to prompt",
       );
+
+      // Ensure still in Image mode after "Add to Prompt"
+      console.log("[TikTok Flow] Step 1.6: Verifying Image mode...");
+      let reSwitched = false;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        reSwitched = await switchToMode("image");
+        if (reSwitched) break;
+        await sleep(1000);
+      }
+      await closeSettingsDropdown();
+      await sleep(1000);
+      console.log("[TikTok Flow] Step 1.6 OK: Image mode confirmed");
     }
 
     // Step 2: Find and fill the prompt
@@ -2687,18 +3080,20 @@ async function testFullFlow(payload = {}) {
     await closeSettingsDropdown();
     await sleep(500);
 
-    // Upload product reference image
+    // Upload product reference image → right-click → "Add to Prompt" (same pattern as Animate)
     if (productImages.length > 0) {
       progress("3/7", "Uploading product reference image...");
-      const uploadSuccess = await uploadReferenceImageForImageMode(
-        productImages[0],
-      );
-      if (!uploadSuccess) {
-        throw new Error(
-          "Reference image upload failed — cannot proceed without the product image as reference.",
-        );
+      await uploadAndAddReferenceToPrompt(productImages[0]);
+      progress("3/7", "✅ Reference image uploaded and added to prompt");
+
+      // Ensure still in Image mode after "Add to Prompt"
+      let reSwitched = false;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        reSwitched = await switchToMode("image");
+        if (reSwitched) break;
+        await sleep(1000);
       }
-      progress("3/7", "✅ Reference image uploaded and verified");
+      await closeSettingsDropdown();
       await sleep(1000);
     } else {
       progress("3/7", "No product images — skipping reference upload");

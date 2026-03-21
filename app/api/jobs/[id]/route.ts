@@ -42,13 +42,21 @@ export async function PATCH(
     "videoUrl",
     "tiktokPostUrl",
     "errorMessage",
+    "lastError",
+    "retryCount",
+    "startedAt",
   ];
 
-  const data: Record<string, string> = {};
+  const data: Record<string, unknown> = {};
   for (const key of allowedFields) {
     if (body[key] !== undefined) {
       data[key] = body[key];
     }
+  }
+
+  // If status is changing to a processing state, record startedAt
+  if (data.status === "generating_image" && !data.startedAt) {
+    data.startedAt = new Date().toISOString();
   }
 
   const job = await prisma.videoJob.update({

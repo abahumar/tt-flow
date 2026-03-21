@@ -1,5 +1,143 @@
 const API_BASE = "http://localhost:3000/api";
 
+// ---- Error Classification ----
+// Categorize errors as retryable (transient) or fatal (permanent)
+const FATAL_ERROR_PATTERNS = [
+  "invalid prompt",
+  "not logged in",
+  "account suspended",
+  "quota exceeded",
+  "content policy",
+  "safety filter",
+  "authentication",
+  "forbidden",
+  "product not found",
+];
+
+function classifyError(errorMessage) {
+  const lower = (errorMessage || "").toLowerCase();
+  for (const pattern of FATAL_ERROR_PATTERNS) {
+    if (lower.includes(pattern)) return "fatal";
+  }
+  if (lower.includes("timeout") || lower.includes("timed out"))
+    return "timeout";
+  return "retryable";
+}
+
+// Job timeout: if a job has been in a processing state for too long, mark it as timed out
+const JOB_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes per phase
+
+async function checkJobTimeouts() {
+  try {
+    const res = await fetch(`${API_BASE}/jobs`);
+    const jobs = await res.json();
+    const now = Date.now();
+    for (const job of jobs) {
+      if (
+        ["generating_image", "generating_video", "posting"].includes(
+          job.status,
+        ) &&
+        job.startedAt
+      ) {
+        const elapsed = now - new Date(job.startedAt).getTime();
+        if (elapsed > JOB_TIMEOUT_MS) {
+          console.warn(
+            `[TikTok Flow] Job ${job.id} timed out (${Math.round(elapsed / 60000)}min in ${job.status})`,
+          );
+          await handleJobFailure(job.id, "Job timed out after 15 minutes", job);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("[TikTok Flow] Timeout check error:", err);
+  }
+}
+
+// Unified failure handler with auto-retry logic
+async function handleJobFailure(jobId, errorMessage, job) {
+  const errorType = classifyError(errorMessage);
+  console.log(
+    `[TikTok Flow] Job ${jobId} failed: "${errorMessage}" (${errorType})`,
+  );
+
+  // Fetch current retry count if not provided
+  let retryCount = job?.retryCount || 0;
+  let maxRetries = job?.maxRetries || 3;
+  if (!job) {
+    try {
+      const res = await fetch(`${API_BASE}/jobs/${jobId}`);
+      const j = await res.json();
+      retryCount = j.retryCount || 0;
+      maxRetries = j.maxRetries || 3;
+    } catch {}
+  }
+
+  if (errorType !== "fatal" && retryCount < maxRetries) {
+    // Auto-retry: reset to pending with incremented retry count
+    const backoffSec = Math.min(10 * Math.pow(2, retryCount), 120); // 10s, 20s, 40s... max 120s
+    console.log(
+      `[TikTok Flow] Auto-retry ${retryCount + 1}/${maxRetries} in ${backoffSec}s for job ${jobId}`,
+    );
+    await fetch(`${API_BASE}/jobs/${jobId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: "pending",
+        errorMessage: `Retry ${retryCount + 1}/${maxRetries}: ${errorMessage}`,
+        lastError: errorType,
+        retryCount: retryCount + 1,
+        startedAt: null,
+      }),
+    });
+    // Schedule retry after backoff
+    setTimeout(() => {
+      if (autoModeEnabled && !isPaused && !isProcessingJob) {
+        processNextJob();
+      }
+    }, backoffSec * 1000);
+  } else {
+    // Final failure — no more retries
+    await fetch(`${API_BASE}/jobs/${jobId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: "failed",
+        errorMessage:
+          errorType === "fatal"
+            ? `[FATAL] ${errorMessage}`
+            : `[MAX RETRIES] ${errorMessage}`,
+        lastError: errorType,
+      }),
+    });
+  }
+}
+
+// Health check: verify Google Flow tab is alive and responsive
+async function healthCheckGoogleFlow() {
+  const tabId = await findGoogleFlowTab();
+  if (!tabId) return { ok: false, error: "No Google Flow tab found" };
+
+  try {
+    const response = await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("Ping timeout")), 5000);
+      chrome.tabs.sendMessage(tabId, { type: "PING" }, (res) => {
+        clearTimeout(timeout);
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+        } else {
+          resolve(res);
+        }
+      });
+    });
+    if (response?.status === "alive") {
+      return { ok: true, tabId, url: response.url };
+    }
+    return { ok: false, error: "Content script not responding" };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
 // Open side panel when extension icon is clicked
 chrome.action.onClicked.addListener((tab) => {
   chrome.sidePanel.open({ tabId: tab.id });
@@ -269,6 +407,22 @@ function handleMessage(message, sender, sendResponse) {
       });
       return true;
 
+    case "TEST_ADD_TO_PROMPT":
+      findGoogleFlowTab().then((flowTabId) => {
+        if (!flowTabId) {
+          sendResponse({ error: "Google Flow tab not found." });
+          return;
+        }
+        chrome.tabs.sendMessage(flowTabId, { type, payload }, (response) => {
+          if (chrome.runtime.lastError) {
+            sendResponse({ error: chrome.runtime.lastError.message });
+            return;
+          }
+          sendResponse(response);
+        });
+      });
+      return true;
+
     case "START_RECORDER":
     case "STOP_RECORDER":
     case "GET_RECORDING":
@@ -294,6 +448,35 @@ function handleMessage(message, sender, sendResponse) {
       fillSlatePrompt(sender.tab?.id, payload)
         .then(sendResponse)
         .catch((err) => sendResponse({ error: err.message }));
+      return true;
+
+    case "HEALTH_CHECK":
+      healthCheckGoogleFlow().then(sendResponse);
+      return true;
+
+    case "RETRY_JOB":
+      // Manually retry a specific failed job
+      (async () => {
+        try {
+          await fetch(`${API_BASE}/jobs/${payload.jobId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              status: "pending",
+              errorMessage: "",
+              lastError: "",
+              startedAt: null,
+            }),
+          });
+          sendResponse({ ok: true });
+          // Trigger processing if auto mode is on
+          if (autoModeEnabled && !isPaused && !isProcessingJob) {
+            setTimeout(processNextJob, 1000);
+          }
+        } catch (err) {
+          sendResponse({ error: err.message });
+        }
+      })();
       return true;
   }
 }
@@ -330,9 +513,7 @@ async function fillSlateViaMainWorld(tabId, text) {
     world: "MAIN",
     func: (textToInsert) => {
       try {
-        const slateEl = document.querySelector(
-          '[data-slate-editor="true"]',
-        );
+        const slateEl = document.querySelector('[data-slate-editor="true"]');
         if (!slateEl) return { error: "Slate editor not found in DOM" };
 
         // Walk React fiber tree to find Slate editor instance
@@ -341,8 +522,7 @@ async function fillSlateViaMainWorld(tabId, text) {
             k.startsWith("__reactFiber$") ||
             k.startsWith("__reactInternalInstance$"),
         );
-        if (!fiberKey)
-          return { error: "No React fiber on Slate element" };
+        if (!fiberKey) return { error: "No React fiber on Slate element" };
 
         function isEditor(obj) {
           return (
@@ -452,14 +632,10 @@ async function fillSlateViaMainWorld(tabId, text) {
 
         // Verify the text landed in the model
         const modelText = editor.children
-          .map((n) =>
-            (n.children || []).map((c) => c.text || "").join(""),
-          )
+          .map((n) => (n.children || []).map((c) => c.text || "").join(""))
           .join("\n");
 
-        if (
-          modelText.includes(textToInsert.substring(0, 20))
-        ) {
+        if (modelText.includes(textToInsert.substring(0, 20))) {
           return { success: true, method: "main-world-slate-api" };
         }
         return {
@@ -757,6 +933,8 @@ try {
       if (autoModeEnabled && !isPaused && !isProcessingJob) {
         processNextJob();
       }
+      // Check for timed-out jobs every alarm cycle
+      checkJobTimeouts();
     }
   });
 } catch (e) {
@@ -930,9 +1108,25 @@ async function processNextJob() {
 async function processImageGeneration(job) {
   console.log("[TikTok Flow] === Image generation for job:", job.id);
 
-  const flowTabId = await ensureGoogleFlowTab();
+  // Health check before starting
+  const health = await healthCheckGoogleFlow();
+  if (!health.ok) {
+    console.warn("[TikTok Flow] Health check failed:", health.error);
+    // Try to open/recover Google Flow tab
+    const flowTabId = await ensureGoogleFlowTab();
+    if (!flowTabId) {
+      await handleJobFailure(
+        job.id,
+        "Could not open Google Flow tab: " + health.error,
+        job,
+      );
+      return;
+    }
+  }
+
+  const flowTabId = health.ok ? health.tabId : await findGoogleFlowTab();
   if (!flowTabId) {
-    console.error("[TikTok Flow] Could not open Google Flow");
+    await handleJobFailure(job.id, "Google Flow tab not available", job);
     return;
   }
 
@@ -993,13 +1187,9 @@ async function processImageGeneration(job) {
       } catch (fetchErr) {
         console.warn("[TikTok Flow] Could not re-check job status:", fetchErr);
       }
-      // Job is still stuck — mark as failed
+      // Job is still stuck — use retry logic
       console.error("[TikTok Flow] Image generation failed:", result.error);
-      await fetch(`${API_BASE}/jobs/${job.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "failed", errorMessage: result.error }),
-      });
+      await handleJobFailure(job.id, result.error, job);
     } else {
       console.log(
         "[TikTok Flow] Image generation complete:",
@@ -1030,24 +1220,31 @@ async function processImageGeneration(job) {
 async function processVideoGeneration(job) {
   console.log("[TikTok Flow] === Video generation for job:", job.id);
 
+  // Health check: verify tab is still alive
+  const health = await healthCheckGoogleFlow();
+  if (!health.ok) {
+    console.warn(
+      "[TikTok Flow] Health check failed before video gen:",
+      health.error,
+    );
+    await handleJobFailure(
+      job.id,
+      "Google Flow tab lost before video generation: " + health.error,
+      job,
+    );
+    return;
+  }
+
   // IMPORTANT: Use findGoogleFlowTab() instead of ensureGoogleFlowTab().
   // We must stay on the SAME project page where the image was generated.
   // ensureGoogleFlowTab() might open a new tab (gallery page) and lose the image.
   const flowTabId = await findGoogleFlowTab();
   if (!flowTabId) {
-    console.error(
-      "[TikTok Flow] Google Flow tab not found for video generation. " +
-        "The tab must still be open on the project page.",
+    await handleJobFailure(
+      job.id,
+      "Google Flow tab not found. Keep the tab open during generation.",
+      job,
     );
-    await fetch(`${API_BASE}/jobs/${job.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        status: "failed",
-        errorMessage:
-          "Google Flow tab not found. Keep the tab open during generation.",
-      }),
-    });
     return;
   }
 
@@ -1078,11 +1275,7 @@ async function processVideoGeneration(job) {
 
     if (result.error) {
       console.error("[TikTok Flow] Video generation failed:", result.error);
-      await fetch(`${API_BASE}/jobs/${job.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "failed", errorMessage: result.error }),
-      });
+      await handleJobFailure(job.id, result.error, job);
     } else {
       console.log(
         "[TikTok Flow] Video generation complete:",

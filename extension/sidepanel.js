@@ -368,6 +368,31 @@ function handleTestVideo() {
   );
 }
 
+function handleTestAddToPrompt() {
+  const resultEl = document.getElementById("inspectResult");
+  resultEl.innerHTML =
+    '<div style="font-size:11px;color:#0d9488">📎 Testing Add to Prompt... Right-clicking reference image → Add to Prompt</div>';
+
+  chrome.runtime.sendMessage(
+    {
+      type: "TEST_ADD_TO_PROMPT",
+      payload: {},
+    },
+    (response) => {
+      if (response?.error) {
+        resultEl.innerHTML = `<div class="scrape-result error">✗ Add to Prompt failed: ${escapeHtml(response.error)}</div>`;
+        return;
+      }
+      if (response?.success) {
+        resultEl.innerHTML = `<div style="font-size:11px;color:#059669">✓ ${escapeHtml(response.message)}</div>`;
+      } else {
+        resultEl.innerHTML =
+          '<div class="scrape-result error">Add to Prompt returned unexpected response</div>';
+      }
+    },
+  );
+}
+
 function handleScrapeCurrentPage() {
   const resultEl = document.getElementById("scrapeResult");
   resultEl.innerHTML =
@@ -633,6 +658,9 @@ document
 document
   .getElementById("testSwitchImageBtn")
   .addEventListener("click", handleTestSwitchImage);
+document
+  .getElementById("testAddToPromptBtn")
+  .addEventListener("click", handleTestAddToPrompt);
 
 // Event delegation for dynamically rendered buttons
 document.body.addEventListener("click", (e) => {

@@ -8,7 +8,13 @@ export async function POST() {
         in: ["failed", "generating_image", "generating_video", "posting"],
       },
     },
-    data: { status: "pending", errorMessage: "" },
+    data: {
+      status: "pending",
+      errorMessage: "",
+      lastError: "",
+      retryCount: 0,
+      startedAt: null,
+    },
   });
 
   return NextResponse.json({ ok: true });

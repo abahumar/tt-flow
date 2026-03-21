@@ -69,12 +69,13 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Update status to generating_image, set videoType, and apply custom prompts
+  // Update status to generating_image, set videoType, record startedAt, and apply custom prompts
   const job = await prisma.videoJob.update({
     where: { id: nextJob.id },
     data: {
       status: "generating_image",
       videoType,
+      startedAt: new Date().toISOString(),
       ...promptData,
     },
     include: { product: true },
