@@ -109,9 +109,17 @@ export default function AutomationPage() {
   const [productsLoading, setProductsLoading] = useState(true);
   const [customPrompts, setCustomPrompts] = useState<CustomPrompt[]>([]);
 
-  // Per-product settings: { [productId]: { videoType, promptId } }
+  // Per-product settings: { [productId]: { videoType, promptId, userImagePrompt, userVideoPrompt } }
   const [productSettings, setProductSettings] = useState<
-    Record<string, { videoType: string; promptId: string }>
+    Record<
+      string,
+      {
+        videoType: string;
+        promptId: string;
+        userImagePrompt: string;
+        userVideoPrompt: string;
+      }
+    >
   >({});
   // Track which product cards are expanded to show settings
   const [expandedProducts, setExpandedProducts] = useState<Set<string>>(
@@ -150,11 +158,16 @@ export default function AutomationPage() {
   }, []);
 
   const getProductSetting = (productId: string) =>
-    productSettings[productId] || { videoType: "fungsi_produk", promptId: "" };
+    productSettings[productId] || {
+      videoType: "fungsi_produk",
+      promptId: "",
+      userImagePrompt: "",
+      userVideoPrompt: "",
+    };
 
   const updateProductSetting = (
     productId: string,
-    field: "videoType" | "promptId",
+    field: "videoType" | "promptId" | "userImagePrompt" | "userVideoPrompt",
     value: string,
   ) => {
     setProductSettings((prev) => ({
@@ -175,13 +188,19 @@ export default function AutomationPage() {
   const handleAddSingleToQueue = async (productId: string) => {
     setAddingProducts((prev) => new Set(prev).add(productId));
     const settings = getProductSetting(productId);
+    const isUserDefined = settings.promptId === "__user_defined__";
     await fetch("/api/jobs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         productId,
         videoType: settings.videoType,
-        customPromptId: settings.promptId || undefined,
+        ...(isUserDefined
+          ? {
+              userImagePrompt: settings.userImagePrompt,
+              userVideoPrompt: settings.userVideoPrompt,
+            }
+          : { customPromptId: settings.promptId || undefined }),
       }),
     });
     setAddingProducts((prev) => {
@@ -423,19 +442,69 @@ export default function AutomationPage() {
                                 className="w-full rounded-md border border-gray-200 px-2.5 py-1.5 text-xs focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-400"
                               >
                                 <option value="">Default Template</option>
+                                <option value="__user_defined__">
+                                  ✏️ User Defined
+                                </option>
                                 {customPrompts.map((p) => (
                                   <option key={p.id} value={p.id}>
                                     {p.name}
                                   </option>
                                 ))}
                               </select>
-                              {settings.promptId && (
-                                <p className="mt-0.5 text-[10px] text-rose-500">
-                                  Overrides default templates
-                                </p>
-                              )}
+                              {settings.promptId &&
+                                settings.promptId !== "__user_defined__" && (
+                                  <p className="mt-0.5 text-[10px] text-rose-500">
+                                    Overrides default templates
+                                  </p>
+                                )}
                             </div>
                           </div>
+
+                          {/* User Defined Prompt Fields */}
+                          {settings.promptId === "__user_defined__" && (
+                            <div className="space-y-2 mt-2">
+                              <p className="text-[10px] text-rose-500">
+                                Enter your own prompts. Use {"{title}"},{" "}
+                                {"{description}"}, {"{price}"} as placeholders.
+                              </p>
+                              <div>
+                                <label className="mb-1 block text-[10px] font-medium text-gray-400 uppercase tracking-wide">
+                                  Image Creation Prompt
+                                </label>
+                                <textarea
+                                  value={settings.userImagePrompt}
+                                  onChange={(e) =>
+                                    updateProductSetting(
+                                      product.id,
+                                      "userImagePrompt",
+                                      e.target.value,
+                                    )
+                                  }
+                                  placeholder="e.g. Create a product photo of {title} with clean white background..."
+                                  rows={3}
+                                  className="w-full rounded-md border border-gray-200 px-2.5 py-1.5 text-xs focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-400 resize-y"
+                                />
+                              </div>
+                              <div>
+                                <label className="mb-1 block text-[10px] font-medium text-gray-400 uppercase tracking-wide">
+                                  Video Prompt
+                                </label>
+                                <textarea
+                                  value={settings.userVideoPrompt}
+                                  onChange={(e) =>
+                                    updateProductSetting(
+                                      product.id,
+                                      "userVideoPrompt",
+                                      e.target.value,
+                                    )
+                                  }
+                                  placeholder="e.g. Create a 15-second video showcasing {title}..."
+                                  rows={3}
+                                  className="w-full rounded-md border border-gray-200 px-2.5 py-1.5 text-xs focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-400 resize-y"
+                                />
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

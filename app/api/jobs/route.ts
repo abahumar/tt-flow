@@ -26,7 +26,13 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { productId, videoType = "fungsi_produk", customPromptId } = body;
+  const {
+    productId,
+    videoType = "fungsi_produk",
+    customPromptId,
+    userImagePrompt,
+    userVideoPrompt,
+  } = body;
 
   if (!productId) {
     return NextResponse.json(
@@ -45,18 +51,35 @@ export async function POST(req: NextRequest) {
   let imagePrompt: string;
   let videoPrompt: string;
 
-  // If a custom prompt is selected, use it (with variable substitution)
-  if (customPromptId) {
+  const replacePlaceholders = (template: string) =>
+    template
+      .replace(/{title}/g, product.title)
+      .replace(/{description}/g, product.description || product.title)
+      .replace(/{price}/g, product.price || "");
+
+  // If user-defined prompts are provided, use them directly
+  if (userImagePrompt || userVideoPrompt) {
+    imagePrompt = userImagePrompt
+      ? replacePlaceholders(userImagePrompt)
+      : generateImagePrompt({
+          title: product.title,
+          description: product.description,
+          price: product.price,
+          videoType: videoType as VideoType,
+        });
+    videoPrompt = userVideoPrompt
+      ? replacePlaceholders(userVideoPrompt)
+      : generateVideoPrompt({
+          title: product.title,
+          description: product.description,
+          price: product.price,
+          videoType: videoType as VideoType,
+        });
+  } else if (customPromptId) {
     const customPrompt = await prisma.customPrompt.findUnique({
       where: { id: customPromptId },
     });
     if (customPrompt) {
-      const replacePlaceholders = (template: string) =>
-        template
-          .replace(/{title}/g, product.title)
-          .replace(/{description}/g, product.description || product.title)
-          .replace(/{price}/g, product.price || "");
-
       imagePrompt = customPrompt.imagePrompt
         ? replacePlaceholders(customPrompt.imagePrompt)
         : generateImagePrompt({
