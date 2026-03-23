@@ -32,43 +32,6 @@ const SETTING_FIELDS = [
     placeholder: "ohdoccgglgmopfclmolmhhchebmmn...",
     type: "text",
   },
-  {
-    key: "default_video_type",
-    label: "Default Video Type",
-    placeholder: "fungsi_produk",
-    type: "select",
-    options: [
-      { value: "fungsi_produk", label: "Fungsi Produk" },
-      { value: "review", label: "Review Style" },
-      { value: "unboxing", label: "Unboxing Style" },
-      { value: "problem_solution", label: "Problem-Solution" },
-    ],
-  },
-  {
-    key: "post_delay_seconds",
-    label: "Delay Between Posts (seconds)",
-    placeholder: "300",
-    type: "number",
-  },
-  {
-    key: "tiktok_default_caption_template",
-    label: "Default TikTok Caption Template",
-    placeholder: "🔥 {title} - Only {price}! #fyp #tiktokshop",
-    type: "textarea",
-  },
-  {
-    key: "image_prompt_template",
-    label: "Image Prompt Template",
-    placeholder:
-      "A professional product photo of {title}, clean white background, studio lighting...",
-    type: "textarea",
-  },
-  {
-    key: "video_prompt_template",
-    label: "Video Prompt Template",
-    placeholder: "Create a short engaging video showcasing {title}...",
-    type: "textarea",
-  },
 ];
 
 export default function SettingsPage() {
@@ -196,42 +159,15 @@ export default function SettingsPage() {
             <label className="mb-1 block text-sm font-medium text-gray-700">
               {field.label}
             </label>
-            {field.type === "textarea" ? (
-              <textarea
-                rows={3}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
-                placeholder={field.placeholder}
-                value={settings[field.key] || ""}
-                onChange={(e) =>
-                  setSettings((s) => ({ ...s, [field.key]: e.target.value }))
-                }
-              />
-            ) : field.type === "select" ? (
-              <select
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
-                value={settings[field.key] || ""}
-                onChange={(e) =>
-                  setSettings((s) => ({ ...s, [field.key]: e.target.value }))
-                }
-              >
-                <option value="">Select...</option>
-                {field.options?.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type={field.type}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
-                placeholder={field.placeholder}
-                value={settings[field.key] || ""}
-                onChange={(e) =>
-                  setSettings((s) => ({ ...s, [field.key]: e.target.value }))
-                }
-              />
-            )}
+            <input
+              type={field.type}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
+              placeholder={field.placeholder}
+              value={settings[field.key] || ""}
+              onChange={(e) =>
+                setSettings((s) => ({ ...s, [field.key]: e.target.value }))
+              }
+            />
           </div>
         ))}
 

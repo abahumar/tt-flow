@@ -478,6 +478,47 @@ function handleMessage(message, sender, sendResponse) {
         }
       })();
       return true;
+
+    case "UPLOAD_VIDEO":
+      // Upload video from content script to backend (avoids CORS)
+      (async () => {
+        try {
+          const { jobId, videoBase64, mimeType } = payload;
+          // Convert base64 back to binary
+          const binaryStr = atob(videoBase64);
+          const bytes = new Uint8Array(binaryStr.length);
+          for (let i = 0; i < binaryStr.length; i++) {
+            bytes[i] = binaryStr.charCodeAt(i);
+          }
+          const blob = new Blob([bytes], { type: mimeType || "video/mp4" });
+          const formData = new FormData();
+          formData.append(
+            "video",
+            new File([blob], "video.mp4", { type: mimeType || "video/mp4" }),
+          );
+
+          const resp = await fetch(`${API_BASE}/jobs/${jobId}/video`, {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!resp.ok) {
+            const errText = await resp.text();
+            sendResponse({
+              error: `Upload failed (${resp.status}): ${errText}`,
+            });
+            return;
+          }
+
+          const result = await resp.json();
+          console.log("[TikTok Flow] Video uploaded:", JSON.stringify(result));
+          sendResponse(result);
+        } catch (err) {
+          console.error("[TikTok Flow] Video upload error:", err);
+          sendResponse({ error: err.message });
+        }
+      })();
+      return true;
   }
 }
 

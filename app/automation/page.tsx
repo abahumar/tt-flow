@@ -15,6 +15,7 @@ import {
   ChevronUp,
   RefreshCw,
   AlertTriangle,
+  Download,
 } from "lucide-react";
 
 interface VideoJob {
@@ -48,6 +49,7 @@ interface CatalogProduct {
   shopName: string;
   images: string;
   description: string;
+  videoReady: boolean;
   _count: { videoJobs: number };
 }
 
@@ -140,7 +142,8 @@ export default function AutomationPage() {
   const fetchProducts = useCallback(async () => {
     const res = await fetch("/api/products");
     const data = await res.json();
-    setProducts(data);
+    // Only show products marked as "Siap Video" in Katalog Produk
+    setProducts(data.filter((p: CatalogProduct) => p.videoReady));
     setProductsLoading(false);
   }, []);
 
@@ -185,6 +188,15 @@ export default function AutomationPage() {
     });
   };
 
+  const handleRemoveFromReady = async (productId: string) => {
+    await fetch(`/api/products/${productId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ videoReady: false }),
+    });
+    fetchProducts();
+  };
+
   const handleAddSingleToQueue = async (productId: string) => {
     setAddingProducts((prev) => new Set(prev).add(productId));
     const settings = getProductSetting(productId);
@@ -209,6 +221,7 @@ export default function AutomationPage() {
       return next;
     });
     fetchJobs();
+    fetchProducts();
   };
 
   const statusCounts = jobs.reduce(
@@ -293,7 +306,7 @@ export default function AutomationPage() {
           className="flex w-full items-center justify-between"
         >
           <p className="text-xs font-semibold tracking-wide text-gray-500 uppercase">
-            Katalog Produk ({products.length})
+            Produk Siap Video ({products.length})
           </p>
           {catalogCollapsed ? (
             <ChevronDown className="h-4 w-4 text-gray-400" />
@@ -310,7 +323,8 @@ export default function AutomationPage() {
               </p>
             ) : products.length === 0 ? (
               <div className="rounded-lg border border-dashed border-gray-300 py-6 text-center text-sm text-gray-400">
-                No products yet. Go to Katalog Produk to scrape products first.
+                Belum ada produk. Klik &ldquo;Create Video&rdquo; di Katalog
+                Produk dulu.
               </div>
             ) : (
               <div className="max-h-125 overflow-y-auto space-y-2">
@@ -391,6 +405,15 @@ export default function AutomationPage() {
                             <PackagePlus className="h-3.5 w-3.5" />
                           )}
                           {isAdding ? "Adding..." : "Add to Queue"}
+                        </button>
+
+                        {/* Remove from ready */}
+                        <button
+                          onClick={() => handleRemoveFromReady(product.id)}
+                          className="rounded-md border border-gray-200 p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                          title="Remove from Produk Siap Video"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
 
@@ -662,6 +685,17 @@ export default function AutomationPage() {
                       {job.errorMessage}
                     </span>
                   )}
+                  {(job.status === "ready" || job.status === "posted") &&
+                    job.videoUrl && (
+                      <a
+                        href={job.videoUrl}
+                        download={`${job.product?.title || job.id}.mp4`}
+                        className="rounded-md p-1 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                        title="Download video (watermark removed)"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                      </a>
+                    )}
                   {job.status === "failed" && (
                     <button
                       onClick={() => handleRetryJob(job.id)}

@@ -9,6 +9,7 @@ services:
       - .:/app
       - /app/node_modules
       - db-data:/data
+      - video-data:/data/videos
     environment:
       - DATABASE_URL=file:/data/dev.db
       - NODE_ENV=development
@@ -16,3 +17,4 @@ services:
 
 volumes:
   db-data:
+  video-data:

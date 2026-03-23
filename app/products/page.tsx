@@ -21,6 +21,7 @@ interface Product {
   images: string;
   price: string;
   shopName: string;
+  videoReady: boolean;
   scrapedAt: string;
   _count?: { videoJobs: number };
 }
@@ -146,23 +147,22 @@ export default function ProductsPage() {
 
   const handleCreateJob = async (productId: string) => {
     setCreatingJobId(productId);
-    const res = await fetch("/api/jobs", {
-      method: "POST",
+    const res = await fetch(`/api/products/${productId}`, {
+      method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ productId, videoType: "fungsi_produk" }),
+      body: JSON.stringify({ videoReady: true }),
     });
     if (res.ok) {
       setAddedIds((prev) => new Set(prev).add(productId));
       fetchProducts();
     } else {
-      const err = await res.json();
-      alert(err.error || "Failed to create job");
+      alert("Failed to mark product");
     }
     setCreatingJobId(null);
   };
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Katalog Produk</h1>
         <p className="text-sm text-gray-500">
@@ -291,16 +291,16 @@ export default function ProductsPage() {
           No products yet. Paste a TikTok Shop URL above to get started.
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {products.map((p) => {
             const images: string[] = JSON.parse(p.images || "[]");
             return (
               <div
                 key={p.id}
-                className="flex gap-4 rounded-xl border border-gray-200 bg-white p-4"
+                className="flex flex-col rounded-xl border border-gray-200 bg-white overflow-hidden hover:shadow-md transition-shadow"
               >
                 {/* Thumbnail */}
-                <div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100">
+                <div className="aspect-square w-full overflow-hidden bg-gray-100">
                   {images[0] ? (
                     <img
                       src={images[0]}
@@ -315,10 +315,15 @@ export default function ProductsPage() {
                 </div>
 
                 {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold truncate">{p.title}</h3>
-                  <p className="text-sm text-gray-500 truncate">
-                    {p.shopName} · {p.price}
+                <div className="flex flex-col flex-1 p-3">
+                  <h3 className="text-sm font-semibold line-clamp-2 leading-tight">
+                    {p.title}
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-1 truncate">
+                    {p.shopName}
+                  </p>
+                  <p className="text-sm font-bold text-rose-500 mt-1">
+                    {p.price}
                   </p>
                   <a
                     href={p.url}
@@ -328,34 +333,34 @@ export default function ProductsPage() {
                   >
                     <ExternalLink className="h-3 w-3" /> View on TikTok
                   </a>
-                </div>
 
-                {/* Actions */}
-                <div className="flex items-center gap-2">
-                  {addedIds.has(p.id) ? (
-                    <span className="flex items-center gap-1 rounded-lg bg-green-50 border border-green-200 px-3 py-1.5 text-xs font-medium text-green-600">
-                      <CheckCircle2 className="h-3.5 w-3.5" /> Added
-                    </span>
-                  ) : (
+                  {/* Actions */}
+                  <div className="flex items-center gap-1.5 mt-auto pt-2">
+                    {p.videoReady || addedIds.has(p.id) ? (
+                      <span className="flex items-center justify-center gap-1 flex-1 rounded-lg bg-green-50 border border-green-200 px-2 py-1.5 text-xs font-medium text-green-600">
+                        <CheckCircle2 className="h-3 w-3" /> Siap Video
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleCreateJob(p.id)}
+                        disabled={creatingJobId === p.id}
+                        className="flex items-center justify-center gap-1 flex-1 rounded-lg bg-rose-500 px-2 py-1.5 text-xs font-medium text-white hover:bg-rose-600 transition-colors disabled:opacity-50"
+                      >
+                        {creatingJobId === p.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Video className="h-3 w-3" />
+                        )}
+                        {creatingJobId === p.id ? "..." : "Create Video"}
+                      </button>
+                    )}
                     <button
-                      onClick={() => handleCreateJob(p.id)}
-                      disabled={creatingJobId === p.id}
-                      className="flex items-center gap-1 rounded-lg bg-rose-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-rose-600 transition-colors disabled:opacity-50"
+                      onClick={() => handleDelete(p.id)}
+                      className="rounded-lg border border-gray-200 p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
                     >
-                      {creatingJobId === p.id ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Video className="h-3.5 w-3.5" />
-                      )}
-                      {creatingJobId === p.id ? "Adding..." : "Create Video"}
+                      <Trash2 className="h-3.5 w-3.5" />
                     </button>
-                  )}
-                  <button
-                    onClick={() => handleDelete(p.id)}
-                    className="rounded-lg border border-gray-200 p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  </div>
                 </div>
               </div>
             );

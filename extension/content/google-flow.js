@@ -1741,6 +1741,240 @@ function extractMediaUrl(element) {
   return null;
 }
 
+// ---- Download video blob and upload to backend for watermark removal ----
+// Strategy: fetch the video bytes in-page (where blob: URLs are valid),
+// then POST to the backend API which saves and processes with FFmpeg.
+async function downloadAndUploadVideo(resultEl, jobId) {
+  console.log("[TikTok Flow] === Downloading video for job:", jobId);
+
+  let videoBlob = null;
+
+  // Strategy 1: Find a download button/link with an HTTPS URL (best quality)
+  const downloadLinks = document.querySelectorAll(
+    'a[download][href*=".mp4"], a[download][href*="video"], a[href*="download"][href*="video"]',
+  );
+  for (const link of downloadLinks) {
+    const href = link.href || link.getAttribute("href") || "";
+    if (href && href.startsWith("http")) {
+      console.log("[TikTok Flow] Found download link:", href.substring(0, 100));
+      try {
+        const resp = await fetch(href);
+        if (resp.ok) {
+          videoBlob = await resp.blob();
+          console.log(
+            "[TikTok Flow] Downloaded via link:",
+            videoBlob.size,
+            "bytes",
+          );
+          break;
+        }
+      } catch (e) {
+        console.warn("[TikTok Flow] Download link fetch failed:", e.message);
+      }
+    }
+  }
+
+  // Strategy 2: Click the download/export button if visible
+  if (!videoBlob) {
+    const downloadBtn =
+      findButtonByText("Download") ||
+      findButtonByText("Export") ||
+      document.querySelector('button[aria-label*="download" i]') ||
+      document.querySelector('button[aria-label*="export" i]');
+    if (downloadBtn) {
+      console.log("[TikTok Flow] Trying download button click...");
+      // Try to extract the download URL from the button's action
+      const href = downloadBtn.href || downloadBtn.closest("a")?.href;
+      if (href && href.startsWith("http")) {
+        try {
+          const resp = await fetch(href);
+          if (resp.ok) {
+            videoBlob = await resp.blob();
+            console.log(
+              "[TikTok Flow] Downloaded via button href:",
+              videoBlob.size,
+              "bytes",
+            );
+          }
+        } catch (e) {
+          console.warn("[TikTok Flow] Button href fetch failed:", e.message);
+        }
+      }
+    }
+  }
+
+  // Strategy 3: Fetch the video element's src (blob: or https:)
+  if (!videoBlob) {
+    const videoSrc =
+      resultEl.src ||
+      resultEl.querySelector?.("source")?.src ||
+      (resultEl.isDownloadLink ? resultEl.src : null);
+
+    if (videoSrc) {
+      console.log(
+        "[TikTok Flow] Fetching video src:",
+        videoSrc.substring(0, 100),
+      );
+      try {
+        const resp = await fetch(videoSrc);
+        if (resp.ok) {
+          videoBlob = await resp.blob();
+          console.log(
+            "[TikTok Flow] Downloaded via src:",
+            videoBlob.size,
+            "bytes",
+          );
+        }
+      } catch (e) {
+        console.warn(
+          "[TikTok Flow] Video src fetch failed (possibly cross-origin blob):",
+          e.message,
+        );
+      }
+    }
+  }
+
+  // Strategy 4: Use canvas capture as last resort (re-encodes, lower quality)
+  if (!videoBlob && resultEl.tagName === "VIDEO") {
+    console.log("[TikTok Flow] Trying canvas capture fallback...");
+    try {
+      videoBlob = await captureVideoViaCanvas(resultEl);
+      console.log(
+        "[TikTok Flow] Captured via canvas:",
+        videoBlob.size,
+        "bytes",
+      );
+    } catch (e) {
+      console.warn("[TikTok Flow] Canvas capture failed:", e.message);
+    }
+  }
+
+  if (!videoBlob || videoBlob.size < 1000) {
+    throw new Error(
+      "Could not download video bytes. All strategies failed. " +
+        "Video element detected but bytes not accessible.",
+    );
+  }
+
+  // Upload to backend via background service worker (avoids CORS from labs.google → localhost)
+  console.log(
+    "[TikTok Flow] Uploading video to backend:",
+    videoBlob.size,
+    "bytes",
+  );
+
+  // Convert blob to base64 to send via chrome.runtime.sendMessage
+  const arrayBuffer = await videoBlob.arrayBuffer();
+  const uint8Array = new Uint8Array(arrayBuffer);
+  let binary = "";
+  // Process in chunks to avoid call stack overflow
+  const chunkSize = 32768;
+  for (let i = 0; i < uint8Array.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(
+      null,
+      uint8Array.subarray(i, i + chunkSize),
+    );
+  }
+  const base64Video = btoa(binary);
+
+  const result = await new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(
+      {
+        type: "UPLOAD_VIDEO",
+        payload: {
+          jobId,
+          videoBase64: base64Video,
+          mimeType: videoBlob.type || "video/mp4",
+        },
+      },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+        } else if (response?.error) {
+          reject(new Error(response.error));
+        } else {
+          resolve(response);
+        }
+      },
+    );
+  });
+
+  console.log(
+    "[TikTok Flow] ✅ Video uploaded and processed:",
+    JSON.stringify(result),
+  );
+  return result;
+}
+
+// ---- Canvas-based video capture (fallback for inaccessible blob URLs) ----
+// Re-records the video using MediaRecorder + Canvas. Lower quality but works
+// even when the blob URL is cross-origin isolated.
+function captureVideoViaCanvas(videoEl) {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = videoEl.videoWidth || 1080;
+    canvas.height = videoEl.videoHeight || 1920;
+    const ctx = canvas.getContext("2d");
+
+    const stream = canvas.captureStream(30); // 30fps
+    // Add audio if the video has it
+    if (videoEl.captureStream) {
+      try {
+        const videoStream = videoEl.captureStream();
+        const audioTracks = videoStream.getAudioTracks();
+        for (const track of audioTracks) {
+          stream.addTrack(track);
+        }
+      } catch {}
+    }
+
+    const recorder = new MediaRecorder(stream, {
+      mimeType: "video/webm;codecs=vp9",
+    });
+    const chunks = [];
+
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+
+    recorder.onstop = () => {
+      const blob = new Blob(chunks, { type: "video/webm" });
+      resolve(blob);
+    };
+
+    recorder.onerror = reject;
+
+    // Seek to start and play
+    videoEl.currentTime = 0;
+    videoEl.muted = true;
+
+    videoEl.onended = () => {
+      recorder.stop();
+    };
+
+    videoEl.onseeked = () => {
+      recorder.start();
+      videoEl.play();
+
+      // Draw frames
+      const drawFrame = () => {
+        if (videoEl.paused || videoEl.ended) return;
+        ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+        requestAnimationFrame(drawFrame);
+      };
+      drawFrame();
+    };
+
+    // Safety timeout
+    setTimeout(() => {
+      if (recorder.state === "recording") {
+        videoEl.pause();
+        recorder.stop();
+      }
+    }, 30000);
+  });
+}
+
 // ---- Main: Generate Image ----
 async function generateImage({ jobId, prompt, productImages }) {
   console.log("[TikTok Flow] === Starting IMAGE generation for job:", jobId);
@@ -2791,10 +3025,27 @@ async function generateVideo({ jobId, prompt, imageUrl }) {
     await sleep(5000);
     const resultEl = await waitForVideoResult(360000); // 6 min timeout
 
-    // Step 5: Extract URL
-    const videoUrl = extractMediaUrl(resultEl);
-    if (!videoUrl) {
-      throw new Error("Video appeared but could not extract URL");
+    // Step 5: Download video blob and upload to backend for watermark removal
+    let videoUrl;
+    try {
+      const uploadResult = await downloadAndUploadVideo(resultEl, jobId);
+      videoUrl = uploadResult.videoUrl;
+      console.log(
+        "[TikTok Flow] Video downloaded and processed:",
+        videoUrl,
+        "watermark removed:",
+        uploadResult.watermarkRemoved,
+      );
+    } catch (downloadErr) {
+      // Fallback: store the raw URL if download/upload fails
+      console.warn(
+        "[TikTok Flow] Video download failed, using raw URL:",
+        downloadErr.message,
+      );
+      videoUrl = extractMediaUrl(resultEl);
+      if (!videoUrl) {
+        throw new Error("Video appeared but could not extract or download it");
+      }
     }
 
     console.log(
@@ -3157,14 +3408,49 @@ async function testFullFlow(payload = {}) {
     if (!videoCreateBtn) throw new Error("Create button not found for video");
     simulateClick(videoCreateBtn);
 
+    // ===== PHASE 4: Wait for video result =====
+    progress(
+      "8/9",
+      "Waiting for video generation to complete (up to 6 min)...",
+    );
+    await sleep(5000);
+    const videoResultEl = await waitForVideoResult(360000);
+    progress("8/9", "Video generation complete!");
+
+    // ===== PHASE 5: Download video and upload to backend =====
+    progress("9/9", "Downloading video and uploading to backend...");
+    let videoUrl = null;
+    try {
+      // Use a test job ID — try to find a ready/pending job, or use "test"
+      const testJobId = payload?.jobId || "test";
+      const uploadResult = await downloadAndUploadVideo(
+        videoResultEl,
+        testJobId,
+      );
+      videoUrl = uploadResult.videoUrl;
+      progress(
+        "9/9",
+        `✅ Video uploaded! Watermark zoom: ${uploadResult.watermarkRemoved}`,
+      );
+    } catch (downloadErr) {
+      console.warn(
+        "[TikTok Flow] Video download/upload failed:",
+        downloadErr.message,
+      );
+      videoUrl = extractMediaUrl(videoResultEl);
+      progress("9/9", "⚠️ Download failed, raw URL: " + (videoUrl || "none"));
+    }
+
     progress(
       "DONE",
-      "Full flow complete! Image created → Animate → Video creating.",
+      "Full flow complete! Image → Animate → Video → Downloaded.",
     );
     return {
       success: true,
+      videoUrl,
       message:
-        "\u2705 Full flow: Image → Animate → Video. Watch Google Flow for video result.",
+        "\u2705 Full flow: Image → Animate → Video → Download. " +
+        (videoUrl ? "Video: " + videoUrl : "Check Google Flow for result."),
     };
   } catch (err) {
     console.error("[TikTok Flow] Full flow test failed:", err.message);
