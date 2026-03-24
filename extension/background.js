@@ -46,6 +46,14 @@ async function checkJobTimeouts() {
       ) {
         const elapsed = now - new Date(job.startedAt).getTime();
         if (elapsed > JOB_TIMEOUT_MS) {
+          // Skip if this job is currently being actively processed
+          // (it might be about to complete — avoid race with completion handler)
+          if (processingJobId === job.id) {
+            console.log(
+              `[TikTok Flow] Job ${job.id} exceeded timeout but is actively processing — skipping timeout (will check next cycle)`,
+            );
+            continue;
+          }
           console.warn(
             `[TikTok Flow] Job ${job.id} timed out (${Math.round(elapsed / 60000)}min in ${job.status})`,
           );
@@ -1244,9 +1252,69 @@ async function ensureTikTokShopShowcaseTab() {
 
 // ---- Job Processing Automation ----
 let isProcessingJob = false;
+let processingLockId = null; // Unique token for current processing session
+let processingJobId = null; // Track which job is being processed
 let autoModeEnabled = false;
 let isPaused = false;
 let currentCustomPromptId = null;
+let pendingPhaseComplete = null; // Queue for JOB_PHASE_COMPLETE events that arrive while busy
+
+// Acquire the processing lock. Returns a unique lock ID if acquired, null if already held.
+function acquireProcessingLock(reason) {
+  if (isProcessingJob) {
+    console.log(
+      `[TikTok Flow] Lock denied (${reason}): already held by ${processingLockId}`,
+    );
+    return null;
+  }
+  isProcessingJob = true;
+  processingLockId = `${reason}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  console.log(`[TikTok Flow] Lock acquired: ${processingLockId}`);
+  return processingLockId;
+}
+
+// Release the processing lock. Only the holder can release it.
+function releaseProcessingLock(lockId) {
+  if (processingLockId !== lockId) {
+    console.warn(
+      `[TikTok Flow] Lock release denied: expected ${processingLockId}, got ${lockId}`,
+    );
+    return false;
+  }
+  console.log(`[TikTok Flow] Lock released: ${processingLockId}`);
+  isProcessingJob = false;
+  processingLockId = null;
+  processingJobId = null;
+
+  // Process any queued phase-complete event
+  if (pendingPhaseComplete) {
+    const pending = pendingPhaseComplete;
+    pendingPhaseComplete = null;
+    console.log(
+      `[TikTok Flow] Processing queued phase-complete: job ${pending.jobId}`,
+    );
+    setTimeout(
+      () => handlePhaseCompleteWithLock(pending.jobId, pending.nextStatus),
+      100,
+    );
+  } else if (autoModeEnabled && !isPaused) {
+    setTimeout(processNextJob, 3000);
+  }
+  return true;
+}
+
+// Force-release the lock (for DISABLE_AUTO_MODE or emergency recovery)
+function forceReleaseProcessingLock(reason) {
+  if (isProcessingJob) {
+    console.warn(
+      `[TikTok Flow] Force-releasing lock (${reason}): was ${processingLockId}`,
+    );
+  }
+  isProcessingJob = false;
+  processingLockId = null;
+  processingJobId = null;
+  pendingPhaseComplete = null;
+}
 
 // Restore auto mode state from storage on service worker startup
 // (MV3 service workers can be terminated and restarted at any time)
@@ -1307,8 +1375,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "DISABLE_AUTO_MODE") {
     autoModeEnabled = false;
     currentCustomPromptId = null;
+    forceReleaseProcessingLock("disable-auto-mode");
     chrome.storage.local.set({ autoModeEnabled: false, customPromptId: null });
-    console.log("[TikTok Flow] Auto mode DISABLED");
+    console.log("[TikTok Flow] Auto mode DISABLED (lock force-released)");
     sendResponse({ autoMode: false });
     return true;
   }
@@ -1340,25 +1409,50 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       "next",
       nextStatus,
     );
-    // Always process — even if autoMode was lost due to SW restart
-    if (!isProcessingJob) {
-      isProcessingJob = true;
-      handlePhaseComplete(jobId, nextStatus)
-        .catch((err) =>
-          console.error("[TikTok Flow] Phase complete handler error:", err),
-        )
-        .finally(() => {
-          isProcessingJob = false;
-          // Continue queue if auto mode is on
-          if (autoModeEnabled && !isPaused) {
-            setTimeout(processNextJob, 3000);
-          }
-        });
+    // If lock is held (e.g. by processNextJob which triggered this phase),
+    // the phase is already being handled inline. But if the lock holder is
+    // processing THIS job, it means the content script is notifying us of
+    // completion while we're already awaiting it — handled inline.
+    // If lock is NOT held (e.g. SW restarted), pick it up immediately.
+    if (isProcessingJob) {
+      // Queue it — will be picked up when lock is released
+      if (processingJobId === jobId) {
+        console.log(
+          `[TikTok Flow] Phase complete for current job ${jobId} — handled inline`,
+        );
+      } else {
+        console.log(
+          `[TikTok Flow] Phase complete queued (lock busy with ${processingJobId})`,
+        );
+        pendingPhaseComplete = { jobId, nextStatus };
+      }
+    } else {
+      handlePhaseCompleteWithLock(jobId, nextStatus);
     }
     sendResponse({ ok: true });
     return true;
   }
 });
+
+// Wrapper that acquires lock before handling phase completion
+function handlePhaseCompleteWithLock(jobId, nextStatus) {
+  const lockId = acquireProcessingLock("phase-complete");
+  if (!lockId) {
+    console.warn(
+      "[TikTok Flow] Could not acquire lock for phase-complete, queuing",
+    );
+    pendingPhaseComplete = { jobId, nextStatus };
+    return;
+  }
+  processingJobId = jobId;
+  handlePhaseComplete(jobId, nextStatus)
+    .catch((err) =>
+      console.error("[TikTok Flow] Phase complete handler error:", err),
+    )
+    .finally(() => {
+      releaseProcessingLock(lockId);
+    });
+}
 
 // Handle phase completion — fetch the job and continue to next step
 async function handlePhaseComplete(jobId, nextStatus) {
@@ -1423,9 +1517,10 @@ async function handlePhaseComplete(jobId, nextStatus) {
 async function processNextJob() {
   if (isProcessingJob || !autoModeEnabled || isPaused) return;
 
-  try {
-    isProcessingJob = true;
+  const lockId = acquireProcessingLock("process-next-job");
+  if (!lockId) return; // Another caller won the race
 
+  try {
     // Check for active jobs (already in-progress)
     const currentJob = await fetchCurrentJob();
 
@@ -1442,15 +1537,13 @@ async function processNextJob() {
       const data = await res.json();
       if (!data.id) {
         console.log("[TikTok Flow] No jobs to process");
-        isProcessingJob = false;
-        return;
+        return; // finally will release lock
       }
-      // Recurse to pick up the newly started job
-      isProcessingJob = false;
-      await processNextJob();
+      // Let finally release lock; it will schedule processNextJob via setTimeout
       return;
     }
 
+    processingJobId = currentJob.id;
     console.log(
       "[TikTok Flow] Processing job:",
       currentJob.id,
@@ -1490,12 +1583,8 @@ async function processNextJob() {
   } catch (err) {
     console.error("[TikTok Flow] Job processing error:", err);
   } finally {
-    isProcessingJob = false;
-  }
-
-  // Continue processing if auto mode is on
-  if (autoModeEnabled && !isPaused) {
-    setTimeout(processNextJob, 3000);
+    releaseProcessingLock(lockId);
+    // releaseProcessingLock handles scheduling next job
   }
 }
 
