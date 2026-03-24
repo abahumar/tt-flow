@@ -13,6 +13,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === "ADD_TO_SHOWCASE") {
+    addToShowcase(message.payload)
+      .then((result) => sendResponse(result))
+      .catch((err) => sendResponse({ error: err.message }));
+    return true;
+  }
+
   if (message.type === "PING") {
     sendResponse({ status: "alive", url: window.location.href });
     return true;
@@ -160,6 +167,126 @@ function getMetaContent(name) {
 function getText(selector) {
   const el = document.querySelector(selector);
   return el ? el.textContent.trim() : "";
+}
+
+// ---- Add Product to Showcase ----
+// Automates Steps 1-7 from the recorded flow:
+// Navigate to showcase list → Add New Products → enter URL → click Product URLs → Add Products → close drawer
+
+async function addToShowcase({ productUrl }) {
+  console.log("[TikTok Flow] Adding product to showcase:", productUrl);
+
+  // Ensure we're on the showcase page
+  if (!window.location.href.includes("streamer/showcase")) {
+    throw new Error("Not on TikTok Shop Streamer Showcase page");
+  }
+
+  await sleepShop(2000);
+
+  // Step 2: Click "Add New Products" button
+  const addNewBtn = findButtonByTextShop("Add New Products");
+  if (!addNewBtn) throw new Error("Add New Products button not found");
+  simulateClickShop(addNewBtn);
+  console.log("[TikTok Flow] Clicked Add New Products");
+  await sleepShop(2000);
+
+  // Step 3-4: Find the product URL input and type the URL
+  const urlInput = document.querySelector(
+    'input[placeholder*="product URL" i]',
+  );
+  if (!urlInput) throw new Error("Product URL input not found");
+  simulateClickShop(urlInput);
+  await sleepShop(500);
+
+  // Set the URL value using native setter to avoid React overwriting or doubling
+  urlInput.focus();
+  const nativeSetter = Object.getOwnPropertyDescriptor(
+    window.HTMLInputElement.prototype,
+    "value",
+  ).set;
+  nativeSetter.call(urlInput, productUrl);
+  urlInput.dispatchEvent(new Event("input", { bubbles: true }));
+  urlInput.dispatchEvent(new Event("change", { bubbles: true }));
+  console.log("[TikTok Flow] Set product URL:", productUrl);
+  await sleepShop(1000);
+
+  // Step 5: Click "Product URLs" button (search/submit button)
+  const productUrlsBtn =
+    findButtonByTextShop("Product URLs") ||
+    findButtonByTextShop("Search") ||
+    findButtonByTextShop("Find");
+  if (productUrlsBtn) {
+    simulateClickShop(productUrlsBtn);
+    console.log("[TikTok Flow] Clicked Product URLs button");
+    await sleepShop(3000); // Wait for product to be found
+  }
+
+  // Step 6: Click "Add Products" button
+  const addProductsBtn = findButtonByTextShop("Add Products");
+  if (!addProductsBtn) throw new Error("Add Products button not found");
+  simulateClickShop(addProductsBtn);
+  console.log("[TikTok Flow] Clicked Add Products");
+  await sleepShop(2000);
+
+  // Step 7: Close the drawer
+  const closeBtn = document.querySelector(
+    ".arco-drawer-close-icon, .arco-icon-close, [class*='drawer'] [class*='close']",
+  );
+  if (closeBtn) {
+    simulateClickShop(closeBtn);
+    console.log("[TikTok Flow] Closed drawer");
+  }
+
+  await sleepShop(1000);
+  return { success: true };
+}
+
+function sleepShop(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function simulateClickShop(el) {
+  const rect = el.getBoundingClientRect();
+  const x = rect.left + rect.width / 2;
+  const y = rect.top + rect.height / 2;
+  const opts = {
+    bubbles: true,
+    cancelable: true,
+    view: window,
+    clientX: x,
+    clientY: y,
+  };
+  el.dispatchEvent(
+    new PointerEvent("pointerdown", {
+      ...opts,
+      pointerId: 1,
+      pointerType: "mouse",
+    }),
+  );
+  el.dispatchEvent(new MouseEvent("mousedown", opts));
+  el.dispatchEvent(
+    new PointerEvent("pointerup", {
+      ...opts,
+      pointerId: 1,
+      pointerType: "mouse",
+    }),
+  );
+  el.dispatchEvent(new MouseEvent("mouseup", opts));
+  el.dispatchEvent(new MouseEvent("click", opts));
+}
+
+function findButtonByTextShop(text) {
+  for (const btn of document.querySelectorAll("button")) {
+    if (btn.textContent.trim().toLowerCase().includes(text.toLowerCase()))
+      return btn;
+  }
+  for (const span of document.querySelectorAll("span")) {
+    if (span.textContent.trim().toLowerCase() === text.toLowerCase()) {
+      const btn = span.closest("button");
+      if (btn) return btn;
+    }
+  }
+  return null;
 }
 
 // ---- Auto-scrape on product page load ----

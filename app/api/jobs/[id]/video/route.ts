@@ -82,9 +82,18 @@ export async function POST(
     // Update job with the video serve URL
     const videoServeUrl = `http://localhost:3000/api/jobs/${id}/video`;
     if (!isTest) {
-      await prisma.videoJob.update({
+      const job = await prisma.videoJob.update({
         where: { id },
         data: { videoUrl: videoServeUrl },
+      });
+
+      // Auto-add to gallery so video persists even if the job is deleted
+      await prisma.galleryVideo.create({
+        data: {
+          filename: `${id}.mp4`,
+          videoType: job.videoType,
+          caption: job.tiktokCaption,
+        },
       });
     }
 
@@ -129,6 +138,21 @@ export async function GET(
       "Content-Type": "video/mp4",
       "Content-Length": videoBuffer.length.toString(),
       "Content-Disposition": `inline; filename="${id}.mp4"`,
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    },
+  });
+}
+
+// Handle CORS preflight
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
     },
   });
 }

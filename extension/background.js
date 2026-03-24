@@ -12,6 +12,11 @@ const FATAL_ERROR_PATTERNS = [
   "authentication",
   "forbidden",
   "product not found",
+  "tiktok posting failed",
+  "add anchor button",
+  "could not find",
+  "save draft button not found",
+  "not on tiktok studio",
 ];
 
 function classifyError(errorMessage) {
@@ -72,21 +77,40 @@ async function handleJobFailure(jobId, errorMessage, job) {
     } catch {}
   }
 
-  if (errorType !== "fatal" && retryCount < maxRetries) {
-    // Auto-retry: reset to pending with incremented retry count
-    const backoffSec = Math.min(10 * Math.pow(2, retryCount), 120); // 10s, 20s, 40s... max 120s
+  // Never retry posting phase — stop immediately and show error on dashboard
+  const currentStatus = job?.status || "pending";
+  if (currentStatus === "posting") {
     console.log(
-      `[TikTok Flow] Auto-retry ${retryCount + 1}/${maxRetries} in ${backoffSec}s for job ${jobId}`,
+      `[TikTok Flow] Posting failure — stopping job ${jobId} immediately`,
     );
     await fetch(`${API_BASE}/jobs/${jobId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        status: "pending",
+        status: "failed",
+        errorMessage: `[POSTING FAILED] ${errorMessage}`,
+        lastError: errorType,
+      }),
+    });
+    return;
+  }
+
+  if (errorType !== "fatal" && retryCount < maxRetries) {
+    // Auto-retry: preserve status for non-posting jobs
+    const retryStatus = "pending";
+    const backoffSec = Math.min(10 * Math.pow(2, retryCount), 120); // 10s, 20s, 40s... max 120s
+    console.log(
+      `[TikTok Flow] Auto-retry ${retryCount + 1}/${maxRetries} in ${backoffSec}s for job ${jobId} (status: ${retryStatus})`,
+    );
+    await fetch(`${API_BASE}/jobs/${jobId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: retryStatus,
         errorMessage: `Retry ${retryCount + 1}/${maxRetries}: ${errorMessage}`,
         lastError: errorType,
         retryCount: retryCount + 1,
-        startedAt: null,
+        startedAt: retryStatus === "posting" ? new Date().toISOString() : null,
       }),
     });
     // Schedule retry after backoff
@@ -452,6 +476,68 @@ function handleMessage(message, sender, sendResponse) {
 
     case "HEALTH_CHECK":
       healthCheckGoogleFlow().then(sendResponse);
+      return true;
+
+    case "TEST_TIKTOK_POST":
+      // Debug: send test commands to TikTok Studio tab for individual step testing
+      (async () => {
+        try {
+          const { action } = payload || {};
+          const studioTabId = await findTikTokStudioTab();
+          if (!studioTabId) {
+            sendResponse({
+              error:
+                "No TikTok Studio tab found. Open tiktokstudio/upload first.",
+            });
+            return;
+          }
+          chrome.tabs.update(studioTabId, { active: true });
+          const result = await new Promise((resolve) => {
+            chrome.tabs.sendMessage(
+              studioTabId,
+              { type: "TEST_ACTION", payload: { action } },
+              (response) => {
+                if (chrome.runtime.lastError) {
+                  resolve({ error: chrome.runtime.lastError.message });
+                } else {
+                  resolve(response || { error: "No response" });
+                }
+              },
+            );
+          });
+          sendResponse(result);
+        } catch (err) {
+          sendResponse({ error: err.message });
+        }
+      })();
+      return true;
+
+    case "START_POSTING":
+      (async () => {
+        try {
+          const { jobId } = payload || {};
+          if (!jobId) {
+            sendResponse({ error: "No jobId provided" });
+            return;
+          }
+          await fetch(`${API_BASE}/jobs/${jobId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              status: "posting",
+              startedAt: new Date().toISOString(),
+            }),
+          });
+          const res = await fetch(`${API_BASE}/jobs/${jobId}`);
+          const job = await res.json();
+          processPosting(job).catch((err) =>
+            console.error("[TikTok Flow] START_POSTING error:", err),
+          );
+          sendResponse({ ok: true });
+        } catch (err) {
+          sendResponse({ error: err.message });
+        }
+      })();
       return true;
 
     case "RETRY_JOB":
@@ -939,6 +1025,223 @@ async function ensureGoogleFlowTab() {
   return tabId;
 }
 
+// ---- TikTok Studio Tab Management ----
+
+async function findTikTokStudioTab() {
+  try {
+    const tabs = await chrome.tabs.query({
+      url: [
+        "https://www.tiktok.com/tiktokstudio/*",
+        "https://tiktok.com/tiktokstudio/*",
+      ],
+    });
+    if (tabs.length > 0) return tabs[0].id;
+  } catch (e) {
+    console.warn("[TikTok Flow] TikTok Studio tabs.query failed:", e);
+  }
+
+  // Strategy 2: Query all tabs
+  try {
+    const allTabs = await chrome.tabs.query({});
+    for (const tab of allTabs) {
+      if (tab.url && tab.url.includes("tiktokstudio")) {
+        return tab.id;
+      }
+    }
+  } catch (e) {
+    console.warn("[TikTok Flow] TikTok Studio all tabs query failed:", e);
+  }
+
+  return null;
+}
+
+async function ensureTikTokStudioTab() {
+  let tabId = await findTikTokStudioTab();
+
+  if (tabId) {
+    try {
+      const response = await chrome.tabs.sendMessage(tabId, { type: "PING" });
+      if (response?.status === "alive") {
+        // If we're on the content page, navigate to upload page
+        if (response.url && !response.url.includes("/upload")) {
+          await chrome.tabs.update(tabId, {
+            url: "https://www.tiktok.com/tiktokstudio/upload?from=creator_center",
+            active: true,
+          });
+          await new Promise((resolve) => {
+            const listener = (updatedTabId, changeInfo) => {
+              if (updatedTabId === tabId && changeInfo.status === "complete") {
+                chrome.tabs.onUpdated.removeListener(listener);
+                resolve();
+              }
+            };
+            chrome.tabs.onUpdated.addListener(listener);
+            setTimeout(() => {
+              chrome.tabs.onUpdated.removeListener(listener);
+              resolve();
+            }, 30000);
+          });
+          await new Promise((r) => setTimeout(r, 3000));
+        } else {
+          chrome.tabs.update(tabId, { active: true });
+        }
+        return tabId;
+      }
+    } catch {
+      // Content script not responding
+    }
+  }
+
+  // Open a new tab to upload page
+  const tab = await chrome.tabs.create({
+    url: "https://www.tiktok.com/tiktokstudio/upload?from=creator_center",
+    active: true,
+  });
+  tabId = tab.id;
+
+  // Wait for page to fully load
+  await new Promise((resolve) => {
+    const listener = (updatedTabId, changeInfo) => {
+      if (updatedTabId === tabId && changeInfo.status === "complete") {
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
+      }
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+    setTimeout(() => {
+      chrome.tabs.onUpdated.removeListener(listener);
+      resolve();
+    }, 30000);
+  });
+
+  // Wait for content script to be injected and responsive
+  await waitForContentScript(tabId, 15000);
+  return tabId;
+}
+
+// Ping content script in a retry loop until it responds
+async function waitForContentScript(tabId, timeout = 15000) {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    try {
+      const res = await new Promise((resolve, reject) => {
+        const t = setTimeout(() => reject(new Error("timeout")), 2000);
+        chrome.tabs.sendMessage(tabId, { type: "PING" }, (r) => {
+          clearTimeout(t);
+          if (chrome.runtime.lastError)
+            reject(new Error(chrome.runtime.lastError.message));
+          else resolve(r);
+        });
+      });
+      if (res?.status === "alive") {
+        console.log("[TikTok Flow] Content script alive on tab", tabId);
+        return true;
+      }
+    } catch {}
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  console.warn("[TikTok Flow] Content script not ready after", timeout, "ms");
+  return false;
+}
+
+async function healthCheckTikTokStudio() {
+  const tabId = await findTikTokStudioTab();
+  if (!tabId) return { ok: false, error: "No TikTok Studio tab found" };
+
+  try {
+    const response = await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("Ping timeout")), 5000);
+      chrome.tabs.sendMessage(tabId, { type: "PING" }, (res) => {
+        clearTimeout(timeout);
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+        } else {
+          resolve(res);
+        }
+      });
+    });
+    if (response?.status === "alive") {
+      return { ok: true, tabId, url: response.url };
+    }
+    return { ok: false, error: "Content script not responding" };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+// ---- TikTok Shop Tab Management ----
+
+async function findTikTokShopTab() {
+  try {
+    const tabs = await chrome.tabs.query({
+      url: ["https://shop.tiktok.com/*"],
+    });
+    if (tabs.length > 0) return tabs[0].id;
+  } catch (e) {
+    console.warn("[TikTok Flow] TikTok Shop tabs.query failed:", e);
+  }
+  return null;
+}
+
+async function ensureTikTokShopShowcaseTab() {
+  let tabId = await findTikTokShopTab();
+
+  if (tabId) {
+    try {
+      const response = await chrome.tabs.sendMessage(tabId, { type: "PING" });
+      if (response?.status === "alive") {
+        // Navigate to showcase page if not already there
+        if (!response.url?.includes("streamer/showcase")) {
+          await chrome.tabs.update(tabId, {
+            url: "https://shop.tiktok.com/streamer/showcase/product/list",
+            active: true,
+          });
+          await new Promise((resolve) => {
+            const listener = (updatedTabId, changeInfo) => {
+              if (updatedTabId === tabId && changeInfo.status === "complete") {
+                chrome.tabs.onUpdated.removeListener(listener);
+                resolve();
+              }
+            };
+            chrome.tabs.onUpdated.addListener(listener);
+            setTimeout(() => {
+              chrome.tabs.onUpdated.removeListener(listener);
+              resolve();
+            }, 30000);
+          });
+          await new Promise((r) => setTimeout(r, 3000));
+        } else {
+          chrome.tabs.update(tabId, { active: true });
+        }
+        return tabId;
+      }
+    } catch {}
+  }
+
+  const tab = await chrome.tabs.create({
+    url: "https://shop.tiktok.com/streamer/showcase/product/list",
+    active: true,
+  });
+  tabId = tab.id;
+
+  await new Promise((resolve) => {
+    const listener = (updatedTabId, changeInfo) => {
+      if (updatedTabId === tabId && changeInfo.status === "complete") {
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
+      }
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+    setTimeout(() => {
+      chrome.tabs.onUpdated.removeListener(listener);
+      resolve();
+    }, 30000);
+  });
+
+  await new Promise((r) => setTimeout(r, 3000));
+  return tabId;
+}
+
 // ---- Job Processing Automation ----
 let isProcessingJob = false;
 let autoModeEnabled = false;
@@ -1086,7 +1389,34 @@ async function handlePhaseComplete(jobId, nextStatus) {
     }
   } else if (nextStatus === "ready") {
     console.log("[TikTok Flow] Video complete, job is ready:", jobId);
-    // Video done — TikTok posting will be triggered from sidepanel
+
+    // Check if auto-post is enabled
+    const { autoPostEnabled } =
+      await chrome.storage.local.get("autoPostEnabled");
+    if (autoPostEnabled) {
+      console.log(
+        "[TikTok Flow] Auto-post enabled, starting posting for job:",
+        jobId,
+      );
+      await fetch(`${API_BASE}/jobs/${jobId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "posting",
+          startedAt: new Date().toISOString(),
+        }),
+      });
+      const res = await fetch(`${API_BASE}/jobs/${jobId}`);
+      const job = await res.json();
+      await processPosting(job);
+    } else {
+      console.log(
+        "[TikTok Flow] Auto-post disabled, waiting for manual trigger",
+      );
+    }
+  } else if (nextStatus === "posted") {
+    console.log("[TikTok Flow] Job posted successfully:", jobId);
+    // Continue to next job in queue
   }
 }
 
@@ -1132,8 +1462,31 @@ async function processNextJob() {
       await processImageGeneration(currentJob);
     } else if (currentJob.status === "generating_video") {
       await processVideoGeneration(currentJob);
+    } else if (currentJob.status === "posting") {
+      await processPosting(currentJob);
+    } else if (currentJob.status === "ready") {
+      // Check auto-post — if enabled, transition to posting
+      const { autoPostEnabled } =
+        await chrome.storage.local.get("autoPostEnabled");
+      if (autoPostEnabled) {
+        console.log(
+          "[TikTok Flow] Job ready + auto-post on, starting posting:",
+          currentJob.id,
+        );
+        await fetch(`${API_BASE}/jobs/${currentJob.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            status: "posting",
+            startedAt: new Date().toISOString(),
+          }),
+        });
+        const freshRes = await fetch(`${API_BASE}/jobs/${currentJob.id}`);
+        const freshJob = await freshRes.json();
+        await processPosting(freshJob);
+      }
+      // If auto-post off, do nothing — job stays at ready for manual trigger
     }
-    // "ready" and "posting" states are handled by user trigger from side panel
   } catch (err) {
     console.error("[TikTok Flow] Job processing error:", err);
   } finally {
@@ -1143,6 +1496,255 @@ async function processNextJob() {
   // Continue processing if auto mode is on
   if (autoModeEnabled && !isPaused) {
     setTimeout(processNextJob, 3000);
+  }
+}
+
+async function processPosting(job) {
+  console.log("[TikTok Flow] === Posting to TikTok for job:", job.id);
+
+  // Phase 1: Add product to TikTok Shop Showcase (optional, best-effort)
+  if (job.product?.url) {
+    try {
+      await updateJobStatusFromBg(job.id, {
+        status: "posting",
+        errorMessage: "Adding product to showcase...",
+      });
+
+      const shopTabId = await ensureTikTokShopShowcaseTab();
+      if (shopTabId) {
+        await new Promise((resolve) => {
+          chrome.tabs.sendMessage(
+            shopTabId,
+            {
+              type: "ADD_TO_SHOWCASE",
+              payload: { productUrl: job.product.url },
+            },
+            (response) => {
+              if (chrome.runtime.lastError) {
+                console.warn(
+                  "[TikTok Flow] Showcase add failed:",
+                  chrome.runtime.lastError.message,
+                );
+              } else if (response?.error) {
+                console.warn(
+                  "[TikTok Flow] Showcase add error:",
+                  response.error,
+                );
+              } else {
+                console.log("[TikTok Flow] Product added to showcase");
+              }
+              resolve(response);
+            },
+          );
+        });
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    } catch (err) {
+      console.warn(
+        "[TikTok Flow] Showcase step failed (non-fatal):",
+        err.message,
+      );
+    }
+  }
+
+  // Phase 2: Post video to TikTok Studio
+  const health = await healthCheckTikTokStudio();
+  if (!health.ok) {
+    console.warn(
+      "[TikTok Flow] TikTok Studio health check failed, ensuring tab...",
+    );
+  }
+
+  const tabId = await ensureTikTokStudioTab();
+  if (!tabId) {
+    await handleJobFailure(job.id, "Could not open TikTok Studio tab", job);
+    return;
+  }
+
+  chrome.tabs.update(tabId, { active: true });
+
+  let hashtags = [];
+  try {
+    hashtags = JSON.parse(job.tiktokHashtags || "[]");
+  } catch {}
+
+  // Fetch video in background script (no CORS/CSP restrictions)
+  // then pass as base64 to avoid tiktok.com blocking localhost fetches.
+  // Always prefer the watermark-removed version from our API.
+  let videoBase64 = null;
+  if (job.videoUrl) {
+    try {
+      await updateJobStatusFromBg(job.id, {
+        status: "posting",
+        errorMessage: "Downloading video for upload...",
+      });
+
+      const processedVideoUrl = `${API_BASE}/jobs/${job.id}/video`;
+      let videoBlob = null;
+
+      // Step 1: Try fetching the processed (watermark-removed) video from our API
+      try {
+        const processedResp = await fetch(processedVideoUrl);
+        if (processedResp.ok) {
+          videoBlob = await processedResp.blob();
+          console.log(
+            `[TikTok Flow] Using processed video from API (${videoBlob.size} bytes)`,
+          );
+        }
+      } catch (e) {
+        console.warn("[TikTok Flow] Processed video fetch failed:", e.message);
+      }
+
+      // Step 2: If no processed video, download the raw video and upload for FFmpeg processing
+      if (!videoBlob && job.videoUrl !== processedVideoUrl) {
+        console.log(
+          "[TikTok Flow] No processed video, downloading raw and uploading for watermark removal...",
+        );
+        await updateJobStatusFromBg(job.id, {
+          status: "posting",
+          errorMessage: "Processing video to remove watermark...",
+        });
+        const rawResp = await fetch(job.videoUrl);
+        if (!rawResp.ok) {
+          throw new Error(`Raw video fetch failed: HTTP ${rawResp.status}`);
+        }
+        const rawBlob = await rawResp.blob();
+
+        // Upload to our API for FFmpeg watermark removal
+        const formData = new FormData();
+        formData.append(
+          "video",
+          new File([rawBlob], "video.mp4", { type: "video/mp4" }),
+        );
+        const uploadResp = await fetch(processedVideoUrl, {
+          method: "POST",
+          body: formData,
+        });
+        if (uploadResp.ok) {
+          const uploadResult = await uploadResp.json();
+          console.log(
+            "[TikTok Flow] Video uploaded and processed, watermark removed:",
+            uploadResult.watermarkRemoved,
+          );
+          // Now fetch the processed version
+          const cleanResp = await fetch(processedVideoUrl);
+          if (cleanResp.ok) {
+            videoBlob = await cleanResp.blob();
+          }
+        }
+
+        // If processing failed, use the raw video as fallback
+        if (!videoBlob) {
+          console.warn(
+            "[TikTok Flow] FFmpeg processing failed, using raw video",
+          );
+          videoBlob = rawBlob;
+        }
+      }
+
+      if (!videoBlob) {
+        throw new Error("Could not obtain video from any source");
+      }
+
+      videoBase64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error("Failed to read video blob"));
+        reader.readAsDataURL(videoBlob);
+      });
+      console.log(
+        `[TikTok Flow] Video ready as base64 (${(videoBase64.length / 1024 / 1024).toFixed(1)}MB)`,
+      );
+    } catch (err) {
+      console.error("[TikTok Flow] Failed to fetch video in background:", err);
+      await handleJobFailure(
+        job.id,
+        `Video download failed: ${err.message}`,
+        job,
+      );
+      return;
+    }
+  }
+
+  try {
+    const result = await new Promise((resolve) => {
+      chrome.tabs.sendMessage(
+        tabId,
+        {
+          type: "POST_VIDEO",
+          payload: {
+            jobId: job.id,
+            videoBase64: videoBase64,
+            caption:
+              job.tiktokDescription ||
+              job.tiktokCaption ||
+              job.product?.title ||
+              "",
+            hashtags: hashtags,
+            productName: job.tiktokProductName || job.product?.title || "",
+            productUrl: job.product?.url || "",
+            tiktokProductName: job.tiktokProductName || "",
+            tiktokDescription: job.tiktokDescription || "",
+          },
+        },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            resolve({ error: chrome.runtime.lastError.message });
+          } else {
+            resolve(response || { error: "No response from content script" });
+          }
+        },
+      );
+    });
+
+    if (result.error) {
+      // The content script may still be finishing (save draft takes time).
+      // Wait and poll the API status before declaring failure.
+      console.warn("[TikTok Flow] Got error from message port:", result.error);
+      let actuallyPosted = false;
+      for (let attempt = 0; attempt < 12; attempt++) {
+        await new Promise((r) => setTimeout(r, 10000)); // wait 10s between checks
+        try {
+          const checkRes = await fetch(`${API_BASE}/jobs/${job.id}`);
+          const freshJob = await checkRes.json();
+          console.log(
+            `[TikTok Flow] Status check attempt ${attempt + 1}: ${freshJob.status}`,
+          );
+          if (freshJob.status === "posted") {
+            actuallyPosted = true;
+            break;
+          }
+          if (freshJob.status === "failed") {
+            break; // Content script already marked it as failed
+          }
+        } catch {}
+      }
+      if (actuallyPosted) {
+        console.log(
+          "[TikTok Flow] Job actually posted successfully (message port had closed early)",
+        );
+        return;
+      }
+      console.error("[TikTok Flow] Posting failed:", result.error);
+      await handleJobFailure(job.id, result.error, job);
+    } else {
+      console.log("[TikTok Flow] Posting complete:", result.tiktokPostUrl);
+    }
+  } catch (err) {
+    console.error("[TikTok Flow] Posting error:", err);
+    await handleJobFailure(job.id, err.message, job);
+  }
+}
+
+async function updateJobStatusFromBg(jobId, data) {
+  try {
+    await fetch(`${API_BASE}/jobs/${jobId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+  } catch (err) {
+    console.warn("[TikTok Flow] Failed to update job status:", err);
   }
 }
 
@@ -1322,6 +1924,32 @@ async function processVideoGeneration(job) {
         "[TikTok Flow] Video generation complete:",
         result.videoUrl?.substring(0, 80),
       );
+
+      // Check if auto-post is enabled — trigger posting inline
+      // (JOB_PHASE_COMPLETE from content script is blocked by isProcessingJob guard)
+      const { autoPostEnabled } =
+        await chrome.storage.local.get("autoPostEnabled");
+      if (autoPostEnabled) {
+        console.log(
+          "[TikTok Flow] Auto-post enabled, starting posting for job:",
+          job.id,
+        );
+        await fetch(`${API_BASE}/jobs/${job.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            status: "posting",
+            startedAt: new Date().toISOString(),
+          }),
+        });
+        const freshRes = await fetch(`${API_BASE}/jobs/${job.id}`);
+        const freshJob = await freshRes.json();
+        await processPosting(freshJob);
+      } else {
+        console.log(
+          "[TikTok Flow] Auto-post disabled, job is ready for manual posting",
+        );
+      }
     }
   } catch (err) {
     console.error("[TikTok Flow] Video generation error:", err);

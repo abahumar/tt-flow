@@ -32,6 +32,12 @@ const SETTING_FIELDS = [
     placeholder: "ohdoccgglgmopfclmolmhhchebmmn...",
     type: "text",
   },
+  {
+    key: "gemini_api_key",
+    label: "Gemini API Key",
+    placeholder: "AIzaSy...",
+    type: "password",
+  },
 ];
 
 export default function SettingsPage() {
@@ -183,6 +189,53 @@ export default function SettingsPage() {
           )}
           {saving ? "Saving..." : "Save Settings"}
         </button>
+      </div>
+
+      {/* Auto-Post Toggle */}
+      <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6">
+        <div>
+          <h2 className="text-lg font-semibold">TikTok Posting</h2>
+          <p className="text-xs text-gray-500">
+            Configure automatic posting behavior
+          </p>
+        </div>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-700">
+              Auto-post to TikTok
+            </p>
+            <p className="text-xs text-gray-500">
+              Automatically post videos to TikTok after generation completes.
+              When off, videos pause at &ldquo;Ready&rdquo; status for manual
+              posting.
+            </p>
+          </div>
+          <button
+            onClick={async () => {
+              const newValue =
+                settings["autoPostEnabled"] === "true" ? "false" : "true";
+              setSettings((s) => ({ ...s, autoPostEnabled: newValue }));
+              await fetch("/api/settings", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ autoPostEnabled: newValue }),
+              });
+            }}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              settings["autoPostEnabled"] === "true"
+                ? "bg-rose-500"
+                : "bg-gray-200"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transform transition-transform ${
+                settings["autoPostEnabled"] === "true"
+                  ? "translate-x-6"
+                  : "translate-x-1"
+              }`}
+            />
+          </button>
+        </div>
       </div>
 
       {/* Custom Prompts Section */}

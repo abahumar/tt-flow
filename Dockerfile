@@ -16,7 +16,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV DATABASE_URL="file:/data/dev.db"
 EXPOSE 3000
-CMD ["sh", "-c", "npx prisma migrate deploy 2>/dev/null; npx prisma db push && npm run dev"]
+CMD ["sh", "-c", "npx prisma migrate deploy 2>/dev/null; npx prisma db push && npx prisma generate && npm run dev"]
 
 # Build for production
 FROM base AS builder

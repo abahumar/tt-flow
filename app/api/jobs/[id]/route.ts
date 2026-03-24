@@ -13,6 +13,7 @@ export async function GET(
       product: {
         select: {
           id: true,
+          url: true,
           title: true,
           price: true,
           shopName: true,

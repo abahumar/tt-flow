@@ -42,6 +42,10 @@ interface PairedOutput {
   description: string;
   imagePrompt: string;
   videoPrompt: string;
+  tiktokProductName: string;
+  tiktokDescription: string;
+  tiktokCaption: string;
+  tiktokHashtags: string[];
 }
 
 const VIDEO_TYPES: Record<string, string> = {
@@ -248,10 +252,18 @@ export default function ToolsPage() {
             description: string;
             imagePrompt?: string;
             videoPrompt?: string;
+            tiktokProductName?: string;
+            tiktokDescription?: string;
+            tiktokCaption?: string;
+            tiktokHashtags?: string[];
           }) => ({
             description: v.description || "",
             imagePrompt: v.imagePrompt || "",
             videoPrompt: v.videoPrompt || "",
+            tiktokProductName: v.tiktokProductName || "",
+            tiktokDescription: v.tiktokDescription || "",
+            tiktokCaption: v.tiktokCaption || "",
+            tiktokHashtags: v.tiktokHashtags || [],
           }),
         ),
       );
@@ -285,6 +297,10 @@ export default function ToolsPage() {
             type === "image" || type === "both" ? output.imagePrompt : "",
           userVideoPrompt:
             type === "video" || type === "both" ? output.videoPrompt : "",
+          tiktokProductName: output.tiktokProductName || "",
+          tiktokDescription: output.tiktokDescription || "",
+          tiktokCaption: output.tiktokCaption || "",
+          tiktokHashtags: output.tiktokHashtags || [],
         }),
       });
 
@@ -812,6 +828,104 @@ export default function ToolsPage() {
                   className="min-h-20 w-full resize-none overflow-hidden bg-white px-5 py-3 font-mono text-sm leading-relaxed text-gray-700 focus:outline-none"
                   spellCheck={false}
                 />
+              </div>
+
+              {/* TikTok Product Name & Description Section */}
+              <div className="border-t border-gray-100">
+                <div className="bg-rose-50/50 px-5 py-2">
+                  <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-rose-700">
+                    <Package className="h-3.5 w-3.5" />
+                    TikTok Product Info (Editable)
+                  </span>
+                </div>
+                <div className="space-y-3 px-5 py-3">
+                  <div>
+                    <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-gray-500">
+                      Product Name{" "}
+                      <span className="text-gray-400">(max 30 chars)</span>
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={30}
+                      value={o.tiktokProductName}
+                      onChange={(e) => {
+                        const next = [...outputs];
+                        next[i] = {
+                          ...next[i],
+                          tiktokProductName: e.target.value,
+                        };
+                        setOutputs(next);
+                      }}
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-400"
+                      placeholder="Clean product name..."
+                    />
+                    <span className="mt-0.5 block text-right text-[10px] text-gray-400">
+                      {o.tiktokProductName.length}/30
+                    </span>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-gray-500">
+                      Description + Hashtags
+                    </label>
+                    <textarea
+                      value={o.tiktokDescription}
+                      onChange={(e) => {
+                        const next = [...outputs];
+                        next[i] = {
+                          ...next[i],
+                          tiktokDescription: e.target.value,
+                        };
+                        setOutputs(next);
+                      }}
+                      rows={3}
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-400"
+                      placeholder="Product description with hashtags..."
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-gray-500">
+                      Caption{" "}
+                      <span className="text-gray-400">(post caption)</span>
+                    </label>
+                    <textarea
+                      value={o.tiktokCaption}
+                      onChange={(e) => {
+                        const next = [...outputs];
+                        next[i] = {
+                          ...next[i],
+                          tiktokCaption: e.target.value,
+                        };
+                        setOutputs(next);
+                      }}
+                      rows={2}
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-400"
+                      placeholder="TikTok post caption..."
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-gray-500">
+                      Hashtags{" "}
+                      <span className="text-gray-400">(comma separated)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={(o.tiktokHashtags || []).join(", ")}
+                      onChange={(e) => {
+                        const next = [...outputs];
+                        next[i] = {
+                          ...next[i],
+                          tiktokHashtags: e.target.value
+                            .split(",")
+                            .map((t) => t.trim().replace(/^#/, ""))
+                            .filter(Boolean),
+                        };
+                        setOutputs(next);
+                      }}
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-400"
+                      placeholder="fyp, tiktokshop, bestseller..."
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           ))}

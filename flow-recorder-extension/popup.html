@@ -1,0 +1,253 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        width: 380px;
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+        background: #0f172a;
+        color: #e2e8f0;
+        padding: 16px;
+      }
+      h1 {
+        font-size: 16px;
+        font-weight: 700;
+        margin-bottom: 4px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .subtitle {
+        font-size: 11px;
+        color: #94a3b8;
+        margin-bottom: 16px;
+      }
+      .controls {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      button {
+        flex: 1;
+        padding: 10px 12px;
+        border: none;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      button:hover {
+        filter: brightness(1.1);
+      }
+      button:disabled {
+        opacity: 0.4;
+        cursor: default;
+        filter: none;
+      }
+      #btnStart {
+        background: #ef4444;
+        color: #fff;
+      }
+      #btnStop {
+        background: #64748b;
+        color: #fff;
+      }
+      #btnCopy {
+        background: #3b82f6;
+        color: #fff;
+      }
+      #btnClear {
+        background: #334155;
+        color: #94a3b8;
+      }
+      .status {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        margin-bottom: 12px;
+        padding: 8px 12px;
+        border-radius: 8px;
+        background: #1e293b;
+      }
+      .status .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #64748b;
+      }
+      .status.recording .dot {
+        background: #ef4444;
+        animation: pulse 1s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.3;
+        }
+      }
+      .step-count {
+        margin-left: auto;
+        font-weight: 600;
+        color: #3b82f6;
+      }
+      .steps-container {
+        max-height: 320px;
+        overflow-y: auto;
+        border-radius: 8px;
+        background: #1e293b;
+        margin-bottom: 12px;
+      }
+      .steps-container:empty::after {
+        content: "No steps recorded yet.\aStart recording and interact with the page.";
+        white-space: pre-line;
+        display: block;
+        padding: 24px;
+        text-align: center;
+        color: #64748b;
+        font-size: 12px;
+      }
+      .step {
+        padding: 8px 12px;
+        border-bottom: 1px solid #334155;
+        font-size: 11px;
+        line-height: 1.5;
+      }
+      .step:last-child {
+        border-bottom: none;
+      }
+      .step .seq {
+        display: inline-block;
+        width: 22px;
+        height: 22px;
+        line-height: 22px;
+        text-align: center;
+        border-radius: 50%;
+        background: #334155;
+        color: #94a3b8;
+        font-size: 10px;
+        font-weight: 700;
+        margin-right: 6px;
+        flex-shrink: 0;
+      }
+      .step .action-name {
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        margin-right: 6px;
+      }
+      .action-click {
+        background: #7c3aed22;
+        color: #a78bfa;
+      }
+      .action-type {
+        background: #05966922;
+        color: #6ee7b7;
+      }
+      .action-navigate {
+        background: #2563eb22;
+        color: #93c5fd;
+      }
+      .action-file_upload,
+      .action-file_drop {
+        background: #d9770622;
+        color: #fdba74;
+      }
+      .action-keypress {
+        background: #64748b22;
+        color: #94a3b8;
+      }
+      .action-scroll {
+        background: #64748b22;
+        color: #64748b;
+      }
+      .action-new_tab,
+      .action-tab_switch,
+      .action-tab_closed {
+        background: #2563eb22;
+        color: #93c5fd;
+      }
+      .action-select {
+        background: #05966922;
+        color: #6ee7b7;
+      }
+      .action-toggle {
+        background: #059669;
+        color: #6ee7b7;
+      }
+      .action-dblclick {
+        background: #7c3aed22;
+        color: #a78bfa;
+      }
+      .action-drag_drop {
+        background: #d9770622;
+        color: #fdba74;
+      }
+      .step .detail {
+        color: #94a3b8;
+        font-size: 10px;
+        margin-top: 2px;
+        word-break: break-all;
+      }
+      .toast {
+        position: fixed;
+        bottom: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #22c55e;
+        color: #fff;
+        padding: 6px 16px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        opacity: 0;
+        transition: opacity 0.2s;
+        pointer-events: none;
+      }
+      .toast.show {
+        opacity: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>⏺ Flow Recorder</h1>
+    <p class="subtitle">Record browser interactions to capture a workflow</p>
+
+    <div class="status" id="statusBar">
+      <span class="dot"></span>
+      <span id="statusText">Idle</span>
+      <span class="step-count" id="stepCount">0 steps</span>
+    </div>
+
+    <div class="controls">
+      <button id="btnStart">▶ Start Recording</button>
+      <button id="btnStop" disabled>⏹ Stop</button>
+    </div>
+
+    <div class="steps-container" id="stepsList"></div>
+
+    <div class="controls">
+      <button id="btnCopy" disabled>📋 Copy as Text</button>
+      <button id="btnClear" disabled>🗑 Clear</button>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

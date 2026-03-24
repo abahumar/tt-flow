@@ -9,6 +9,7 @@ import {
   Settings,
   Package,
   Wand2,
+  Film,
 } from "lucide-react";
 
 const nav = [
@@ -16,6 +17,7 @@ const nav = [
   { href: "/products", label: "Katalog Produk", icon: ShoppingBag },
   { href: "/tools", label: "Prompt Tools", icon: Wand2 },
   { href: "/automation", label: "Automation", icon: Zap },
+  { href: "/gallery", label: "Video Gallery", icon: Film },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

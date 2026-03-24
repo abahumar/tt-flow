@@ -196,10 +196,9 @@ function handleSkip(jobId) {
 }
 
 function handlePostToTikTok(jobId) {
-  chrome.runtime.sendMessage({ type: "OPEN_TIKTOK_STUDIO" });
   chrome.runtime.sendMessage({
-    type: "UPDATE_JOB_STATUS",
-    payload: { jobId, data: { status: "posting" } },
+    type: "START_POSTING",
+    payload: { jobId },
   });
 }
 
@@ -280,6 +279,16 @@ chrome.runtime.sendMessage({ type: "GET_AUTO_STATUS" }, (response) => {
   }
 });
 
+// Auto-post toggle
+chrome.storage.local.get("autoPostEnabled", ({ autoPostEnabled }) => {
+  const toggle = document.getElementById("autoPostToggle");
+  if (toggle) toggle.checked = !!autoPostEnabled;
+});
+
+document.getElementById("autoPostToggle").addEventListener("change", (e) => {
+  chrome.storage.local.set({ autoPostEnabled: e.target.checked });
+});
+
 // ---- Attach event listeners ----
 document
   .getElementById("autoModeBtn")
@@ -287,6 +296,50 @@ document
 document
   .getElementById("scrapeBtn")
   .addEventListener("click", handleScrapeCurrentPage);
+
+// ---- Test TikTok Studio buttons ----
+function sendTestToStudioTab(testAction) {
+  const resultEl = document.getElementById("testResult");
+  resultEl.innerHTML =
+    '<div style="font-size:11px;color:#6b7280">Running test...</div>';
+
+  chrome.runtime.sendMessage(
+    { type: "TEST_TIKTOK_POST", payload: { action: testAction } },
+    (response) => {
+      if (chrome.runtime.lastError) {
+        resultEl.innerHTML = `<div style="font-size:11px;color:#dc2626">Error: ${chrome.runtime.lastError.message}</div>`;
+        return;
+      }
+      if (response?.error) {
+        resultEl.innerHTML = `<div style="font-size:11px;color:#dc2626">${escapeHtml(response.error)}</div>`;
+      } else {
+        resultEl.innerHTML = `<div style="font-size:11px;color:#059669">✓ ${escapeHtml(response?.message || "Test sent")}</div>`;
+      }
+    },
+  );
+}
+
+document
+  .getElementById("testProductLinkBtn")
+  .addEventListener("click", () => sendTestToStudioTab("product_link"));
+document
+  .getElementById("testAiToggleBtn")
+  .addEventListener("click", () => sendTestToStudioTab("ai_toggle"));
+document
+  .getElementById("testFillProductBtn")
+  .addEventListener("click", () => sendTestToStudioTab("fill_product_info"));
+document
+  .getElementById("testScanDomBtn")
+  .addEventListener("click", () => sendTestToStudioTab("scan_dom"));
+document
+  .getElementById("testFillCaptionBtn")
+  .addEventListener("click", () => sendTestToStudioTab("fill_caption"));
+document
+  .getElementById("testSaveDraftBtn")
+  .addEventListener("click", () => sendTestToStudioTab("save_draft"));
+document
+  .getElementById("testFullPostBtn")
+  .addEventListener("click", () => sendTestToStudioTab("full_post"));
 
 // Event delegation for dynamically rendered buttons
 document.body.addEventListener("click", (e) => {

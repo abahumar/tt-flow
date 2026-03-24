@@ -193,7 +193,7 @@ export async function POST(req: NextRequest) {
     Shop: ${product.shopName || "N/A"}
     Marketing Angle: ${videoType}
 
-    Output JSON: { "variations": [{ "description": "Title", "image_prompt": "...", "scene": "...", "camera": "...", "action": "..."${dialogFields} }] }
+    Output JSON: { "variations": [{ "description": "Title", "image_prompt": "...", "scene": "...", "camera": "...", "action": "..."${dialogFields}, "tiktok_product_name": "Clean short product name for TikTok (max 30 chars, no special characters, no SKU codes)", "tiktok_description": "Compelling casual Malay product description with hashtags (max 200 chars)", "tiktok_caption": "Catchy casual Malay TikTok post caption (max 150 chars, no hashtags)", "tiktok_hashtags": ["fyp", "tiktokshop", "relevantTag1", "relevantTag2", "relevantTag3"] }] }
     Generate exactly ${variantCount} variations. All string fields must be plain strings (never objects).
   `;
 
@@ -207,6 +207,7 @@ export async function POST(req: NextRequest) {
           contents: [{ parts: [{ text: systemPrompt }] }],
           generationConfig: { responseMimeType: "application/json" },
         }),
+        cache: "no-store" as RequestCache,
       },
     );
 
@@ -279,10 +280,24 @@ export async function POST(req: NextRequest) {
           videoContent = `Scene: ${stringify(v.scene)}\nCamera: ${stringify(v.camera) || "Static"}\nAction: ${stringify(v.action)}${d_my}${d_en}`;
         }
 
+        // Parse hashtags array
+        let hashtags: string[] = [];
+        if (Array.isArray(v.tiktok_hashtags)) {
+          hashtags = (v.tiktok_hashtags as string[]).map((h) =>
+            String(h).replace(/^#/, ""),
+          );
+        }
+
         return {
           description: String(v.description || `Variation ${i + 1}`),
           imagePrompt: stringify(v.image_prompt),
           videoPrompt: videoContent,
+          tiktokProductName: String(v.tiktok_product_name || "")
+            .substring(0, 30)
+            .trim(),
+          tiktokDescription: String(v.tiktok_description || "").trim(),
+          tiktokCaption: String(v.tiktok_caption || "").trim(),
+          tiktokHashtags: hashtags,
         };
       },
     );
@@ -290,8 +305,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ type: "paired", platform, variations });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Unknown error";
+    const cause =
+      e instanceof Error && e.cause
+        ? ` | cause: ${JSON.stringify(e.cause, Object.getOwnPropertyNames(e.cause as object))}`
+        : "";
+    console.error(`[ai-generate] Failed: ${msg}${cause}`);
     return NextResponse.json(
-      { error: `AI generation failed: ${msg}` },
+      { error: `AI generation failed: ${msg}${cause}` },
       { status: 500 },
     );
   }

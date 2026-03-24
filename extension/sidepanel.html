@@ -311,10 +311,94 @@
             ▶ Start Auto Mode
           </button>
         </div>
+        <label
+          style="
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+          "
+        >
+          <input type="checkbox" id="autoPostToggle" />
+          <span>Auto Post to TikTok</span>
+        </label>
         <button class="btn btn-scrape" id="scrapeBtn">
           📦 Scrape Current Page
         </button>
         <div id="scrapeResult"></div>
+      </div>
+
+      <!-- Test TikTok Studio posting (for debugging) -->
+      <div
+        style="
+          margin-top: 10px;
+          padding-top: 10px;
+          border-top: 1px solid #e5e7eb;
+        "
+      >
+        <p style="font-size: 11px; color: #9ca3af; margin-bottom: 6px">
+          🧪 Debug: Test on current TikTok Studio tab
+        </p>
+        <div class="btn-row">
+          <button
+            class="btn"
+            id="testProductLinkBtn"
+            style="flex: 1; font-size: 11px"
+          >
+            🔗 Product Link
+          </button>
+          <button
+            class="btn"
+            id="testAiToggleBtn"
+            style="flex: 1; font-size: 11px"
+          >
+            🤖 AI Toggle
+          </button>
+        </div>
+        <div class="btn-row" style="margin-top: 4px">
+          <button
+            class="btn"
+            id="testFillProductBtn"
+            style="flex: 1; font-size: 11px"
+          >
+            📝 Fill Product Info
+          </button>
+          <button
+            class="btn"
+            id="testScanDomBtn"
+            style="flex: 1; font-size: 11px"
+          >
+            🔍 Scan DOM
+          </button>
+        </div>
+        <div class="btn-row" style="margin-top: 4px">
+          <button
+            class="btn"
+            id="testFillCaptionBtn"
+            style="flex: 1; font-size: 11px"
+          >
+            📋 Fill Caption
+          </button>
+          <button
+            class="btn"
+            id="testSaveDraftBtn"
+            style="flex: 1; font-size: 11px"
+          >
+            💾 Save Draft
+          </button>
+        </div>
+        <div class="btn-row" style="margin-top: 4px">
+          <button
+            class="btn btn-primary"
+            id="testFullPostBtn"
+            style="flex: 1; font-size: 11px"
+          >
+            🚀 Full Post Test
+          </button>
+        </div>
+        <div id="testResult" style="margin-top: 6px"></div>
       </div>
     </div>
 

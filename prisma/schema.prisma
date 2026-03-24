@@ -32,7 +32,11 @@ model VideoJob {
   videoPrompt   String   @default("")
   imageUrl      String   @default("")
   videoUrl      String   @default("")
-  tiktokPostUrl String   @default("")
+  tiktokCaption       String   @default("")
+  tiktokHashtags      String   @default("[]") // JSON array of hashtag strings
+  tiktokProductName   String   @default("") // Clean product name for TikTok product link (max 30 chars)
+  tiktokDescription   String   @default("") // Product description with hashtags for TikTok product link
+  tiktokPostUrl       String   @default("")
   errorMessage  String   @default("")
   retryCount    Int      @default(0) // how many times this job has been retried
   maxRetries    Int      @default(3) // max auto-retry attempts before giving up
@@ -65,4 +69,12 @@ model CustomPrompt {
   videoPrompt String   @default("")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model GalleryVideo {
+  id        String   @id @default(cuid())
+  filename  String   // e.g. "abc123.mp4" — the file in /data/videos/
+  videoType String   @default("")
+  caption   String   @default("")
+  createdAt DateTime @default(now())
 }
