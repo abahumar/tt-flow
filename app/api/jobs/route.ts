@@ -41,7 +41,23 @@ export async function POST(req: NextRequest) {
     tiktokDescription: userDescription,
     tiktokCaption: userCaption,
     tiktokHashtags: userHashtags,
+    imageOnly = false,
+    imagePrompt: directImagePrompt,
+    referenceImage,
   } = body;
+
+  // For imageOnly jobs, no product needed
+  if (imageOnly) {
+    const job = await prisma.videoJob.create({
+      data: {
+        imageOnly: true,
+        imagePrompt: directImagePrompt || userImagePrompt || "",
+        referenceImage: referenceImage || "",
+        status: "pending",
+      },
+    });
+    return NextResponse.json(job);
+  }
 
   if (!productId) {
     return NextResponse.json(

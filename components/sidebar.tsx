@@ -10,12 +10,14 @@ import {
   Package,
   Wand2,
   Film,
+  ImageIcon,
 } from "lucide-react";
 
 const nav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/products", label: "Katalog Produk", icon: ShoppingBag },
   { href: "/tools", label: "Prompt Tools", icon: Wand2 },
+  { href: "/image-tools", label: "Image Tools", icon: ImageIcon },
   { href: "/automation", label: "Automation", icon: Zap },
   { href: "/gallery", label: "Video Gallery", icon: Film },
   { href: "/settings", label: "Settings", icon: Settings },

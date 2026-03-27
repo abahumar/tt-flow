@@ -613,6 +613,115 @@ function handleMessage(message, sender, sendResponse) {
         }
       })();
       return true;
+
+    case "UPLOAD_IMAGE":
+      // Upload generated image from content script to backend (avoids CORS)
+      (async () => {
+        try {
+          const { jobId, imageBase64, mimeType } = payload;
+          const binaryStr = atob(imageBase64);
+          const bytes = new Uint8Array(binaryStr.length);
+          for (let i = 0; i < binaryStr.length; i++) {
+            bytes[i] = binaryStr.charCodeAt(i);
+          }
+          const blob = new Blob([bytes], { type: mimeType || "image/png" });
+          const ext = (mimeType || "image/png").split("/")[1] || "png";
+          const formData = new FormData();
+          formData.append(
+            "image",
+            new File([blob], `image.${ext}`, {
+              type: mimeType || "image/png",
+            }),
+          );
+
+          const resp = await fetch(`${API_BASE}/jobs/${jobId}/image`, {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!resp.ok) {
+            const errText = await resp.text();
+            sendResponse({
+              error: `Image upload failed (${resp.status}): ${errText}`,
+            });
+            return;
+          }
+
+          const result = await resp.json();
+          console.log(
+            "[TikTok Flow] Generated image uploaded to gallery:",
+            JSON.stringify(result),
+          );
+          sendResponse(result);
+        } catch (err) {
+          console.error("[TikTok Flow] Image upload error:", err);
+          sendResponse({ error: err.message });
+        }
+      })();
+      return true;
+
+    // ---- Image Job Processing ----
+    case "START_IMAGE_AUTO":
+      // Start processing the next pending image job
+      fetch(`${API_BASE}/image-jobs/start-auto`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      })
+        .then((r) => r.json())
+        .then((job) => {
+          if (job.id) {
+            processImageJob(job);
+          }
+          sendResponse(job);
+        })
+        .catch((err) => sendResponse({ error: err.message }));
+      return true;
+
+    case "UPLOAD_GENERATED_IMAGE":
+      // Upload generated image from content script to backend
+      (async () => {
+        try {
+          const { jobId, imageBase64, mimeType } = payload;
+          const binaryStr = atob(imageBase64);
+          const bytes = new Uint8Array(binaryStr.length);
+          for (let i = 0; i < binaryStr.length; i++) {
+            bytes[i] = binaryStr.charCodeAt(i);
+          }
+          const blob = new Blob([bytes], { type: mimeType || "image/png" });
+          const ext = (mimeType || "image/png").split("/")[1] || "png";
+          const formData = new FormData();
+          formData.append(
+            "image",
+            new File([blob], `image.${ext}`, {
+              type: mimeType || "image/png",
+            }),
+          );
+
+          const resp = await fetch(`${API_BASE}/image-jobs/${jobId}/image`, {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!resp.ok) {
+            const errText = await resp.text();
+            sendResponse({
+              error: `Upload failed (${resp.status}): ${errText}`,
+            });
+            return;
+          }
+
+          const result = await resp.json();
+          console.log(
+            "[TikTok Flow] Generated image uploaded:",
+            JSON.stringify(result),
+          );
+          sendResponse(result);
+        } catch (err) {
+          console.error("[TikTok Flow] Image upload error:", err);
+          sendResponse({ error: err.message });
+        }
+      })();
+      return true;
   }
 }
 
@@ -1282,6 +1391,7 @@ function releaseProcessingLock(lockId) {
     return false;
   }
   console.log(`[TikTok Flow] Lock released: ${processingLockId}`);
+  const wasProcessingAJob = processingJobId !== null;
   isProcessingJob = false;
   processingLockId = null;
   processingJobId = null;
@@ -1297,7 +1407,9 @@ function releaseProcessingLock(lockId) {
       () => handlePhaseCompleteWithLock(pending.jobId, pending.nextStatus),
       100,
     );
-  } else if (autoModeEnabled && !isPaused) {
+  } else if (wasProcessingAJob && autoModeEnabled && !isPaused) {
+    // Only re-schedule immediately if we actually processed a job.
+    // When idle (no jobs found), the 24s keepAlive alarm handles periodic polling.
     setTimeout(processNextJob, 3000);
   }
   return true;
@@ -1525,7 +1637,7 @@ async function processNextJob() {
     const currentJob = await fetchCurrentJob();
 
     if (!currentJob) {
-      // Try to start the next pending job
+      // Try to start the next pending job (video or image-only)
       const startBody = {};
       if (currentCustomPromptId)
         startBody.customPromptId = currentCustomPromptId;
@@ -1552,7 +1664,11 @@ async function processNextJob() {
     );
 
     if (currentJob.status === "generating_image") {
-      await processImageGeneration(currentJob);
+      if (currentJob.imageOnly) {
+        await processImageOnlyJob(currentJob);
+      } else {
+        await processImageGeneration(currentJob);
+      }
     } else if (currentJob.status === "generating_video") {
       await processVideoGeneration(currentJob);
     } else if (currentJob.status === "posting") {
@@ -1903,16 +2019,10 @@ async function processImageGeneration(job) {
       try {
         const freshRes = await fetch(`${API_BASE}/jobs/${job.id}`);
         const freshJob = await freshRes.json();
-        if (
-          freshJob.status === "generating_video" ||
-          freshJob.status === "ready"
-        ) {
+        if (freshJob.status === "generating_video") {
           console.log(
-            "[TikTok Flow] Job already advanced to",
-            freshJob.status,
-            "— content script succeeded despite message error. Proceeding to video...",
+            "[TikTok Flow] Job already advanced to generating_video — content script succeeded despite message error.",
           );
-          // Immediately proceed to video generation
           await processVideoGeneration(freshJob);
           return;
         }
@@ -1927,8 +2037,7 @@ async function processImageGeneration(job) {
         "[TikTok Flow] Image generation complete:",
         result.imageUrl?.substring(0, 80),
       );
-      // Image succeeded — immediately proceed to video generation
-      // Re-fetch the job to get the updated status and imageUrl
+      // Image succeeded — proceed to video generation
       try {
         const freshRes = await fetch(`${API_BASE}/jobs/${job.id}`);
         const freshJob = await freshRes.json();
@@ -1946,6 +2055,126 @@ async function processImageGeneration(job) {
     }
   } catch (err) {
     console.error("[TikTok Flow] Image generation error:", err);
+  }
+}
+
+// ---- Standalone Image-Only Job Processing ----
+// Duplicates the video creation flow but stops after image generation.
+// Completely standalone — no video generation step.
+async function processImageOnlyJob(job) {
+  console.log("[TikTok Flow] === Standalone image-only job:", job.id);
+
+  // Step 1: Ensure Google Flow tab is open and content script is alive
+  let flowTabId = await findGoogleFlowTab();
+  if (flowTabId) {
+    const health = await healthCheckGoogleFlow();
+    if (!health.ok) {
+      console.warn(
+        "[TikTok Flow] Google Flow tab found but not responsive, reopening...",
+      );
+      flowTabId = null;
+    }
+  }
+
+  if (!flowTabId) {
+    console.log("[TikTok Flow] Opening Google Flow tab for image-only job...");
+    flowTabId = await ensureGoogleFlowTab();
+    if (!flowTabId) {
+      await handleJobFailure(job.id, "Could not open Google Flow tab", job);
+      return;
+    }
+  }
+
+  // Focus the tab
+  chrome.tabs.update(flowTabId, { active: true });
+
+  // Step 2: Pre-fetch reference image in background (no CORS restrictions here)
+  // Content scripts on labs.google can't fetch from localhost due to CORS
+  let referenceImages = [];
+  if (job.referenceImage) {
+    try {
+      const imgUrl = `${API_BASE}/upload/${job.referenceImage}`;
+      console.log("[TikTok Flow] Fetching reference image:", imgUrl);
+      const imgRes = await fetch(imgUrl);
+      if (imgRes.ok) {
+        const blob = await imgRes.blob();
+        const dataUrl = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(blob);
+        });
+        referenceImages = [dataUrl];
+        console.log(
+          "[TikTok Flow] Reference image fetched as data URL (" +
+            Math.round(blob.size / 1024) +
+            "KB)",
+        );
+      } else {
+        console.warn(
+          "[TikTok Flow] Reference image fetch failed:",
+          imgRes.status,
+        );
+      }
+    } catch (fetchErr) {
+      console.warn(
+        "[TikTok Flow] Could not fetch reference image:",
+        fetchErr.message,
+      );
+    }
+  }
+
+  // Step 3: Send standalone image generation message to content script
+  try {
+    const result = await new Promise((resolve) => {
+      chrome.tabs.sendMessage(
+        flowTabId,
+        {
+          type: "GENERATE_IMAGE_ONLY",
+          payload: {
+            jobId: job.id,
+            prompt: job.imagePrompt,
+            referenceImages: referenceImages,
+          },
+        },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            resolve({ error: chrome.runtime.lastError.message });
+          } else {
+            resolve(response || { error: "No response from content script" });
+          }
+        },
+      );
+    });
+
+    if (result.error) {
+      console.warn("[TikTok Flow] Image-only result has error:", result.error);
+      // Check if content script already advanced the job
+      try {
+        const freshRes = await fetch(`${API_BASE}/jobs/${job.id}`);
+        const freshJob = await freshRes.json();
+        if (freshJob.status === "ready") {
+          console.log(
+            "[TikTok Flow] Image-only job already marked ready — content script succeeded.",
+          );
+          return;
+        }
+      } catch (fetchErr) {
+        console.warn("[TikTok Flow] Could not re-check job status:", fetchErr);
+      }
+      console.error(
+        "[TikTok Flow] Standalone image generation failed:",
+        result.error,
+      );
+      await handleJobFailure(job.id, result.error, job);
+    } else {
+      console.log(
+        "[TikTok Flow] Standalone image generation complete:",
+        result.imageUrl?.substring(0, 80),
+      );
+    }
+  } catch (err) {
+    console.error("[TikTok Flow] Standalone image generation error:", err);
+    await handleJobFailure(job.id, err.message || "Unknown error", job);
   }
 }
 

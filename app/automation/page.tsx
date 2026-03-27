@@ -629,7 +629,7 @@ export default function AutomationPage() {
             {jobs.map((job) => {
               const cfg = STATUS_CONFIG[job.status] || STATUS_CONFIG.pending;
               const Icon = cfg.icon;
-              const images: string[] = JSON.parse(job.product.images || "[]");
+              const images: string[] = JSON.parse(job.product?.images || "[]");
               const isFatal = job.lastError === "fatal";
               const isRetrying = job.retryCount > 0 && job.status === "pending";
               return (
@@ -652,10 +652,13 @@ export default function AutomationPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">
-                      {job.product.title}
+                      {job.product?.title ||
+                        (job.imageOnly ? "Image Only" : "No Product")}
                     </p>
                     <p className="text-xs text-gray-400">
-                      {VIDEO_TYPES[job.videoType] || job.videoType}
+                      {job.imageOnly
+                        ? "Image Generation"
+                        : VIDEO_TYPES[job.videoType] || job.videoType}
                       {job.retryCount > 0 && (
                         <span className="ml-1 text-amber-500">
                           · retry {job.retryCount}/{job.maxRetries}

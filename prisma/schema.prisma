@@ -24,10 +24,12 @@ model Product {
 
 model VideoJob {
   id            String   @id @default(cuid())
-  productId     String
-  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId     String?
+  product       Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
   status        String   @default("pending") // pending, generating_image, generating_video, ready, posting, posted, failed
   videoType     String   @default("fungsi_produk") // marketing angle
+  imageOnly     Boolean  @default(false) // true = stop after image generation (no video/posting)
+  referenceImage String  @default("") // uploaded reference image filename for image-only jobs
   imagePrompt   String   @default("")
   videoPrompt   String   @default("")
   imageUrl      String   @default("")
@@ -76,5 +78,27 @@ model GalleryVideo {
   filename  String   // e.g. "abc123.mp4" — the file in /data/videos/
   videoType String   @default("")
   caption   String   @default("")
+  createdAt DateTime @default(now())
+}
+
+model ImageJob {
+  id              String    @id @default(cuid())
+  status          String    @default("pending") // pending, generating, completed, failed
+  imagePrompt     String    @default("")
+  referenceImage  String    @default("") // filename in /data/images/references/
+  resultImage     String    @default("") // filename in /data/images/generated/
+  errorMessage    String    @default("")
+  retryCount      Int       @default(0)
+  maxRetries      Int       @default(3)
+  lastError       String    @default("") // retryable|fatal|timeout
+  startedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model GalleryImage {
+  id        String   @id @default(cuid())
+  filename  String   // e.g. "abc123.png" — the file in /data/images/generated/
+  prompt    String   @default("")
   createdAt DateTime @default(now())
 }

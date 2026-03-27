@@ -57,6 +57,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         .catch((err) => sendResponse({ error: err.message }));
       return true;
 
+    case "GENERATE_IMAGE_ONLY":
+      generateImageOnly(payload)
+        .then((result) => sendResponse(result))
+        .catch((err) => sendResponse({ error: err.message }));
+      return true;
+
     case "GENERATE_VIDEO":
       generateVideo(payload)
         .then((result) => sendResponse(result))
@@ -1741,6 +1747,104 @@ function extractMediaUrl(element) {
   return null;
 }
 
+// ---- Download generated image and upload to backend for gallery storage ----
+// Mirrors downloadAndUploadVideo but for images.
+async function downloadAndUploadImage(resultEl, jobId) {
+  console.log("[TikTok Flow] === Downloading generated image for job:", jobId);
+
+  let imageBlob = null;
+
+  // Strategy 1: Fetch the image element's src directly
+  const imgSrc = resultEl.src || resultEl.querySelector?.("img")?.src;
+  if (imgSrc) {
+    console.log("[TikTok Flow] Fetching image src:", imgSrc.substring(0, 100));
+    try {
+      const resp = await fetch(imgSrc);
+      if (resp.ok) {
+        imageBlob = await resp.blob();
+        console.log(
+          "[TikTok Flow] Downloaded image via src:",
+          imageBlob.size,
+          "bytes",
+        );
+      }
+    } catch (e) {
+      console.warn("[TikTok Flow] Image src fetch failed:", e.message);
+    }
+  }
+
+  // Strategy 2: Canvas capture as fallback
+  if (!imageBlob && resultEl.tagName === "IMG") {
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = resultEl.naturalWidth || resultEl.width;
+      canvas.height = resultEl.naturalHeight || resultEl.height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(resultEl, 0, 0);
+      imageBlob = await new Promise((resolve) =>
+        canvas.toBlob(resolve, "image/png"),
+      );
+      console.log(
+        "[TikTok Flow] Captured image via canvas:",
+        imageBlob?.size,
+        "bytes",
+      );
+    } catch (e) {
+      console.warn("[TikTok Flow] Canvas capture failed:", e.message);
+    }
+  }
+
+  if (!imageBlob || imageBlob.size < 100) {
+    throw new Error("Could not download image bytes.");
+  }
+
+  // Convert blob to base64 to send via chrome.runtime.sendMessage
+  console.log(
+    "[TikTok Flow] Uploading image to backend:",
+    imageBlob.size,
+    "bytes",
+  );
+  const arrayBuffer = await imageBlob.arrayBuffer();
+  const uint8Array = new Uint8Array(arrayBuffer);
+  let binary = "";
+  const chunkSize = 32768;
+  for (let i = 0; i < uint8Array.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(
+      null,
+      uint8Array.subarray(i, i + chunkSize),
+    );
+  }
+  const base64Image = btoa(binary);
+
+  const result = await new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(
+      {
+        type: "UPLOAD_IMAGE",
+        payload: {
+          jobId,
+          imageBase64: base64Image,
+          mimeType: imageBlob.type || "image/png",
+        },
+      },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+        } else if (response?.error) {
+          reject(new Error(response.error));
+        } else {
+          resolve(response);
+        }
+      },
+    );
+  });
+
+  console.log(
+    "[TikTok Flow] ✅ Image uploaded to gallery:",
+    JSON.stringify(result),
+  );
+  return result.imageUrl;
+}
+
 // ---- Download video blob and upload to backend for watermark removal ----
 // Strategy: fetch the video bytes in-page (where blob: URLs are valid),
 // then POST to the backend API which saves and processes with FFmpeg.
@@ -2115,6 +2219,7 @@ async function generateImage({ jobId, prompt, productImages }) {
       "[TikTok Flow] Image generation SUCCESS:",
       imageUrl.substring(0, 100),
     );
+
     await updateJobStatus(jobId, { status: "generating_video", imageUrl });
 
     // Notify background to immediately start video generation.
@@ -2128,6 +2233,220 @@ async function generateImage({ jobId, prompt, productImages }) {
     return { success: true, imageUrl };
   } catch (err) {
     console.error("[TikTok Flow] Image generation FAILED:", err.message);
+    await updateJobStatus(jobId, {
+      status: "failed",
+      errorMessage: err.message,
+    });
+    return { error: err.message };
+  }
+}
+
+// ---- Standalone Image Generation (duplicates video flow, stops after image) ----
+// This is a standalone function that mirrors the video creation flow
+// but stops after image generation. Used for image-only jobs.
+async function generateImageOnly({ jobId, prompt, referenceImages }) {
+  console.log(
+    "[TikTok Flow] === Starting STANDALONE IMAGE generation for job:",
+    jobId,
+  );
+  console.log(
+    "[TikTok Flow] Prompt:",
+    (prompt || "").substring(0, 100) + "...",
+  );
+  console.log(
+    "[TikTok Flow] Reference images:",
+    (referenceImages || []).length,
+    "available",
+  );
+
+  try {
+    verifyFlowPage();
+    await sleep(2000);
+
+    // Step 0: Wait for gallery UI to be ready (SPA may still be loading)
+    console.log("[TikTok Flow] Waiting for gallery UI to be ready...");
+    let galleryReady = false;
+    for (let wait = 0; wait < 15; wait++) {
+      // Check if we can find "New project" button or are already on creation page
+      if (isOnCreationPage()) {
+        galleryReady = true;
+        break;
+      }
+      const allButtons = document.querySelectorAll("button");
+      for (const btn of allButtons) {
+        const text = btn.textContent.trim().toLowerCase();
+        if (text.includes("new project") || text.includes("add_2")) {
+          galleryReady = true;
+          break;
+        }
+      }
+      if (galleryReady) break;
+      console.log(
+        "[TikTok Flow] Gallery not ready yet, waiting... (" +
+          (wait + 1) +
+          "/15)",
+      );
+      await sleep(2000);
+    }
+    if (!galleryReady) {
+      throw new Error(
+        "Google Flow gallery did not load. Make sure you are logged in at https://labs.google/fx/tools/flow",
+      );
+    }
+
+    // Step 1: Navigate to a fresh project — select Image from dropdown
+    await withRetry(() => navigateToNewProject("image"), {
+      maxAttempts: 5,
+      delayMs: 3000,
+      label: "Navigate to new image project",
+    });
+    await sleep(1500);
+
+    // Step 2: Ensure Image mode is selected in settings
+    console.log("[TikTok Flow] Ensuring Image mode is selected...");
+    let switched = false;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      switched = await switchToMode("image");
+      if (switched) break;
+      console.log(
+        "[TikTok Flow] Image mode switch attempt",
+        attempt + 1,
+        "failed, retrying...",
+      );
+      await sleep(1000);
+    }
+    if (!switched) {
+      console.warn(
+        "[TikTok Flow] Could not switch to Image tab after 3 attempts — proceeding anyway",
+      );
+    }
+
+    // Step 2.1: Set aspect ratio to 9:16 (PORTRAIT) for TikTok
+    console.log(
+      "[TikTok Flow] Setting image aspect ratio to 9:16 (PORTRAIT)...",
+    );
+    await selectTriggerOption("PORTRAIT", "9:16");
+    await sleep(500);
+
+    await closeSettingsDropdown();
+    await sleep(1000);
+
+    // Step 3: Upload reference image if available
+    if (referenceImages && referenceImages.length > 0) {
+      console.log(
+        "[TikTok Flow] Uploading reference image:",
+        referenceImages[0].substring(0, 80),
+      );
+      await withRetry(() => uploadAndAddReferenceToPrompt(referenceImages[0]), {
+        maxAttempts: 2,
+        delayMs: 2000,
+        label: "Upload reference image",
+      });
+      console.log(
+        "[TikTok Flow] ✅ Reference image uploaded and added to prompt",
+      );
+
+      // Verify still in Image mode after "Add to Prompt"
+      console.log(
+        "[TikTok Flow] Verifying still in Image mode after Add to Prompt...",
+      );
+      switched = false;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        switched = await switchToMode("image");
+        if (switched) break;
+        await sleep(1000);
+      }
+      if (!switched) {
+        console.warn(
+          "[TikTok Flow] Could not confirm Image mode after Add to Prompt — proceeding anyway",
+        );
+      }
+      await closeSettingsDropdown();
+      await sleep(1000);
+    } else {
+      console.warn(
+        "[TikTok Flow] No reference images — generating from prompt only",
+      );
+    }
+
+    // Step 4: Find the prompt input (contenteditable div)
+    let promptEl = findPromptInput();
+    if (!promptEl) {
+      console.log("[TikTok Flow] Prompt not found immediately, waiting...");
+      await sleep(3000);
+      promptEl = findPromptInput();
+    }
+    if (!promptEl) {
+      throw new Error(
+        "Could not find prompt input on Google Flow. " +
+          "Make sure you are on https://labs.google/fx/tools/flow and logged in.",
+      );
+    }
+
+    // Step 5: Click to focus, then fill the prompt
+    simulateClick(promptEl);
+    await sleep(300);
+    await fillPrompt(promptEl, prompt);
+
+    // Step 6: Click Create button (retry up to 5 times)
+    let createBtn = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await sleep(500);
+      createBtn = findGenerateButton();
+      if (createBtn) break;
+      console.log(
+        "[TikTok Flow] Create button not found, retry",
+        attempt + 1,
+        "of 5...",
+      );
+      await sleep(1000);
+    }
+    if (!createBtn) {
+      throw new Error("Could not find Create button. The UI may have changed.");
+    }
+    simulateClick(createBtn);
+    console.log("[TikTok Flow] Create clicked, waiting for image result...");
+
+    // Step 7: Wait for the generated image
+    await sleep(3000);
+    const resultEl = await waitForImageResult(180000); // 3 min timeout
+
+    // Step 8: Extract URL
+    const imageUrl = extractMediaUrl(resultEl);
+    if (!imageUrl) {
+      throw new Error("Image appeared but could not extract URL");
+    }
+
+    console.log(
+      "[TikTok Flow] Standalone image generation SUCCESS:",
+      imageUrl.substring(0, 100),
+    );
+
+    // Step 9: Download image and upload to backend for gallery storage
+    let savedImageUrl = imageUrl;
+    try {
+      savedImageUrl = await downloadAndUploadImage(resultEl, jobId);
+      console.log("[TikTok Flow] Image saved to gallery:", savedImageUrl);
+    } catch (uploadErr) {
+      console.warn(
+        "[TikTok Flow] Image gallery upload failed, using raw URL:",
+        uploadErr.message,
+      );
+    }
+
+    // Mark job as ready — standalone image, no video generation
+    await updateJobStatus(jobId, { status: "ready", imageUrl: savedImageUrl });
+    chrome.runtime.sendMessage({
+      type: "JOB_PHASE_COMPLETE",
+      payload: { jobId, phase: "image", nextStatus: "ready" },
+    });
+
+    return { success: true, imageUrl: savedImageUrl };
+  } catch (err) {
+    console.error(
+      "[TikTok Flow] Standalone image generation FAILED:",
+      err.message,
+    );
     await updateJobStatus(jobId, {
       status: "failed",
       errorMessage: err.message,
