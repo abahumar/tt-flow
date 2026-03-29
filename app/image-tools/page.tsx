@@ -23,6 +23,10 @@ import {
   X,
   Play,
   RefreshCw,
+  Save,
+  BookmarkPlus,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 interface ImageVariation {
@@ -37,6 +41,13 @@ interface ImageJobData {
   imageOnly: boolean;
   imageUrl: string;
   errorMessage: string;
+  createdAt: string;
+}
+
+interface SavedPrompt {
+  id: string;
+  name: string;
+  imagePrompt: string;
   createdAt: string;
 }
 
@@ -76,6 +87,13 @@ export default function ImageToolsPage() {
   // Automation
   const [startingAuto, setStartingAuto] = useState(false);
 
+  // Saved prompts
+  const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]);
+  const [showSavedPrompts, setShowSavedPrompts] = useState(false);
+  const [savingPrompt, setSavingPrompt] = useState(false);
+  const [savePromptName, setSavePromptName] = useState("");
+  const [showSaveForm, setShowSaveForm] = useState(false);
+
   // UI state
   const [error, setError] = useState("");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -109,12 +127,24 @@ export default function ImageToolsPage() {
     }
   }, []);
 
-  // Load API key and jobs + auto-poll when jobs are generating
+  // Fetch saved prompts
+  const fetchSavedPrompts = useCallback(async () => {
+    try {
+      const res = await fetch("/api/custom-prompts");
+      const data = await res.json();
+      setSavedPrompts(data.filter((p: SavedPrompt) => p.imagePrompt));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Load API key, jobs, and saved prompts
   useEffect(() => {
     const savedKey = localStorage.getItem("gemini_api_key");
     if (savedKey) setApiKey(savedKey);
     fetchJobs();
-  }, [fetchJobs]);
+    fetchSavedPrompts();
+  }, [fetchJobs, fetchSavedPrompts]);
 
   // Auto-poll jobs every 5s when there are generating jobs
   useEffect(() => {
@@ -285,6 +315,47 @@ export default function ImageToolsPage() {
     } finally {
       setSendingKey(null);
     }
+  };
+
+  // Save manual prompt
+  const handleSavePrompt = async () => {
+    if (!manualPrompt.trim() || !savePromptName.trim()) return;
+    setSavingPrompt(true);
+    try {
+      const res = await fetch("/api/custom-prompts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: savePromptName.trim(),
+          imagePrompt: manualPrompt,
+        }),
+      });
+      if (res.ok) {
+        setSavePromptName("");
+        setShowSaveForm(false);
+        fetchSavedPrompts();
+      }
+    } catch {
+      setError("Failed to save prompt");
+    } finally {
+      setSavingPrompt(false);
+    }
+  };
+
+  // Delete saved prompt
+  const handleDeleteSavedPrompt = async (id: string) => {
+    try {
+      await fetch(`/api/custom-prompts/${id}`, { method: "DELETE" });
+      fetchSavedPrompts();
+    } catch {
+      // ignore
+    }
+  };
+
+  // Load saved prompt into manual textarea
+  const loadSavedPrompt = (prompt: SavedPrompt) => {
+    setManualPrompt(prompt.imagePrompt);
+    setShowSavedPrompts(false);
   };
 
   // Send manual prompt to queue
@@ -486,6 +557,57 @@ export default function ImageToolsPage() {
         {/* Manual Mode */}
         {promptMode === "manual" && (
           <div className="space-y-3">
+            {/* Saved Prompts Toggle */}
+            {savedPrompts.length > 0 && (
+              <div>
+                <button
+                  onClick={() => setShowSavedPrompts(!showSavedPrompts)}
+                  className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-700"
+                >
+                  <BookmarkPlus size={14} />
+                  Saved Prompts ({savedPrompts.length})
+                  {showSavedPrompts ? (
+                    <ChevronUp size={12} />
+                  ) : (
+                    <ChevronDown size={12} />
+                  )}
+                </button>
+
+                {showSavedPrompts && (
+                  <div className="mt-2 max-h-48 space-y-1 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-2">
+                    {savedPrompts.map((sp) => (
+                      <div
+                        key={sp.id}
+                        className="flex items-center justify-between rounded-lg px-3 py-2 hover:bg-white cursor-pointer group"
+                      >
+                        <div
+                          className="min-w-0 flex-1"
+                          onClick={() => loadSavedPrompt(sp)}
+                        >
+                          <p className="text-sm font-medium text-gray-700 truncate">
+                            {sp.name}
+                          </p>
+                          <p className="text-[11px] text-gray-400 truncate">
+                            {sp.imagePrompt.substring(0, 80)}
+                            {sp.imagePrompt.length > 80 ? "..." : ""}
+                          </p>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteSavedPrompt(sp.id);
+                          }}
+                          className="ml-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             <textarea
               value={manualPrompt}
               onChange={(e) => setManualPrompt(e.target.value)}
@@ -493,20 +615,72 @@ export default function ImageToolsPage() {
               placeholder="Enter your image prompt here... e.g., 'From the image uploaded, accurate scale, no alter, no redesign. Create a professional product showcase on a clean white background with studio lighting.'"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500"
             />
-            <button
-              onClick={sendManualToQueue}
-              disabled={!manualPrompt.trim() || sendingKey === "prompt--1"}
-              className="flex items-center gap-1.5 rounded-lg bg-pink-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-pink-700 disabled:opacity-50"
-            >
-              {sendingKey === "prompt--1" ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : sentKeys.has("prompt--1") ? (
-                <CheckCircle2 size={14} />
-              ) : (
-                <Send size={14} />
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={sendManualToQueue}
+                disabled={!manualPrompt.trim() || sendingKey === "prompt--1"}
+                className="flex items-center gap-1.5 rounded-lg bg-pink-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-pink-700 disabled:opacity-50"
+              >
+                {sendingKey === "prompt--1" ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : sentKeys.has("prompt--1") ? (
+                  <CheckCircle2 size={14} />
+                ) : (
+                  <Send size={14} />
+                )}
+                {sentKeys.has("prompt--1") ? "Added!" : "Add to Queue"}
+              </button>
+
+              {/* Save Prompt Button */}
+              {manualPrompt.trim() && !showSaveForm && (
+                <button
+                  onClick={() => setShowSaveForm(true)}
+                  className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
+                >
+                  <Save size={14} />
+                  Save Prompt
+                </button>
               )}
-              {sentKeys.has("prompt--1") ? "Added!" : "Add to Queue"}
-            </button>
+            </div>
+
+            {/* Save prompt form */}
+            {showSaveForm && (
+              <div className="flex items-center gap-2 rounded-lg border border-pink-200 bg-pink-50 p-3">
+                <input
+                  type="text"
+                  value={savePromptName}
+                  onChange={(e) => setSavePromptName(e.target.value)}
+                  placeholder="Prompt name (e.g., Product Showcase Clean BG)"
+                  className="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSavePrompt();
+                  }}
+                  autoFocus
+                />
+                <button
+                  onClick={handleSavePrompt}
+                  disabled={savingPrompt || !savePromptName.trim()}
+                  className="flex items-center gap-1 rounded-lg bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-700 disabled:opacity-50"
+                >
+                  {savingPrompt ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : (
+                    <Save size={12} />
+                  )}
+                  Save
+                </button>
+                <button
+                  onClick={() => {
+                    setShowSaveForm(false);
+                    setSavePromptName("");
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
           </div>
         )}
 
