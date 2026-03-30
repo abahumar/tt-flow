@@ -11,6 +11,12 @@ import {
   PenLine,
   Loader2,
   CheckCircle2,
+  Upload,
+  List,
+  FileText,
+  AlertCircle,
+  Check,
+  X,
 } from "lucide-react";
 
 interface Product {
@@ -34,6 +40,16 @@ export default function ProductsPage() {
   const [creatingJobId, setCreatingJobId] = useState<string | null>(null);
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
   const [showManual, setShowManual] = useState(false);
+  const [showBulk, setShowBulk] = useState(false);
+  const [bulkUrls, setBulkUrls] = useState("");
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{
+    created: number;
+    skippedExisting: number;
+    skippedQueued: number;
+    skippedInvalid: number;
+    details: { url: string; status: string; reason?: string }[];
+  } | null>(null);
   const [manual, setManual] = useState({
     url: "",
     title: "",
@@ -139,6 +155,68 @@ export default function ProductsPage() {
     setScraping(false);
   };
 
+  // Bulk import handler
+  const handleBulkImport = async () => {
+    const lines = bulkUrls
+      .split(/[\n,]+/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+    if (lines.length === 0) return;
+
+    setBulkLoading(true);
+    setBulkResult(null);
+
+    try {
+      const res = await fetch("/api/scrape-requests/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ urls: lines }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setBulkResult(data);
+        if (data.created > 0) {
+          setBulkUrls("");
+        }
+      } else {
+        alert(data.error || "Bulk import failed");
+      }
+    } catch {
+      alert("Network error during bulk import");
+    }
+    setBulkLoading(false);
+  };
+
+  const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      if (!text) return;
+      // Parse CSV: extract URLs from all columns
+      const urls: string[] = [];
+      const lines = text.split(/\r?\n/);
+      for (const line of lines) {
+        const cells = line
+          .split(",")
+          .map((c) => c.trim().replace(/^"|"$/g, ""));
+        for (const cell of cells) {
+          if (cell.startsWith("http://") || cell.startsWith("https://")) {
+            urls.push(cell);
+          }
+        }
+      }
+      if (urls.length > 0) {
+        setBulkUrls((prev) => (prev ? prev + "\n" : "") + urls.join("\n"));
+      } else {
+        alert("No URLs found in the CSV file");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this product and all its video jobs?")) return;
     await fetch(`/api/products/${id}`, { method: "DELETE" });
@@ -212,6 +290,18 @@ export default function ProductsPage() {
             <PenLine className="h-3 w-3" />{" "}
             {showManual ? "Hide manual form" : "Add manually"}
           </button>
+          <span>·</span>
+          <button
+            type="button"
+            onClick={() => {
+              setShowBulk(!showBulk);
+              setBulkResult(null);
+            }}
+            className="flex items-center gap-1 text-purple-500 hover:underline"
+          >
+            <List className="h-3 w-3" />{" "}
+            {showBulk ? "Hide bulk import" : "Bulk import"}
+          </button>
         </div>
       </form>
 
@@ -281,6 +371,126 @@ export default function ProductsPage() {
             <Plus className="h-4 w-4" /> Add Product
           </button>
         </form>
+      )}
+
+      {/* Bulk import section */}
+      {showBulk && (
+        <div className="space-y-3 rounded-xl border border-purple-200 bg-purple-50/50 p-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-purple-700 flex items-center gap-1.5">
+              <List className="h-4 w-4" /> Bulk Product Import
+            </h3>
+            <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-purple-300 bg-white px-3 py-1.5 text-xs font-medium text-purple-600 transition-colors hover:bg-purple-100">
+              <FileText className="h-3 w-3" /> Import CSV
+              <input
+                type="file"
+                accept=".csv,.txt"
+                onChange={handleCsvUpload}
+                className="hidden"
+              />
+            </label>
+          </div>
+
+          <p className="text-xs text-purple-600/70">
+            Paste multiple TikTok Shop product URLs below — one per line or
+            comma-separated. They will be queued for scraping via the Chrome
+            extension.
+          </p>
+
+          <textarea
+            value={bulkUrls}
+            onChange={(e) => setBulkUrls(e.target.value)}
+            placeholder={
+              "https://shop.tiktok.com/product/123...\nhttps://shop.tiktok.com/product/456...\nhttps://shop.tiktok.com/product/789..."
+            }
+            rows={6}
+            className="w-full rounded-lg border border-purple-300 bg-white px-3 py-2 font-mono text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+          />
+
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-purple-600/70">
+              {bulkUrls.split(/[\n,]+/).filter((l) => l.trim()).length} URL(s)
+              detected
+            </span>
+            <button
+              onClick={handleBulkImport}
+              disabled={bulkLoading || !bulkUrls.trim()}
+              className="flex items-center gap-2 rounded-lg bg-purple-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-600 disabled:opacity-50"
+            >
+              {bulkLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4" />
+              )}
+              {bulkLoading ? "Queueing..." : "Queue All for Scraping"}
+            </button>
+          </div>
+
+          {/* Bulk import results */}
+          {bulkResult && (
+            <div className="space-y-2 rounded-lg border border-purple-200 bg-white p-3">
+              <h4 className="text-sm font-semibold text-gray-700">
+                Import Results
+              </h4>
+              <div className="flex flex-wrap gap-3 text-xs">
+                {bulkResult.created > 0 && (
+                  <span className="flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-green-700">
+                    <Check className="h-3 w-3" /> {bulkResult.created} queued
+                  </span>
+                )}
+                {bulkResult.skippedExisting > 0 && (
+                  <span className="flex items-center gap-1 rounded-full bg-yellow-100 px-2.5 py-1 text-yellow-700">
+                    <AlertCircle className="h-3 w-3" />{" "}
+                    {bulkResult.skippedExisting} already exist
+                  </span>
+                )}
+                {bulkResult.skippedQueued > 0 && (
+                  <span className="flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-1 text-blue-700">
+                    <RefreshCw className="h-3 w-3" /> {bulkResult.skippedQueued}{" "}
+                    already queued
+                  </span>
+                )}
+                {bulkResult.skippedInvalid > 0 && (
+                  <span className="flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-1 text-red-700">
+                    <X className="h-3 w-3" /> {bulkResult.skippedInvalid}{" "}
+                    invalid
+                  </span>
+                )}
+              </div>
+
+              {bulkResult.details.length > 0 && (
+                <details className="mt-1">
+                  <summary className="cursor-pointer text-xs text-gray-500 hover:text-gray-700">
+                    Show details ({bulkResult.details.length} URLs)
+                  </summary>
+                  <div className="mt-2 max-h-48 overflow-y-auto space-y-1">
+                    {bulkResult.details.map((d, i) => (
+                      <div key={i} className="flex items-start gap-2 text-xs">
+                        {d.status === "created" ? (
+                          <Check className="mt-0.5 h-3 w-3 shrink-0 text-green-500" />
+                        ) : d.status === "exists" ? (
+                          <AlertCircle className="mt-0.5 h-3 w-3 shrink-0 text-yellow-500" />
+                        ) : d.status === "queued" ? (
+                          <RefreshCw className="mt-0.5 h-3 w-3 shrink-0 text-blue-500" />
+                        ) : (
+                          <X className="mt-0.5 h-3 w-3 shrink-0 text-red-500" />
+                        )}
+                        <span className="truncate font-mono text-gray-600">
+                          {d.url}
+                        </span>
+                        {d.reason && (
+                          <span className="shrink-0 text-gray-400">
+                            — {d.reason}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Product list */}

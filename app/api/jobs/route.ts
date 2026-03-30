@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { copyFile, mkdir } from "fs/promises";
+import { existsSync } from "fs";
+import { join } from "path";
 import {
   generateImagePrompt,
   generateVideoPrompt,
@@ -9,6 +12,8 @@ import {
   generateTikTokDescription,
   VideoType,
 } from "@/lib/prompt-templates";
+
+const IMAGE_DIR = "/data/images/generated";
 
 export async function GET() {
   const jobs = await prisma.videoJob.findMany({
@@ -44,7 +49,53 @@ export async function POST(req: NextRequest) {
     imageOnly = false,
     imagePrompt: directImagePrompt,
     referenceImage,
+    galleryImageId,
+    videoPrompt: userVideoPromptForGallery,
   } = body;
+
+  // Create video job from a gallery image — skip image generation
+  if (galleryImageId) {
+    const galleryImage = await prisma.galleryImage.findUnique({
+      where: { id: galleryImageId },
+    });
+    if (!galleryImage) {
+      return NextResponse.json(
+        { error: "Gallery image not found" },
+        { status: 404 },
+      );
+    }
+
+    // Copy gallery image to new job ID filename
+    const ext = galleryImage.filename.split(".").pop() || "png";
+    const job = await prisma.videoJob.create({
+      data: {
+        imagePrompt: galleryImage.prompt,
+        videoPrompt: userVideoPromptForGallery || "",
+        status: "generating_video",
+        startedAt: new Date().toISOString(),
+      },
+    });
+
+    const srcPath = join(IMAGE_DIR, galleryImage.filename);
+    const destFilename = `${job.id}.${ext}`;
+    const destPath = join(IMAGE_DIR, destFilename);
+
+    if (!existsSync(IMAGE_DIR)) {
+      await mkdir(IMAGE_DIR, { recursive: true });
+    }
+
+    if (existsSync(srcPath)) {
+      await copyFile(srcPath, destPath);
+    }
+
+    const imageServeUrl = `http://localhost:3000/api/jobs/${job.id}/image`;
+    const updatedJob = await prisma.videoJob.update({
+      where: { id: job.id },
+      data: { imageUrl: imageServeUrl },
+    });
+
+    return NextResponse.json(updatedJob, { status: 201 });
+  }
 
   // For imageOnly jobs, no product needed
   if (imageOnly) {

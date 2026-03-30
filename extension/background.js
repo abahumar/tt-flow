@@ -2181,25 +2181,46 @@ async function processImageOnlyJob(job) {
 async function processVideoGeneration(job) {
   console.log("[TikTok Flow] === Video generation for job:", job.id);
 
+  // Detect gallery-image jobs (no product, came from gallery push)
+  const isGalleryImageJob = !job.productId && job.imageUrl;
+
   // Health check: verify tab is still alive
   const health = await healthCheckGoogleFlow();
   if (!health.ok) {
-    console.warn(
-      "[TikTok Flow] Health check failed before video gen:",
-      health.error,
-    );
-    await handleJobFailure(
-      job.id,
-      "Google Flow tab lost before video generation: " + health.error,
-      job,
-    );
-    return;
+    if (isGalleryImageJob) {
+      // For gallery jobs, we can open a new tab since we're starting fresh
+      console.warn(
+        "[TikTok Flow] Health check failed, opening new tab for gallery video job...",
+      );
+      const newTabId = await ensureGoogleFlowTab();
+      if (!newTabId) {
+        await handleJobFailure(
+          job.id,
+          "Could not open Google Flow tab for gallery video job",
+          job,
+        );
+        return;
+      }
+    } else {
+      console.warn(
+        "[TikTok Flow] Health check failed before video gen:",
+        health.error,
+      );
+      await handleJobFailure(
+        job.id,
+        "Google Flow tab lost before video generation: " + health.error,
+        job,
+      );
+      return;
+    }
   }
 
-  // IMPORTANT: Use findGoogleFlowTab() instead of ensureGoogleFlowTab().
-  // We must stay on the SAME project page where the image was generated.
-  // ensureGoogleFlowTab() might open a new tab (gallery page) and lose the image.
-  const flowTabId = await findGoogleFlowTab();
+  const flowTabId = isGalleryImageJob
+    ? health.ok
+      ? health.tabId
+      : await findGoogleFlowTab()
+    : await findGoogleFlowTab();
+
   if (!flowTabId) {
     await handleJobFailure(
       job.id,
@@ -2209,8 +2230,109 @@ async function processVideoGeneration(job) {
     return;
   }
 
-  // Focus the tab but do NOT navigate — stay on the project page
+  // Focus the tab
   chrome.tabs.update(flowTabId, { active: true });
+
+  // Gallery image job: fetch image as data URL and use GENERATE_VIDEO_FROM_IMAGE
+  if (isGalleryImageJob) {
+    console.log(
+      "[TikTok Flow] Gallery image job detected — fetching image for reference upload...",
+    );
+
+    let referenceImageDataUrl = null;
+    try {
+      const imgRes = await fetch(job.imageUrl);
+      if (imgRes.ok) {
+        const blob = await imgRes.blob();
+        referenceImageDataUrl = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(blob);
+        });
+        console.log(
+          "[TikTok Flow] Gallery image fetched as data URL (" +
+            Math.round(blob.size / 1024) +
+            "KB)",
+        );
+      } else {
+        console.warn(
+          "[TikTok Flow] Gallery image fetch failed:",
+          imgRes.status,
+        );
+      }
+    } catch (fetchErr) {
+      console.warn(
+        "[TikTok Flow] Could not fetch gallery image:",
+        fetchErr.message,
+      );
+    }
+
+    try {
+      const result = await new Promise((resolve) => {
+        chrome.tabs.sendMessage(
+          flowTabId,
+          {
+            type: "GENERATE_VIDEO_FROM_IMAGE",
+            payload: {
+              jobId: job.id,
+              prompt:
+                job.videoPrompt ||
+                "Create a smooth cinematic video showcasing this product with gentle camera movement, soft lighting, 9:16 vertical format.",
+              referenceImageDataUrl,
+            },
+          },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              resolve({ error: chrome.runtime.lastError.message });
+            } else {
+              resolve(response || { error: "No response from content script" });
+            }
+          },
+        );
+      });
+
+      if (result.error) {
+        console.error(
+          "[TikTok Flow] Gallery video generation failed:",
+          result.error,
+        );
+        await handleJobFailure(job.id, result.error, job);
+      } else {
+        console.log(
+          "[TikTok Flow] Gallery video generation complete:",
+          result.videoUrl?.substring(0, 80),
+        );
+
+        const { autoPostEnabled } =
+          await chrome.storage.local.get("autoPostEnabled");
+        if (autoPostEnabled) {
+          console.log(
+            "[TikTok Flow] Auto-post enabled, starting posting for job:",
+            job.id,
+          );
+          await fetch(`${API_BASE}/jobs/${job.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              status: "posting",
+              startedAt: new Date().toISOString(),
+            }),
+          });
+          const freshRes = await fetch(`${API_BASE}/jobs/${job.id}`);
+          const freshJob = await freshRes.json();
+          await processPosting(freshJob);
+        }
+      }
+    } catch (err) {
+      console.error("[TikTok Flow] Gallery video generation error:", err);
+      await handleJobFailure(job.id, err.message || "Unknown error", job);
+    }
+    return;
+  }
+
+  // Normal video generation (continues from image step on same project page)
+  // IMPORTANT: Use findGoogleFlowTab() instead of ensureGoogleFlowTab().
+  // We must stay on the SAME project page where the image was generated.
 
   try {
     const result = await new Promise((resolve) => {

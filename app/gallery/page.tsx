@@ -9,7 +9,13 @@ import {
   Eye,
   X,
   ImageIcon,
+  Video,
+  Save,
+  BookmarkPlus,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 interface GalleryVideo {
   id: string;
@@ -23,6 +29,13 @@ interface GalleryImage {
   id: string;
   filename: string;
   prompt: string;
+  createdAt: string;
+}
+
+interface SavedVideoPrompt {
+  id: string;
+  name: string;
+  videoPrompt: string;
   createdAt: string;
 }
 
@@ -41,6 +54,19 @@ export default function GalleryPage() {
   const [previewVideo, setPreviewVideo] = useState<GalleryVideo | null>(null);
   const [previewImage, setPreviewImage] = useState<GalleryImage | null>(null);
   const [deleting, setDeleting] = useState<Set<string>>(new Set());
+  const [creatingVideo, setCreatingVideo] = useState<Set<string>>(new Set());
+  const [createVideoImage, setCreateVideoImage] = useState<GalleryImage | null>(
+    null,
+  );
+  const [videoPromptInput, setVideoPromptInput] = useState("");
+  const [savedVideoPrompts, setSavedVideoPrompts] = useState<
+    SavedVideoPrompt[]
+  >([]);
+  const [showSavedVideoPrompts, setShowSavedVideoPrompts] = useState(false);
+  const [savingVideoPrompt, setSavingVideoPrompt] = useState(false);
+  const [saveVideoPromptName, setSaveVideoPromptName] = useState("");
+  const [showSaveVideoForm, setShowSaveVideoForm] = useState(false);
+  const router = useRouter();
 
   const fetchGallery = useCallback(async () => {
     const res = await fetch("/api/gallery");
@@ -50,9 +76,20 @@ export default function GalleryPage() {
     setLoading(false);
   }, []);
 
+  const fetchSavedVideoPrompts = useCallback(async () => {
+    try {
+      const res = await fetch("/api/custom-prompts");
+      const data = await res.json();
+      setSavedVideoPrompts(data.filter((p: SavedVideoPrompt) => p.videoPrompt));
+    } catch {
+      // ignore
+    }
+  }, []);
+
   useEffect(() => {
     fetchGallery();
-  }, [fetchGallery]);
+    fetchSavedVideoPrompts();
+  }, [fetchGallery, fetchSavedVideoPrompts]);
 
   const handleDownloadVideo = (video: GalleryVideo) => {
     const link = document.createElement("a");
@@ -98,6 +135,82 @@ export default function GalleryPage() {
       return next;
     });
     if (previewImage?.id === image.id) setPreviewImage(null);
+  };
+
+  const openCreateVideoModal = (image: GalleryImage) => {
+    setCreateVideoImage(image);
+    setVideoPromptInput("");
+    setShowSaveVideoForm(false);
+    setSaveVideoPromptName("");
+  };
+
+  const handleSaveVideoPrompt = async () => {
+    if (!videoPromptInput.trim() || !saveVideoPromptName.trim()) return;
+    setSavingVideoPrompt(true);
+    try {
+      const res = await fetch("/api/custom-prompts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: saveVideoPromptName.trim(),
+          videoPrompt: videoPromptInput,
+        }),
+      });
+      if (res.ok) {
+        setSaveVideoPromptName("");
+        setShowSaveVideoForm(false);
+        fetchSavedVideoPrompts();
+      }
+    } catch {
+      // ignore
+    } finally {
+      setSavingVideoPrompt(false);
+    }
+  };
+
+  const handleDeleteSavedVideoPrompt = async (id: string) => {
+    try {
+      await fetch(`/api/custom-prompts/${id}`, { method: "DELETE" });
+      fetchSavedVideoPrompts();
+    } catch {
+      // ignore
+    }
+  };
+
+  const loadSavedVideoPrompt = (prompt: SavedVideoPrompt) => {
+    setVideoPromptInput(prompt.videoPrompt);
+    setShowSavedVideoPrompts(false);
+  };
+
+  const handleCreateVideo = async () => {
+    if (!createVideoImage) return;
+    const image = createVideoImage;
+    setCreatingVideo((prev) => new Set(prev).add(image.id));
+    try {
+      const res = await fetch("/api/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          galleryImageId: image.id,
+          videoPrompt: videoPromptInput.trim() || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert("Failed to create video job: " + (err.error || "Unknown error"));
+        return;
+      }
+      setCreateVideoImage(null);
+      router.push("/automation");
+    } catch {
+      alert("Failed to create video job");
+    } finally {
+      setCreatingVideo((prev) => {
+        const next = new Set(prev);
+        next.delete(image.id);
+        return next;
+      });
+    }
   };
 
   return (
@@ -254,6 +367,18 @@ export default function GalleryPage() {
                   </button>
                   <div className="flex gap-2">
                     <button
+                      onClick={() => openCreateVideoModal(image)}
+                      disabled={creatingVideo.has(image.id)}
+                      title="Create Video"
+                      className="rounded-full bg-indigo-500 p-2 text-white shadow-lg transition-transform hover:scale-110 disabled:opacity-50"
+                    >
+                      {creatingVideo.has(image.id) ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Video className="h-4 w-4" />
+                      )}
+                    </button>
+                    <button
                       onClick={() => handleDownloadImage(image)}
                       className="rounded-full bg-pink-500 p-2 text-white shadow-lg transition-transform hover:scale-110"
                     >
@@ -362,11 +487,22 @@ export default function GalleryPage() {
             )}
             <div className="flex gap-2 bg-gray-900 p-3 pt-0">
               <button
+                onClick={() => openCreateVideoModal(previewImage)}
+                disabled={creatingVideo.has(previewImage.id)}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-600 disabled:opacity-50"
+              >
+                {creatingVideo.has(previewImage.id) ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Video className="h-4 w-4" />
+                )}
+                Create Video
+              </button>
+              <button
                 onClick={() => handleDownloadImage(previewImage)}
-                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-pink-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-pink-600"
+                className="flex items-center justify-center gap-2 rounded-lg bg-pink-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-pink-600"
               >
                 <Download className="h-4 w-4" />
-                Download
               </button>
               <button
                 onClick={() => handleDeleteImage(previewImage)}
@@ -374,6 +510,170 @@ export default function GalleryPage() {
                 className="flex items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
               >
                 <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Video Modal */}
+      {createVideoImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setCreateVideoImage(null)}
+        >
+          <div
+            className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Create Video from Image
+              </h3>
+              <button
+                onClick={() => setCreateVideoImage(null)}
+                className="rounded-full p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-4 p-5">
+              <div className="flex gap-4">
+                <div className="h-24 w-16 shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-gray-100">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`/api/gallery/${createVideoImage.id}?type=image`}
+                    alt="Selected image"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-gray-700">
+                    Image Prompt
+                  </p>
+                  <p className="mt-0.5 line-clamp-3 text-xs text-gray-500">
+                    {createVideoImage.prompt || "No prompt"}
+                  </p>
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Video Prompt
+                  </label>
+                  <div className="flex gap-1">
+                    {savedVideoPrompts.length > 0 && (
+                      <button
+                        onClick={() =>
+                          setShowSavedVideoPrompts(!showSavedVideoPrompts)
+                        }
+                        className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-indigo-600 hover:bg-indigo-50"
+                      >
+                        <BookmarkPlus className="h-3 w-3" />
+                        Saved ({savedVideoPrompts.length})
+                        {showSavedVideoPrompts ? (
+                          <ChevronUp className="h-3 w-3" />
+                        ) : (
+                          <ChevronDown className="h-3 w-3" />
+                        )}
+                      </button>
+                    )}
+                    {videoPromptInput.trim() && (
+                      <button
+                        onClick={() => setShowSaveVideoForm(!showSaveVideoForm)}
+                        className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-green-600 hover:bg-green-50"
+                      >
+                        <Save className="h-3 w-3" />
+                        Save
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Save form */}
+                {showSaveVideoForm && (
+                  <div className="mt-1 flex gap-2">
+                    <input
+                      value={saveVideoPromptName}
+                      onChange={(e) => setSaveVideoPromptName(e.target.value)}
+                      placeholder="Prompt name..."
+                      className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs text-gray-900 focus:border-indigo-500 focus:outline-none"
+                      onKeyDown={(e) =>
+                        e.key === "Enter" && handleSaveVideoPrompt()
+                      }
+                    />
+                    <button
+                      onClick={handleSaveVideoPrompt}
+                      disabled={
+                        savingVideoPrompt || !saveVideoPromptName.trim()
+                      }
+                      className="rounded bg-green-500 px-3 py-1 text-xs font-medium text-white hover:bg-green-600 disabled:opacity-50"
+                    >
+                      {savingVideoPrompt ? "Saving..." : "Save"}
+                    </button>
+                  </div>
+                )}
+
+                {/* Saved prompts list */}
+                {showSavedVideoPrompts && savedVideoPrompts.length > 0 && (
+                  <div className="mt-1 max-h-32 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50">
+                    {savedVideoPrompts.map((sp) => (
+                      <div
+                        key={sp.id}
+                        className="flex items-center justify-between gap-2 border-b border-gray-100 px-3 py-1.5 last:border-0 hover:bg-gray-100"
+                      >
+                        <button
+                          onClick={() => loadSavedVideoPrompt(sp)}
+                          className="min-w-0 flex-1 text-left"
+                        >
+                          <p className="truncate text-xs font-medium text-gray-700">
+                            {sp.name}
+                          </p>
+                          <p className="truncate text-[10px] text-gray-400">
+                            {sp.videoPrompt}
+                          </p>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteSavedVideoPrompt(sp.id)}
+                          className="shrink-0 rounded p-0.5 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <textarea
+                  value={videoPromptInput}
+                  onChange={(e) => setVideoPromptInput(e.target.value)}
+                  placeholder="Describe how the video should look... (e.g. Zoom in slowly on the product, then pan around showing details)"
+                  rows={4}
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  Leave empty to let the system generate a default video prompt.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 border-t border-gray-200 bg-gray-50 px-5 py-4">
+              <button
+                onClick={() => setCreateVideoImage(null)}
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateVideo}
+                disabled={creatingVideo.has(createVideoImage.id)}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-600 disabled:opacity-50"
+              >
+                {creatingVideo.has(createVideoImage.id) ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Video className="h-4 w-4" />
+                )}
+                Create Video Job
               </button>
             </div>
           </div>

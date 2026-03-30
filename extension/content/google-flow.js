@@ -69,6 +69,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         .catch((err) => sendResponse({ error: err.message }));
       return true;
 
+    case "GENERATE_VIDEO_FROM_IMAGE":
+      generateVideoFromImage(payload)
+        .then((result) => sendResponse(result))
+        .catch((err) => sendResponse({ error: err.message }));
+      return true;
+
     case "PING":
       sendResponse({ status: "alive", url: window.location.href });
       return true;
@@ -3285,6 +3291,267 @@ async function clickAnimateAndWaitForVideoMode(timeout = 20000) {
     "[TikTok Flow] Prompt input not detected after Animate — proceeding anyway",
   );
   return true;
+}
+
+// ---- Generate Video from Gallery Image ----
+// Opens a new VIDEO project directly, uploads the gallery image into the
+// "Start" slot (first frame), enters the video prompt, and generates.
+// This skips image generation entirely — uses our gallery image as-is.
+async function generateVideoFromImage({
+  jobId,
+  prompt,
+  referenceImageDataUrl,
+}) {
+  console.log(
+    "[TikTok Flow] === Starting VIDEO FROM IMAGE generation for job:",
+    jobId,
+  );
+  console.log(
+    "[TikTok Flow] Prompt:",
+    (prompt || "").substring(0, 100) + "...",
+  );
+  console.log(
+    "[TikTok Flow] Reference image provided:",
+    !!referenceImageDataUrl,
+  );
+
+  try {
+    verifyFlowPage();
+    await sleep(2000);
+
+    // Step 1: Navigate to a fresh project in Video mode
+    await withRetry(() => navigateToNewProject("video"), {
+      maxAttempts: 5,
+      delayMs: 3000,
+      label: "Navigate to new video project",
+    });
+    await sleep(1500);
+
+    // Step 2: Ensure Video mode is selected
+    let switched = false;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      switched = await switchToMode("video");
+      if (switched) break;
+      await sleep(1000);
+    }
+
+    // Step 2.1: Set aspect ratio to 9:16 (PORTRAIT)
+    console.log("[TikTok Flow] Setting aspect ratio to 9:16 (PORTRAIT)...");
+    await selectTriggerOption("PORTRAIT", "9:16");
+    await sleep(500);
+    await closeSettingsDropdown();
+    await sleep(1000);
+
+    // Step 3: Upload the gallery image into the "Start" slot (first frame for video)
+    if (referenceImageDataUrl) {
+      console.log(
+        "[TikTok Flow] Uploading gallery image as video start frame...",
+      );
+      await withRetry(() => uploadStartImageForVideo(referenceImageDataUrl), {
+        maxAttempts: 3,
+        delayMs: 2000,
+        label: "Upload gallery image as start frame",
+      });
+      console.log(
+        "[TikTok Flow] ✅ Gallery image uploaded as video start frame",
+      );
+      await sleep(1000);
+    } else {
+      console.warn(
+        "[TikTok Flow] No reference image — video will generate from prompt only",
+      );
+    }
+
+    // Step 4: Find and fill the video prompt
+    let promptEl = findPromptInput();
+    if (!promptEl) {
+      await sleep(3000);
+      promptEl = findPromptInput();
+    }
+    if (!promptEl) {
+      throw new Error("Could not find prompt input for video generation.");
+    }
+
+    simulateClick(promptEl);
+    await sleep(300);
+    await fillPrompt(promptEl, prompt);
+
+    // Step 5: Click Create for video
+    let createBtn = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await sleep(500);
+      createBtn = findGenerateButton();
+      if (createBtn) break;
+      await sleep(1000);
+    }
+    if (!createBtn) {
+      throw new Error("Could not find Create button for video.");
+    }
+    simulateClick(createBtn);
+    console.log("[TikTok Flow] Video Create clicked, waiting for result...");
+
+    // Step 6: Wait for video result
+    await sleep(5000);
+    const resultEl = await waitForVideoResult(360000); // 6 min timeout
+
+    // Step 7: Download and upload video
+    let videoUrl;
+    try {
+      const uploadResult = await downloadAndUploadVideo(resultEl, jobId);
+      videoUrl = uploadResult.videoUrl;
+      console.log("[TikTok Flow] Video downloaded and processed:", videoUrl);
+    } catch (downloadErr) {
+      console.warn(
+        "[TikTok Flow] Video download failed, using raw URL:",
+        downloadErr.message,
+      );
+      videoUrl = extractMediaUrl(resultEl);
+      if (!videoUrl) {
+        throw new Error("Video appeared but could not extract or download it");
+      }
+    }
+
+    console.log(
+      "[TikTok Flow] Video from image SUCCESS:",
+      videoUrl.substring(0, 100),
+    );
+    await updateJobStatus(jobId, { status: "ready", videoUrl });
+
+    chrome.runtime.sendMessage({
+      type: "JOB_PHASE_COMPLETE",
+      payload: { jobId, phase: "video", nextStatus: "ready" },
+    });
+
+    return { success: true, videoUrl };
+  } catch (err) {
+    console.error("[TikTok Flow] Video from image FAILED:", err.message);
+    await updateJobStatus(jobId, {
+      status: "failed",
+      errorMessage: err.message,
+    });
+    return { error: err.message };
+  }
+}
+
+// ---- Upload image into the "Start" slot for Video mode ----
+// Google Flow Video mode has a "Start" area where you set the first frame.
+// We click it, find the upload option, and inject our gallery image.
+async function uploadStartImageForVideo(imageDataUrl) {
+  console.log(
+    "[TikTok Flow] Looking for Start/reference area in Video mode...",
+  );
+
+  // Step 1: Find and click the "Start" / reference image area
+  let startArea = null;
+  const divs = document.querySelectorAll("div");
+  for (const div of divs) {
+    const text = div.textContent.trim().toLowerCase();
+    const rect = div.getBoundingClientRect();
+    if (
+      (text === "start" ||
+        text === "reference" ||
+        text === "add image" ||
+        text === "first frame") &&
+      rect.width > 40 &&
+      rect.height > 40
+    ) {
+      startArea = div;
+      break;
+    }
+  }
+  if (!startArea) {
+    startArea =
+      findButtonByText("Start") ||
+      findButtonByText("Add image") ||
+      findButtonByText("Reference") ||
+      findButtonByText("First frame");
+  }
+  // Fallback: look near the prompt area for clickable upload targets
+  if (!startArea) {
+    const promptEl = findPromptInput();
+    if (promptEl) {
+      let container = promptEl.parentElement;
+      for (let i = 0; i < 8 && container; i++) {
+        const candidates = container.querySelectorAll(
+          'div[role="button"], button, div[tabindex]',
+        );
+        for (const c of candidates) {
+          const text = c.textContent.trim().toLowerCase();
+          const rect = c.getBoundingClientRect();
+          if (
+            rect.width > 30 &&
+            rect.height > 30 &&
+            (text.includes("start") ||
+              text.includes("image") ||
+              text.includes("upload") ||
+              text.includes("add_photo") ||
+              text.includes("first frame"))
+          ) {
+            startArea = c;
+            break;
+          }
+        }
+        if (startArea) break;
+        container = container.parentElement;
+      }
+    }
+  }
+
+  if (!startArea) {
+    console.warn(
+      "[TikTok Flow] Start area not found — trying direct file input",
+    );
+    await tryDirectFileUpload(imageDataUrl);
+    return await verifyReferenceImageUploaded();
+  }
+
+  simulateClick(startArea);
+  console.log("[TikTok Flow] Clicked Start area in Video mode");
+  await sleep(1000);
+
+  // Step 2: Look for "Upload image" button in the picker
+  const uploadBtn =
+    findButtonByText("Upload image") ||
+    findButtonByText("Upload") ||
+    findButtonContainingText("Upload");
+  if (uploadBtn) {
+    simulateClick(uploadBtn);
+    console.log("[TikTok Flow] Clicked 'Upload image' button");
+    await sleep(800);
+  }
+
+  // Step 3: Find file input and inject our gallery image
+  const fileInput =
+    document.querySelector('input[type="file"][accept*="image"]') ||
+    document.querySelector('input[type="file"]');
+
+  if (fileInput) {
+    try {
+      const response = await fetch(imageDataUrl);
+      const blob = await response.blob();
+      const file = new File([blob], "gallery-image.png", {
+        type: blob.type || "image/png",
+      });
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+      fileInput.files = dataTransfer.files;
+      fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+      fileInput.dispatchEvent(new Event("input", { bubbles: true }));
+      console.log("[TikTok Flow] Gallery image uploaded via file input");
+      await sleep(2000);
+      return await verifyReferenceImageUploaded();
+    } catch (fetchErr) {
+      console.warn(
+        "[TikTok Flow] Failed to inject gallery image:",
+        fetchErr.message,
+      );
+    }
+  }
+
+  // Fallback: try direct file input injection
+  console.log("[TikTok Flow] Trying direct file input fallback...");
+  await tryDirectFileUpload(imageDataUrl);
+  return await verifyReferenceImageUploaded();
 }
 
 // ---- Main: Generate Video ----
