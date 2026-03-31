@@ -933,13 +933,13 @@ async function fetchCurrentJob() {
   try {
     const res = await fetch(`${API_BASE}/jobs`);
     const jobs = await res.json();
-    return (
-      jobs.find((j) =>
-        ["generating_image", "generating_video", "ready", "posting"].includes(
-          j.status,
-        ),
-      ) || null
-    );
+    // Check if auto-post is enabled to determine if "ready" jobs are actionable
+    const { autoPostEnabled } =
+      await chrome.storage.local.get("autoPostEnabled");
+    const activeStatuses = autoPostEnabled
+      ? ["generating_image", "generating_video", "ready", "posting"]
+      : ["generating_image", "generating_video", "posting"];
+    return jobs.find((j) => activeStatuses.includes(j.status)) || null;
   } catch {
     return null;
   }
@@ -1617,7 +1617,7 @@ async function handlePhaseComplete(jobId, nextStatus) {
       await processPosting(job);
     } else {
       console.log(
-        "[TikTok Flow] Auto-post disabled, waiting for manual trigger",
+        "[TikTok Flow] Auto-post disabled, job stays at ready. Will proceed to next pending job.",
       );
     }
   } else if (nextStatus === "posted") {

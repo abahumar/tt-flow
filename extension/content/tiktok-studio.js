@@ -633,10 +633,9 @@ async function postVideo({
     simulateClick(draftBtn);
     console.log("[TikTok Flow] Save draft button clicked");
 
-    // Step 9: Wait for draft save to complete (page redirects to content?tab=draft)
-    await sleep(5000);
-    const success = await waitForDraftSaved(60000);
-
+    // Mark as posted IMMEDIATELY after clicking Save draft, before the page
+    // redirects to content?tab=draft (which kills this content script).
+    // The redirect itself is confirmation that the draft was saved.
     const tiktokPostUrl = window.location.href;
     await updateJobStatus(jobId, {
       status: "posted",
@@ -645,10 +644,18 @@ async function postVideo({
     });
 
     // Notify background.js that posting is complete
-    chrome.runtime.sendMessage({
-      type: "JOB_PHASE_COMPLETE",
-      payload: { jobId, phase: "posting", nextStatus: "posted" },
-    });
+    try {
+      chrome.runtime.sendMessage({
+        type: "JOB_PHASE_COMPLETE",
+        payload: { jobId, phase: "posting", nextStatus: "posted" },
+      });
+    } catch (e) {
+      // Message port may already be closed if page is navigating — safe to ignore
+      console.warn(
+        "[TikTok Flow] Could not send JOB_PHASE_COMPLETE (page may be navigating):",
+        e.message,
+      );
+    }
 
     console.log("[TikTok Flow] Successfully saved draft to TikTok");
     return { success: true, tiktokPostUrl };

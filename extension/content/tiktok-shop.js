@@ -174,7 +174,19 @@ function getText(selector) {
 // Navigate to showcase list → Add New Products → enter URL → click Product URLs → Add Products → close drawer
 
 async function addToShowcase({ productUrl }) {
-  console.log("[TikTok Flow] Adding product to showcase:", productUrl);
+  console.log(
+    "[TikTok Flow] Adding product to showcase, original URL:",
+    productUrl,
+  );
+
+  // Convert product URL to the format TikTok Showcase expects:
+  // e.g. https://www.tiktok.com/shop/my/pdp/1734586118503434079
+  //   -> https://shop.tiktok.com/view/product/1734586118503434079
+  const idMatch = productUrl.match(/(\d{10,})/);
+  if (idMatch) {
+    productUrl = `https://shop.tiktok.com/view/product/${idMatch[1]}`;
+    console.log("[TikTok Flow] Converted to showcase URL:", productUrl);
+  }
 
   // Ensure we're on the showcase page
   if (!window.location.href.includes("streamer/showcase")) {
