@@ -79,6 +79,11 @@ const STATUS_CONFIG: Record<
     color: "text-purple-600 bg-purple-50",
     icon: Loader2,
   },
+  multi_scene_processing: {
+    label: "Multi-Scene",
+    color: "text-indigo-600 bg-indigo-50",
+    icon: Loader2,
+  },
   ready: {
     label: "Ready",
     color: "text-emerald-600 bg-emerald-50",
@@ -228,7 +233,12 @@ export default function AutomationPage() {
     (acc, j) => {
       if (j.status === "pending") acc.waiting++;
       else if (
-        ["generating_image", "generating_video", "posting"].includes(j.status)
+        [
+          "generating_image",
+          "generating_video",
+          "posting",
+          "multi_scene_processing",
+        ].includes(j.status)
       )
         acc.processing++;
       else if (j.status === "posted") acc.done++;

@@ -51,6 +51,10 @@ export async function POST(req: NextRequest) {
     referenceImage,
     referenceImages: refImagesInput,
     templateId,
+    groupId,
+    sceneIndex,
+    masterJobId,
+    scenePrompts,
     galleryImageId,
     videoPrompt: userVideoPromptForGallery,
   } = body;
@@ -292,6 +296,10 @@ export async function POST(req: NextRequest) {
       tiktokDescription,
       referenceImages,
       templateId: templateId || "",
+      groupId: groupId || "",
+      sceneIndex: typeof sceneIndex === "number" ? sceneIndex : 0,
+      masterJobId: masterJobId || "",
+      scenePrompts: scenePrompts || "",
       status: "pending",
     },
     include: {

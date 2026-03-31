@@ -136,20 +136,51 @@ export async function POST(req: NextRequest) {
         CONSISTENT VIDEO STUDIO MODE (${sceneCount} SCENES):
         Generate exactly ${sceneCount} paired prompts. Each scene creates a separate standalone video.
 
-        STRICT CONSISTENCY RULES:
-        - BACKGROUND: ALL scenes MUST use this EXACT same background/setting: "${bgInstruction}"
-        - MODEL: ALL scenes MUST feature this EXACT same model: "${modelInstruction}"
-        - The background, lighting style, color palette, and model appearance MUST be IDENTICAL across all scenes.
-        - ONLY vary: camera angle, product interaction, pose/action, and emotional beat.
+        IMPORTANT — REFERENCE IMAGES ARE UPLOADED:
+        The background image, model image, and product image are ALREADY uploaded as visual references.
+        The AI image generator will USE these uploaded images directly.
+        DO NOT re-describe the model's appearance (face, hair, clothing, hijab, skin tone, etc.).
+        DO NOT re-describe the background/setting details (wall texture, floor, lighting, etc.).
+        The uploaded reference images handle the visual consistency automatically.
+
+        Background context (for your understanding only, DO NOT put in prompts): "${bgInstruction}"
+        Model context (for your understanding only, DO NOT put in prompts): "${modelInstruction}"
+
+        IMAGE PROMPT RULES:
+        Each image_prompt MUST start with: "From the image uploaded, accurate scale, no alter, no redesign."
+        Then ONLY describe:
+        - How the model interacts with the product (holding, showing, using, etc.)
+        - The model's pose and expression (smiling, looking at camera, looking at product, etc.)
+        - Camera framing (chest-up, full body, close-up on hands, etc.)
+        - Product position relative to the model (in right hand, on table, held up to camera, etc.)
+        DO NOT describe what the model looks like or what the background looks like.
+        Keep it SHORT and focused on pose + product interaction + camera angle.
+
+        Example good image_prompt:
+        "From the image uploaded, accurate scale, no alter, no redesign. Model holds the product casually in her right hand, positioned slightly to the front. Static chest-up framing, centered, warm smile."
+
+        Example BAD image_prompt (DO NOT DO THIS):
+        "From the image uploaded... A friendly 25-year-old Malay woman with a warm smile, wearing a stylish light beige chiffon hijab... stands in a clean minimalist studio background with light grey concrete texture wall..."
+
+        VIDEO PROMPT RULES:
+        Write a single short sentence for the video_prompt field.
+        Describe ONE simple, subtle motion from the generated image.
+        Keep it under 20 words. No labels, no structured format.
+        Focus on: one gentle action + camera framing.
+
+        Example good video_prompt:
+        "Model gently lifts the product toward camera, slight smile, static chest-up framing."
+        "Slow gentle pan across the product in model's hands, soft natural sway."
+
+        Example BAD video_prompt (TOO LONG/STRUCTURED — DO NOT DO THIS):
+        "Scene: Model holds product prominently. Camera: Static medium shot. Action: Model gently lifts the product..."
 
         STRUCTURE (AIDA - UGC REVIEW STYLE):
-        1. SCENE 1 (ATTENTION/HOOK): Visual hook to stop scrolling. Model holds/shows product.
-        2. MIDDLE SCENES (INTEREST & DESIRE): Product demo/review with different angles and actions.
-        3. LAST SCENE (ACTION/CTA): Strong Call to Action. Model presents product to camera.
+        1. SCENE 1 (ATTENTION/HOOK): Model holds/shows product prominently. Eye-catching pose.
+        2. MIDDLE SCENES (INTEREST & DESIRE): Different product interactions — close-up, demo, turning product.
+        3. LAST SCENE (ACTION/CTA): Model presents product directly to camera. Inviting expression.
 
-        CRITICAL: FULLY RE-DESCRIBE the background and model for every prompt. NEVER say "Same as above".
-        Each image_prompt MUST start with: "From the image uploaded, accurate scale, no alter, no redesign."
-        Then describe the EXACT same background and model, with only the pose/action/camera changed.
+        ONLY vary across scenes: pose, product interaction, camera angle, expression, and simple action.
       `;
     } else if (platform === "flow") {
       promptStrategy = `
@@ -196,6 +227,10 @@ export async function POST(req: NextRequest) {
       : `MODEL/AVATAR (MUST USE IN ALL PROMPTS): The subject/model in every scene is — ${avatarDna}
     CRITICAL: ALWAYS describe this exact model in both image_prompt and scene. NEVER change the model's appearance across variations.`;
 
+  const outputFields = consistentMode
+    ? `"video_prompt": "Short single sentence video motion"`
+    : `"scene": "...", "camera": "...", "action": "..."`;
+
   const systemPrompt = `
     You are an Expert AI Video Director for ${platform.toUpperCase()}.
     Title Language: CASUAL MALAY.
@@ -214,9 +249,7 @@ export async function POST(req: NextRequest) {
        - Must start with: "From the image uploaded, accurate scale, no alter, no redesign."
        - This image will be used as the reference/starting frame for the AI video generator.
 
-    2. "scene" + "camera" + "action": The VIDEO prompt that animates from that first frame.
-       - Describes the motion, camera movement, and actions that happen AFTER the first frame.
-       - Must be consistent with the image_prompt (same scene, same setup).
+    2. ${consistentMode ? '"video_prompt": A single SHORT sentence describing the subtle motion from the first frame.' : '"scene" + "camera" + "action": The VIDEO prompt that animates from that first frame.\n       - Describes the motion, camera movement, and actions that happen AFTER the first frame.\n       - Must be consistent with the image_prompt (same scene, same setup).'}
 
     Product: ${product.title}
     Description: ${product.description || "N/A"}
@@ -224,7 +257,7 @@ export async function POST(req: NextRequest) {
     Shop: ${product.shopName || "N/A"}
     Marketing Angle: ${videoType}
 
-    Output JSON: { "variations": [{ "description": "Title", "image_prompt": "...", "scene": "...", "camera": "...", "action": "..."${dialogFields}, "tiktok_product_name": "Clean short product name for TikTok (max 30 chars, no special characters, no SKU codes)", "tiktok_description": "Compelling casual Malay product description with hashtags (max 200 chars)", "tiktok_caption": "Catchy casual Malay TikTok post caption (max 150 chars, no hashtags)", "tiktok_hashtags": ["fyp", "tiktokshop", "relevantTag1", "relevantTag2", "relevantTag3"] }] }
+    Output JSON: { "variations": [{ "description": "Title", "image_prompt": "...", ${outputFields}${dialogFields}, "tiktok_product_name": "Clean short product name for TikTok (max 30 chars, no special characters, no SKU codes)", "tiktok_description": "Compelling casual Malay product description with hashtags (max 200 chars)", "tiktok_caption": "Catchy casual Malay TikTok post caption (max 150 chars, no hashtags)", "tiktok_hashtags": ["fyp", "tiktokshop", "relevantTag1", "relevantTag2", "relevantTag3"] }] }
     Generate exactly ${variantCount} variations. All string fields must be plain strings (never objects).
   `;
 
@@ -305,7 +338,13 @@ export async function POST(req: NextRequest) {
 
         // Build video prompt text
         let videoContent: string;
-        if (platform === "kling" || (platform === "grok" && duration === 10)) {
+        if (v.video_prompt) {
+          // consistentMode: single short sentence
+          videoContent = `${stringify(v.video_prompt)}${d_my}${d_en}`;
+        } else if (
+          platform === "kling" ||
+          (platform === "grok" && duration === 10)
+        ) {
           videoContent = `Scene: ${stringify(v.scene)}\n\n${stringify(v.action)}${d_my}${d_en}`;
         } else {
           videoContent = `Scene: ${stringify(v.scene)}\nCamera: ${stringify(v.camera) || "Static"}\nAction: ${stringify(v.action)}${d_my}${d_en}`;

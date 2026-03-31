@@ -95,6 +95,8 @@ export default function VideoStudioPage() {
   const [sceneCount, setSceneCount] = useState(3);
   const [apiKey, setApiKey] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
+  const [includeDialog, setIncludeDialog] = useState(false);
+  const [includeEnglishDialog, setIncludeEnglishDialog] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [scenes, setScenes] = useState<SceneOutput[]>([]);
   const [hasGenerated, setHasGenerated] = useState(false);
@@ -301,6 +303,8 @@ export default function VideoStudioPage() {
           avatarId: "woman_malay_hijab",
           consistentMode: true,
           sceneCount,
+          includeDialog,
+          includeEnglishDialog,
           backgroundDesc:
             bgDesc || "Use the uploaded background image exactly as shown",
           modelDesc: modelDesc || "",
@@ -364,47 +368,57 @@ export default function VideoStudioPage() {
     setScenes(next);
   };
 
-  // Queue selected scenes to automation
+  // Queue selected scenes as a SINGLE job for consistent multi-scene processing
   const handleQueueSelected = async () => {
-    const selected = scenes.filter((s) => s.selected);
+    const selected = scenes
+      .map((s, i) => ({ ...s, originalIndex: i }))
+      .filter((s) => s.selected);
     if (selected.length === 0) {
       setError("Select at least one scene");
       return;
     }
     setSendingAll(true);
     setError("");
-    let count = 0;
 
-    for (const scene of selected) {
-      try {
-        // Build reference images array from background + model uploads
-        const refImages: string[] = [];
-        if (bgFilename) refImages.push(bgFilename);
-        if (modelFilename) refImages.push(modelFilename);
+    try {
+      // Build reference images array from background + model uploads
+      const refImages: string[] = [];
+      if (bgFilename) refImages.push(bgFilename);
+      if (modelFilename) refImages.push(modelFilename);
 
-        const res = await fetch("/api/jobs", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            productId: selectedProductId,
-            videoType,
-            userImagePrompt: scene.imagePrompt,
-            userVideoPrompt: scene.videoPrompt,
-            tiktokProductName: scene.tiktokProductName,
-            tiktokDescription: scene.tiktokDescription,
-            tiktokCaption: scene.tiktokCaption,
-            tiktokHashtags: scene.tiktokHashtags,
-            templateId: selectedTemplateId || "",
-            referenceImages: refImages,
-          }),
-        });
-        if (res.ok) count++;
-      } catch {
-        /* continue */
+      // Scene 1 prompts go into main fields, all scenes go into scenePrompts
+      const scene1 = selected[0];
+      const allScenePrompts = selected.map((s) => ({
+        imagePrompt: s.imagePrompt,
+        videoPrompt: s.videoPrompt,
+      }));
+
+      const res = await fetch("/api/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId: selectedProductId,
+          videoType,
+          userImagePrompt: scene1.imagePrompt,
+          userVideoPrompt: scene1.videoPrompt,
+          tiktokProductName: scene1.tiktokProductName,
+          tiktokDescription: scene1.tiktokDescription,
+          tiktokCaption: scene1.tiktokCaption,
+          tiktokHashtags: scene1.tiktokHashtags,
+          templateId: selectedTemplateId || "",
+          referenceImages: refImages,
+          scenePrompts: JSON.stringify(allScenePrompts),
+        }),
+      });
+      if (res.ok) {
+        setQueuedCount(selected.length);
+      } else {
+        setError("Failed to create job");
       }
+    } catch {
+      setError("Failed to create job");
     }
 
-    setQueuedCount(count);
     setSendingAll(false);
   };
 
@@ -680,6 +694,30 @@ export default function VideoStudioPage() {
             </div>
           </div>
         )}
+
+        {/* Dialog toggles */}
+        <div className="flex gap-3">
+          <button
+            onClick={() => setIncludeDialog(!includeDialog)}
+            className={`flex-1 rounded-xl border py-2.5 text-xs font-bold transition-all ${
+              includeDialog
+                ? "border-black bg-black text-white shadow-md"
+                : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
+            }`}
+          >
+            Dialog Melayu: {includeDialog ? "On" : "Off"}
+          </button>
+          <button
+            onClick={() => setIncludeEnglishDialog(!includeEnglishDialog)}
+            className={`flex-1 rounded-xl border py-2.5 text-xs font-bold transition-all ${
+              includeEnglishDialog
+                ? "border-black bg-black text-white shadow-md"
+                : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
+            }`}
+          >
+            Dialog English: {includeEnglishDialog ? "On" : "Off"}
+          </button>
+        </div>
 
         {/* API Key */}
         <div>

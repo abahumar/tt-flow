@@ -39,13 +39,21 @@ async function checkJobTimeouts() {
     const now = Date.now();
     for (const job of jobs) {
       if (
-        ["generating_image", "generating_video", "posting"].includes(
-          job.status,
-        ) &&
+        [
+          "generating_image",
+          "generating_video",
+          "posting",
+          "multi_scene_processing",
+        ].includes(job.status) &&
         job.startedAt
       ) {
         const elapsed = now - new Date(job.startedAt).getTime();
-        if (elapsed > JOB_TIMEOUT_MS) {
+        // Multi-scene jobs get a much longer timeout (45 min for ~3 scenes)
+        const timeout =
+          job.status === "multi_scene_processing"
+            ? 45 * 60 * 1000
+            : JOB_TIMEOUT_MS;
+        if (elapsed > timeout) {
           // Skip if this job is currently being actively processed
           // (it might be about to complete — avoid race with completion handler)
           if (processingJobId === job.id) {
@@ -57,7 +65,11 @@ async function checkJobTimeouts() {
           console.warn(
             `[TikTok Flow] Job ${job.id} timed out (${Math.round(elapsed / 60000)}min in ${job.status})`,
           );
-          await handleJobFailure(job.id, "Job timed out after 15 minutes", job);
+          await handleJobFailure(
+            job.id,
+            `Job timed out after ${Math.round(timeout / 60000)} minutes`,
+            job,
+          );
         }
       }
     }
@@ -577,7 +589,7 @@ function handleMessage(message, sender, sendResponse) {
       // Upload video from content script to backend (avoids CORS)
       (async () => {
         try {
-          const { jobId, videoBase64, mimeType } = payload;
+          const { jobId, videoBase64, mimeType, sceneIndex } = payload;
           // Convert base64 back to binary
           const binaryStr = atob(videoBase64);
           const bytes = new Uint8Array(binaryStr.length);
@@ -590,6 +602,9 @@ function handleMessage(message, sender, sendResponse) {
             "video",
             new File([blob], "video.mp4", { type: mimeType || "video/mp4" }),
           );
+          if (typeof sceneIndex === "number") {
+            formData.append("sceneIndex", String(sceneIndex));
+          }
 
           const resp = await fetch(`${API_BASE}/jobs/${jobId}/video`, {
             method: "POST",
@@ -618,7 +633,7 @@ function handleMessage(message, sender, sendResponse) {
       // Upload generated image from content script to backend (avoids CORS)
       (async () => {
         try {
-          const { jobId, imageBase64, mimeType } = payload;
+          const { jobId, imageBase64, mimeType, sceneIndex } = payload;
           const binaryStr = atob(imageBase64);
           const bytes = new Uint8Array(binaryStr.length);
           for (let i = 0; i < binaryStr.length; i++) {
@@ -633,6 +648,9 @@ function handleMessage(message, sender, sendResponse) {
               type: mimeType || "image/png",
             }),
           );
+          if (typeof sceneIndex === "number") {
+            formData.append("sceneIndex", String(sceneIndex));
+          }
 
           const resp = await fetch(`${API_BASE}/jobs/${jobId}/image`, {
             method: "POST",
@@ -1956,6 +1974,23 @@ async function updateJobStatusFromBg(jobId, data) {
 async function processImageGeneration(job) {
   console.log("[TikTok Flow] === Image generation for job:", job.id);
 
+  // Detect multi-scene job — route to dedicated handler
+  let scenePrompts = [];
+  try {
+    scenePrompts = JSON.parse(job.scenePrompts || "[]");
+  } catch {
+    /* ignore */
+  }
+  if (scenePrompts.length > 1) {
+    console.log(
+      "[TikTok Flow] Multi-scene job detected:",
+      scenePrompts.length,
+      "scenes",
+    );
+    await processMultiSceneJob(job, scenePrompts);
+    return;
+  }
+
   // Health check before starting
   const health = await healthCheckGoogleFlow();
   if (!health.ok) {
@@ -2025,6 +2060,47 @@ async function processImageGeneration(job) {
     }
   } catch {
     // no reference images
+  }
+
+  // For scenes 2+ in a group, fetch the master scene's generated image as reference
+  if (job.masterJobId && job.sceneIndex > 0) {
+    try {
+      console.log(
+        "[TikTok Flow] Scene",
+        job.sceneIndex,
+        "— fetching master image from job",
+        job.masterJobId,
+      );
+      const masterImgRes = await fetch(
+        `${API_BASE}/jobs/${job.masterJobId}/image`,
+      );
+      if (masterImgRes.ok) {
+        const blob = await masterImgRes.blob();
+        const dataUrl = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(blob);
+        });
+        // Prepend master reference so it's the first image added to prompt
+        studioReferenceImages.unshift(dataUrl);
+        console.log(
+          "[TikTok Flow] ✅ Master reference fetched (" +
+            Math.round(blob.size / 1024) +
+            "KB)",
+        );
+      } else {
+        console.warn(
+          "[TikTok Flow] Master job image not available (status " +
+            masterImgRes.status +
+            ")",
+        );
+      }
+    } catch (masterErr) {
+      console.warn(
+        "[TikTok Flow] Could not fetch master job image:",
+        masterErr.message,
+      );
+    }
   }
 
   try {
@@ -2097,6 +2173,149 @@ async function processImageGeneration(job) {
     }
   } catch (err) {
     console.error("[TikTok Flow] Image generation error:", err);
+  }
+}
+
+// ---- Multi-Scene Job Processing ----
+// Processes all scenes within one job: image + video for each scene sequentially.
+// Scene 1 uses product + studio refs. Scene 2+ uses Scene 1's generated image as reference.
+async function processMultiSceneJob(job, scenePrompts) {
+  console.log(
+    "[TikTok Flow] === Multi-scene job:",
+    job.id,
+    "scenes:",
+    scenePrompts.length,
+  );
+
+  const health = await healthCheckGoogleFlow();
+  if (!health.ok) {
+    const flowTabId = await ensureGoogleFlowTab();
+    if (!flowTabId) {
+      await handleJobFailure(job.id, "Could not open Google Flow tab", job);
+      return;
+    }
+  }
+
+  // Re-check health to get verified tabId with alive content script
+  let flowTabId = null;
+  for (let ping = 0; ping < 10; ping++) {
+    const h = await healthCheckGoogleFlow();
+    if (h.ok) {
+      flowTabId = h.tabId;
+      break;
+    }
+    console.log(
+      "[TikTok Flow] Waiting for content script... attempt",
+      ping + 1,
+    );
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  if (!flowTabId) {
+    await handleJobFailure(
+      job.id,
+      "Google Flow content script not responding",
+      job,
+    );
+    return;
+  }
+
+  // Extract product images
+  let productImages = [];
+  try {
+    productImages = JSON.parse(job.product?.images || "[]");
+  } catch {
+    productImages = [];
+  }
+
+  // Pre-fetch studio reference images (background, model)
+  let studioReferenceImages = [];
+  try {
+    const refArr = JSON.parse(job.referenceImages || "[]");
+    for (const filename of refArr) {
+      try {
+        const imgRes = await fetch(`${API_BASE}/upload/${filename}`);
+        if (imgRes.ok) {
+          const blob = await imgRes.blob();
+          const dataUrl = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.readAsDataURL(blob);
+          });
+          studioReferenceImages.push(dataUrl);
+        }
+      } catch (e) {
+        console.warn("[TikTok Flow] Could not fetch ref:", filename, e.message);
+      }
+    }
+  } catch {
+    /* no refs */
+  }
+
+  // Mark job as multi_scene_processing so the polling loop won't pick it up
+  // if the service worker restarts during the long multi-scene generation.
+  try {
+    await fetch(`${API_BASE}/jobs/${job.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "multi_scene_processing" }),
+    });
+    console.log(
+      "[TikTok Flow] Job status set to multi_scene_processing — safe from restart",
+    );
+  } catch (e) {
+    console.warn(
+      "[TikTok Flow] Could not set multi_scene_processing status:",
+      e,
+    );
+  }
+
+  try {
+    const result = await new Promise((resolve) => {
+      chrome.tabs.sendMessage(
+        flowTabId,
+        {
+          type: "GENERATE_MULTI_SCENE",
+          payload: {
+            jobId: job.id,
+            scenes: scenePrompts,
+            productImages,
+            studioReferenceImages,
+          },
+        },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            resolve({ error: chrome.runtime.lastError.message });
+          } else {
+            resolve(response || { error: "No response from content script" });
+          }
+        },
+      );
+    });
+
+    if (result.error) {
+      // Check if content script already marked the job
+      try {
+        const freshRes = await fetch(`${API_BASE}/jobs/${job.id}`);
+        const freshJob = await freshRes.json();
+        if (freshJob.status === "ready") {
+          console.log("[TikTok Flow] Multi-scene job already marked ready");
+          return;
+        }
+      } catch {
+        /* ignore */
+      }
+      console.error("[TikTok Flow] Multi-scene job failed:", result.error);
+      await handleJobFailure(job.id, result.error, job);
+    } else {
+      console.log(
+        "[TikTok Flow] Multi-scene job completed successfully:",
+        result.scenesCompleted,
+        "scenes",
+      );
+    }
+  } catch (err) {
+    console.error("[TikTok Flow] Multi-scene job error:", err);
+    await handleJobFailure(job.id, err.message || "Unknown error", job);
   }
 }
 

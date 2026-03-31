@@ -40,27 +40,39 @@ export async function POST(
       );
     }
 
+    // Check for optional sceneIndex (multi-scene jobs)
+    const sceneIndexStr = formData.get("sceneIndex") as string | null;
+    const sceneIndex =
+      sceneIndexStr !== null ? parseInt(sceneIndexStr, 10) : -1;
+    const isMultiScene = sceneIndex >= 0;
+
     const ext =
       imageFile.type === "image/jpeg"
         ? "jpg"
         : imageFile.type === "image/webp"
           ? "webp"
           : "png";
-    const filename = `${id}.${ext}`;
+    const filename = isMultiScene
+      ? `${id}-s${sceneIndex}.${ext}`
+      : `${id}.${ext}`;
     const filepath = join(IMAGE_DIR, filename);
     const buffer = Buffer.from(await imageFile.arrayBuffer());
     await writeFile(filepath, buffer);
 
     console.log(
-      `[Image] Saved generated image for job ${id}: ${filepath} (${buffer.length} bytes)`,
+      `[Image] Saved generated image for job ${id}${isMultiScene ? ` scene ${sceneIndex}` : ""}: ${filepath} (${buffer.length} bytes)`,
     );
 
-    // Update job with the image serve URL
-    const imageServeUrl = `http://localhost:3000/api/jobs/${id}/image`;
-    await prisma.videoJob.update({
-      where: { id },
-      data: { imageUrl: imageServeUrl },
-    });
+    // Update job's main imageUrl only for scene 0 or non-multi-scene
+    const imageServeUrl = isMultiScene
+      ? `http://localhost:3000/api/jobs/${id}/image?scene=${sceneIndex}`
+      : `http://localhost:3000/api/jobs/${id}/image`;
+    if (!isMultiScene || sceneIndex === 0) {
+      await prisma.videoJob.update({
+        where: { id },
+        data: { imageUrl: imageServeUrl },
+      });
+    }
 
     // Add to gallery so image persists even if the job is deleted
     await prisma.galleryImage.create({
@@ -74,6 +86,7 @@ export async function POST(
       success: true,
       imageUrl: imageServeUrl,
       size: buffer.length,
+      sceneIndex: isMultiScene ? sceneIndex : undefined,
     });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
@@ -87,16 +100,18 @@ export async function POST(
 
 // GET: Serve the generated image file
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  const sceneParam = req.nextUrl.searchParams.get("scene");
+  const fileId = sceneParam !== null ? `${id}-s${sceneParam}` : id;
 
   await ensureImageDir();
 
   // Try common extensions
   for (const ext of ["png", "jpg", "webp"]) {
-    const filepath = join(IMAGE_DIR, `${id}.${ext}`);
+    const filepath = join(IMAGE_DIR, `${fileId}.${ext}`);
     if (existsSync(filepath)) {
       const imageBuffer = await readFile(filepath);
       const mimeMap: Record<string, string> = {

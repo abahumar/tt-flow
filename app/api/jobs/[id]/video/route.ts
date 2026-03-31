@@ -48,9 +48,16 @@ export async function POST(
       );
     }
 
+    // Check for optional sceneIndex (multi-scene jobs)
+    const sceneIndexStr = formData.get("sceneIndex") as string | null;
+    const sceneIndex =
+      sceneIndexStr !== null ? parseInt(sceneIndexStr, 10) : -1;
+    const isMultiScene = sceneIndex >= 0;
+    const videoId = isMultiScene ? `${id}-s${sceneIndex}` : id;
+
     // Save raw video
-    const rawPath = join(VIDEO_DIR, `${id}-raw.mp4`);
-    const cleanPath = join(VIDEO_DIR, `${id}.mp4`);
+    const rawPath = join(VIDEO_DIR, `${videoId}-raw.mp4`);
+    const cleanPath = join(VIDEO_DIR, `${videoId}.mp4`);
     const buffer = Buffer.from(await videoFile.arrayBuffer());
     await writeFile(rawPath, buffer);
 
@@ -80,19 +87,25 @@ export async function POST(
     }
 
     // Update job with the video serve URL
-    const videoServeUrl = `http://localhost:3000/api/jobs/${id}/video`;
+    const videoServeUrl = isMultiScene
+      ? `http://localhost:3000/api/jobs/${id}/video?scene=${sceneIndex}`
+      : `http://localhost:3000/api/jobs/${id}/video`;
     if (!isTest) {
-      const job = await prisma.videoJob.update({
-        where: { id },
-        data: { videoUrl: videoServeUrl },
-      });
+      // Only update main videoUrl for scene 0 or non-multi-scene
+      if (!isMultiScene || sceneIndex === 0) {
+        await prisma.videoJob.update({
+          where: { id },
+          data: { videoUrl: videoServeUrl },
+        });
+      }
+      const job = await prisma.videoJob.findUnique({ where: { id } });
 
       // Auto-add to gallery so video persists even if the job is deleted
       await prisma.galleryVideo.create({
         data: {
-          filename: `${id}.mp4`,
-          videoType: job.videoType,
-          caption: job.tiktokCaption,
+          filename: `${videoId}.mp4`,
+          videoType: job?.videoType || "fungsi_produk",
+          caption: job?.tiktokCaption || "",
         },
       });
     }
@@ -115,16 +128,18 @@ export async function POST(
 
 // GET: Serve the processed video file
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  const sceneParam = req.nextUrl.searchParams.get("scene");
+  const videoId = sceneParam !== null ? `${id}-s${sceneParam}` : id;
 
   await ensureVideoDir();
 
   // Prefer clean (watermark-removed) version, fall back to raw
-  const cleanPath = join(VIDEO_DIR, `${id}.mp4`);
-  const rawPath = join(VIDEO_DIR, `${id}-raw.mp4`);
+  const cleanPath = join(VIDEO_DIR, `${videoId}.mp4`);
+  const rawPath = join(VIDEO_DIR, `${videoId}-raw.mp4`);
   const videoPath = existsSync(cleanPath) ? cleanPath : rawPath;
 
   if (!existsSync(videoPath)) {
@@ -137,7 +152,7 @@ export async function GET(
     headers: {
       "Content-Type": "video/mp4",
       "Content-Length": videoBuffer.length.toString(),
-      "Content-Disposition": `inline; filename="${id}.mp4"`,
+      "Content-Disposition": `inline; filename="${videoId}.mp4"`,
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",

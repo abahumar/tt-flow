@@ -31,13 +31,33 @@ export async function POST(request: NextRequest) {
   }
 
   // Find the next pending job and mark it as ready for the extension
-  const nextJob = await prisma.videoJob.findFirst({
+  // Sort by sceneIndex so Scene 0 (master) processes before Scene 1, 2...
+  const pendingJobs = await prisma.videoJob.findMany({
     where: { status: "pending" },
-    orderBy: { createdAt: "asc" },
+    orderBy: [{ sceneIndex: "asc" }, { createdAt: "asc" }],
     include: {
       product: true,
     },
   });
+
+  // Find the first job that's ready to process
+  // For grouped scenes (sceneIndex > 0), the master scene must have an imageUrl
+  let nextJob = null;
+  for (const job of pendingJobs) {
+    if (job.masterJobId) {
+      // This is a dependent scene — check if master has generated its image
+      const masterJob = await prisma.videoJob.findUnique({
+        where: { id: job.masterJobId },
+        select: { imageUrl: true, status: true },
+      });
+      if (!masterJob?.imageUrl) {
+        // Master hasn't generated image yet — skip this job for now
+        continue;
+      }
+    }
+    nextJob = job;
+    break;
+  }
 
   if (!nextJob) {
     return NextResponse.json(
@@ -54,17 +74,23 @@ export async function POST(request: NextRequest) {
     });
     if (customPrompt) {
       const product = nextJob.product;
-      const replacePlaceholders = (template: string) =>
-        template
-          .replace(/{title}/g, product.title)
-          .replace(/{description}/g, product.description || product.title)
-          .replace(/{price}/g, product.price || "");
+      if (product) {
+        const replacePlaceholders = (template: string) =>
+          template
+            .replace(/{title}/g, product.title)
+            .replace(/{description}/g, product.description || product.title)
+            .replace(/{price}/g, product.price || "");
 
-      if (customPrompt.imagePrompt) {
-        promptData.imagePrompt = replacePlaceholders(customPrompt.imagePrompt);
-      }
-      if (customPrompt.videoPrompt) {
-        promptData.videoPrompt = replacePlaceholders(customPrompt.videoPrompt);
+        if (customPrompt.imagePrompt) {
+          promptData.imagePrompt = replacePlaceholders(
+            customPrompt.imagePrompt,
+          );
+        }
+        if (customPrompt.videoPrompt) {
+          promptData.videoPrompt = replacePlaceholders(
+            customPrompt.videoPrompt,
+          );
+        }
       }
     }
   }

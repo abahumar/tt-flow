@@ -75,6 +75,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         .catch((err) => sendResponse({ error: err.message }));
       return true;
 
+    case "GENERATE_MULTI_SCENE":
+      generateMultiScene(payload)
+        .then((result) => sendResponse(result))
+        .catch((err) => sendResponse({ error: err.message }));
+      return true;
+
     case "PING":
       sendResponse({ status: "alive", url: window.location.href });
       return true;
@@ -460,14 +466,41 @@ async function navigateToNewProject(preferMode = "image") {
     console.log(
       "[TikTok Flow] Already on creation page, going back to gallery...",
     );
-    const backBtn = findBackButton();
-    if (backBtn) {
-      simulateClick(backBtn);
+    let wentBack = false;
+    for (let backAttempt = 0; backAttempt < 3; backAttempt++) {
+      const backBtn = findBackButton();
+      if (backBtn) {
+        simulateClick(backBtn);
+        // Wait for gallery to load (creation page should disappear)
+        for (let w = 0; w < 10; w++) {
+          await sleep(1000);
+          if (!isOnCreationPage()) {
+            wentBack = true;
+            break;
+          }
+        }
+        if (wentBack) break;
+        console.log(
+          "[TikTok Flow] Still on creation page after back click, retry",
+          backAttempt + 1,
+        );
+      } else {
+        console.warn(
+          "[TikTok Flow] Back button not found, retry",
+          backAttempt + 1,
+        );
+        await sleep(2000);
+      }
+    }
+    if (!wentBack) {
+      // Last resort: use history.back() instead of location.href to avoid full reload
+      console.warn("[TikTok Flow] Back button failed — using history.back()");
+      window.history.back();
+      for (let w = 0; w < 10; w++) {
+        await sleep(1000);
+        if (!isOnCreationPage()) break;
+      }
       await sleep(2000);
-    } else {
-      // Fallback: navigate directly to the gallery URL
-      window.location.href = "https://labs.google/fx/tools/flow";
-      await sleep(3000);
     }
   }
 
@@ -1755,8 +1788,12 @@ function extractMediaUrl(element) {
 
 // ---- Download generated image and upload to backend for gallery storage ----
 // Mirrors downloadAndUploadVideo but for images.
-async function downloadAndUploadImage(resultEl, jobId) {
-  console.log("[TikTok Flow] === Downloading generated image for job:", jobId);
+async function downloadAndUploadImage(resultEl, jobId, sceneIndex) {
+  console.log(
+    "[TikTok Flow] === Downloading generated image for job:",
+    jobId,
+    sceneIndex !== undefined ? `scene ${sceneIndex}` : "",
+  );
 
   let imageBlob = null;
 
@@ -1830,6 +1867,7 @@ async function downloadAndUploadImage(resultEl, jobId) {
           jobId,
           imageBase64: base64Image,
           mimeType: imageBlob.type || "image/png",
+          sceneIndex: sceneIndex !== undefined ? sceneIndex : undefined,
         },
       },
       (response) => {
@@ -1848,14 +1886,18 @@ async function downloadAndUploadImage(resultEl, jobId) {
     "[TikTok Flow] ✅ Image uploaded to gallery:",
     JSON.stringify(result),
   );
-  return result.imageUrl;
+  return { imageUrl: result.imageUrl, imageBlob };
 }
 
 // ---- Download video blob and upload to backend for watermark removal ----
 // Strategy: fetch the video bytes in-page (where blob: URLs are valid),
 // then POST to the backend API which saves and processes with FFmpeg.
-async function downloadAndUploadVideo(resultEl, jobId) {
-  console.log("[TikTok Flow] === Downloading video for job:", jobId);
+async function downloadAndUploadVideo(resultEl, jobId, sceneIndex) {
+  console.log(
+    "[TikTok Flow] === Downloading video for job:",
+    jobId,
+    sceneIndex !== undefined ? `scene ${sceneIndex}` : "",
+  );
 
   let videoBlob = null;
 
@@ -1995,6 +2037,7 @@ async function downloadAndUploadVideo(resultEl, jobId) {
           jobId,
           videoBase64: base64Video,
           mimeType: videoBlob.type || "video/mp4",
+          sceneIndex: sceneIndex !== undefined ? sceneIndex : undefined,
         },
       },
       (response) => {
@@ -2472,7 +2515,8 @@ async function generateImageOnly({ jobId, prompt, referenceImages }) {
     // Step 9: Download image and upload to backend for gallery storage
     let savedImageUrl = imageUrl;
     try {
-      savedImageUrl = await downloadAndUploadImage(resultEl, jobId);
+      const uploadResult = await downloadAndUploadImage(resultEl, jobId);
+      savedImageUrl = uploadResult.imageUrl;
       console.log("[TikTok Flow] Image saved to gallery:", savedImageUrl);
     } catch (uploadErr) {
       console.warn(
@@ -2978,6 +3022,117 @@ async function clickAddToPromptOnReferenceImage() {
   return true;
 }
 
+// ---- Right-click the GENERATED image and click "Add to Prompt" ----
+// After video generation, the generated image (from image gen step) is still in the DOM.
+// We right-click it → select "Add to Prompt" so it becomes a reference for the next image.
+// This keeps us on the SAME project page — no navigation needed.
+async function clickAddToPromptOnGeneratedImage() {
+  console.log("[TikTok Flow] Looking for generated image to Add to Prompt...");
+
+  // Step 1: Find the generated image
+  let genImg = null;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    genImg = findGeneratedImage();
+    if (genImg) break;
+    console.log(
+      "[TikTok Flow] Generated image not found yet, retry",
+      attempt + 1,
+      "of 10...",
+    );
+    await sleep(1500);
+  }
+  if (!genImg) {
+    throw new Error(
+      "Generated image not found for Add to Prompt. The image may no longer be in the DOM.",
+    );
+  }
+
+  console.log(
+    "[TikTok Flow] Found generated image for Add to Prompt:",
+    genImg.tagName,
+    `${Math.round(genImg.getBoundingClientRect().width)}x${Math.round(genImg.getBoundingClientRect().height)}`,
+  );
+
+  // Scroll image into view
+  genImg.scrollIntoView({ block: "center", behavior: "instant" });
+  await sleep(500);
+
+  // Step 2: Right-click to open context menu and find "Add to Prompt"
+  let addToPromptItem = null;
+
+  for (let bigAttempt = 0; bigAttempt < 3; bigAttempt++) {
+    // Strategy A: Right-click directly on the image
+    simulateRightClick(genImg);
+    await sleep(1500);
+    addToPromptItem = findAddToPromptMenuItem();
+    if (addToPromptItem) break;
+
+    // Strategy B: Right-click parent containers
+    let parent = genImg.parentElement;
+    for (let i = 0; i < 5 && parent && !addToPromptItem; i++) {
+      const rect = parent.getBoundingClientRect();
+      if (rect.width > 50 && rect.height > 50) {
+        console.log(
+          "[TikTok Flow] AddToPrompt Strategy B: right-click parent level",
+          i + 1,
+        );
+        simulateRightClick(parent);
+        await sleep(1500);
+        addToPromptItem = findAddToPromptMenuItem();
+        if (addToPromptItem) break;
+      }
+      parent = parent.parentElement;
+    }
+    if (addToPromptItem) break;
+
+    // Strategy C: Hover to trigger overlay
+    const hoverRect = genImg.getBoundingClientRect();
+    const hoverOpts = {
+      bubbles: true,
+      clientX: hoverRect.left + hoverRect.width / 2,
+      clientY: hoverRect.top + hoverRect.height / 2,
+    };
+    genImg.dispatchEvent(new MouseEvent("mouseover", hoverOpts));
+    genImg.dispatchEvent(
+      new MouseEvent("mouseenter", { ...hoverOpts, bubbles: false }),
+    );
+    genImg.dispatchEvent(new MouseEvent("mousemove", hoverOpts));
+    await sleep(1000);
+    addToPromptItem = findAddToPromptMenuItem();
+    if (addToPromptItem) break;
+
+    // Dismiss stale menu
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    );
+    await sleep(500);
+
+    // Re-find image (DOM may have changed)
+    genImg = findGeneratedImage() || genImg;
+    console.log(
+      "[TikTok Flow] 'Add to Prompt' on generated image not found, retry",
+      bigAttempt + 1,
+      "of 3...",
+    );
+    await sleep(1000);
+  }
+
+  if (!addToPromptItem) {
+    throw new Error(
+      "'Add to Prompt' not found in context menu for the generated image.",
+    );
+  }
+
+  // Step 3: Click "Add to Prompt"
+  simulateClick(addToPromptItem);
+  console.log("[TikTok Flow] ✅ Clicked 'Add to Prompt' on generated image");
+
+  // Wait for Flow to attach the image as reference to the prompt
+  await sleep(3000);
+  console.log("[TikTok Flow] ✅ Generated image added to prompt as reference");
+  return true;
+}
+
 // ---- Upload reference image and click "Add to Prompt" ----
 // Full flow: upload → wait → right-click image → click "Add to Prompt" in context menu.
 // Same pattern as Animate: the Radix context menu has both "Animate" and "Add to Prompt".
@@ -3334,6 +3489,277 @@ async function clickAnimateAndWaitForVideoMode(timeout = 20000) {
   return true;
 }
 
+// ---- Multi-Scene Generation ----
+// Processes multiple scenes within ONE job on the SAME Flow session.
+// Scene 1: new project → uploads product + bg + model refs → generates image → animates to video.
+// Scene 2+: STAYS on same page → right-clicks previous generated image → "Add to Prompt"
+//           → switches to Image mode → enters new prompt → generates image → animates to video.
+// All images and videos are uploaded to backend with sceneIndex for separate storage.
+async function generateMultiScene({
+  jobId,
+  scenes,
+  productImages,
+  studioReferenceImages,
+}) {
+  console.log(
+    "[TikTok Flow] === Starting MULTI-SCENE generation for job:",
+    jobId,
+  );
+  console.log("[TikTok Flow] Total scenes:", scenes.length);
+
+  let scenesCompleted = 0;
+
+  try {
+    verifyFlowPage();
+    await sleep(2000);
+
+    for (let si = 0; si < scenes.length; si++) {
+      const scene = scenes[si];
+      console.log(`[TikTok Flow] --- Scene ${si + 1}/${scenes.length} ---`);
+      console.log(
+        "[TikTok Flow] Image prompt:",
+        (scene.imagePrompt || "").substring(0, 80),
+      );
+
+      // === IMAGE GENERATION ===
+
+      if (si === 0) {
+        // ---- SCENE 1: New project + upload all references ----
+        await withRetry(() => navigateToNewProject("image"), {
+          maxAttempts: 3,
+          label: "Scene 1: Navigate to new project",
+        });
+        await sleep(1500);
+
+        // Switch to Image mode + 9:16
+        let switched = false;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          switched = await switchToMode("image");
+          if (switched) break;
+          await sleep(1000);
+        }
+        await selectTriggerOption("PORTRAIT", "9:16");
+        await sleep(500);
+        await closeSettingsDropdown();
+        await sleep(1000);
+
+        // Upload product image
+        if (productImages && productImages.length > 0) {
+          await withRetry(
+            () => uploadAndAddReferenceToPrompt(productImages[0]),
+            {
+              maxAttempts: 2,
+              delayMs: 2000,
+              label: "Upload product image",
+            },
+          );
+          for (let a = 0; a < 3; a++) {
+            if (await switchToMode("image")) break;
+            await sleep(1000);
+          }
+          await closeSettingsDropdown();
+          await sleep(1000);
+        }
+
+        // Upload studio references (background, model)
+        if (studioReferenceImages && studioReferenceImages.length > 0) {
+          for (let ri = 0; ri < studioReferenceImages.length; ri++) {
+            await withRetry(
+              () => uploadAndAddReferenceToPrompt(studioReferenceImages[ri]),
+              {
+                maxAttempts: 2,
+                delayMs: 2000,
+                label: `Upload studio ref ${ri + 1}`,
+              },
+            );
+            for (let a = 0; a < 3; a++) {
+              if (await switchToMode("image")) break;
+              await sleep(1000);
+            }
+            await closeSettingsDropdown();
+            await sleep(1000);
+          }
+        }
+      } else {
+        // ---- SCENE 2+: Stay on same page, right-click previous generated image ----
+        // After the previous scene's video was created, the generated IMAGE is still
+        // in the DOM. Right-click it → "Add to Prompt" to use as reference.
+        console.log(
+          `[TikTok Flow] Scene ${si + 1}: Right-clicking previous generated image → Add to Prompt`,
+        );
+        await withRetry(() => clickAddToPromptOnGeneratedImage(), {
+          maxAttempts: 3,
+          delayMs: 2000,
+          label: `Scene ${si + 1}: Add generated image to prompt`,
+        });
+
+        // Switch to Image mode + 9:16
+        for (let a = 0; a < 3; a++) {
+          if (await switchToMode("image")) break;
+          await sleep(1000);
+        }
+        await selectTriggerOption("PORTRAIT", "9:16");
+        await sleep(500);
+        await closeSettingsDropdown();
+        await sleep(1000);
+      }
+
+      // Fill image prompt
+      let promptEl = findPromptInput();
+      if (!promptEl) {
+        await sleep(3000);
+        promptEl = findPromptInput();
+      }
+      if (!promptEl)
+        throw new Error(`Scene ${si + 1}: Could not find prompt input`);
+
+      simulateClick(promptEl);
+      await sleep(300);
+      await fillPrompt(promptEl, scene.imagePrompt);
+
+      // Click Create for image
+      let createBtn = null;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        await sleep(500);
+        createBtn = findGenerateButton();
+        if (createBtn) break;
+        await sleep(1000);
+      }
+      if (!createBtn)
+        throw new Error(`Scene ${si + 1}: Create button not found`);
+      simulateClick(createBtn);
+      console.log(`[TikTok Flow] Scene ${si + 1}: Image Create clicked`);
+
+      // Wait for UI to transition before polling for result
+      await sleep(3000);
+
+      // Wait for image result
+      const imgResultEl = await waitForImageResult(180000);
+      const imageUrl = extractMediaUrl(imgResultEl);
+      if (!imageUrl)
+        throw new Error(
+          `Scene ${si + 1}: Image appeared but could not extract URL`,
+        );
+
+      console.log(
+        `[TikTok Flow] Scene ${si + 1}: Image generated:`,
+        imageUrl.substring(0, 80),
+      );
+
+      // Download and upload to backend with sceneIndex
+      const uploadResult = await downloadAndUploadImage(imgResultEl, jobId, si);
+      console.log(
+        `[TikTok Flow] Scene ${si + 1}: Image uploaded:`,
+        uploadResult.imageUrl,
+      );
+
+      // === VIDEO GENERATION ===
+
+      // Animate the generated image (right-click → Animate)
+      await withRetry(() => clickAnimateAndWaitForVideoMode(), {
+        maxAttempts: 3,
+        delayMs: 2000,
+        label: `Scene ${si + 1}: Animate for video`,
+      });
+      await sleep(2000);
+
+      // Set 9:16 for video
+      await openSettingsDropdown();
+      await sleep(500);
+      await selectTriggerOption("PORTRAIT", "9:16");
+      await sleep(500);
+      await closeSettingsDropdown();
+      await sleep(500);
+
+      // Fill video prompt
+      let videoPromptEl = findPromptInput();
+      if (!videoPromptEl) {
+        await sleep(3000);
+        videoPromptEl = findPromptInput();
+      }
+      if (!videoPromptEl)
+        throw new Error(`Scene ${si + 1}: Video prompt input not found`);
+
+      simulateClick(videoPromptEl);
+      await sleep(300);
+      await fillPrompt(videoPromptEl, scene.videoPrompt);
+
+      // Click Create for video
+      await sleep(500);
+      const videoCreateBtn = findGenerateButton();
+      if (!videoCreateBtn)
+        throw new Error(`Scene ${si + 1}: Video Create button not found`);
+      simulateClick(videoCreateBtn);
+      console.log(`[TikTok Flow] Scene ${si + 1}: Video Create clicked`);
+
+      // Wait for UI to transition before polling for result
+      await sleep(3000);
+
+      // Wait for video result
+      const videoResultEl = await waitForVideoResult(360000);
+
+      // Download and upload video with sceneIndex
+      let videoUrl;
+      try {
+        const videoUploadResult = await downloadAndUploadVideo(
+          videoResultEl,
+          jobId,
+          si,
+        );
+        videoUrl = videoUploadResult.videoUrl;
+        console.log(`[TikTok Flow] Scene ${si + 1}: Video uploaded:`, videoUrl);
+      } catch (dlErr) {
+        console.warn(
+          `[TikTok Flow] Scene ${si + 1}: Video download failed:`,
+          dlErr.message,
+        );
+        videoUrl = extractMediaUrl(videoResultEl);
+      }
+
+      scenesCompleted++;
+      console.log(`[TikTok Flow] Scene ${si + 1}/${scenes.length} COMPLETE`);
+
+      // Update job status to show progress
+      await updateJobStatus(jobId, {
+        errorMessage: `Multi-scene progress: ${scenesCompleted}/${scenes.length} scenes completed`,
+      });
+
+      // Brief pause before starting next scene
+      if (si < scenes.length - 1) {
+        console.log(
+          `[TikTok Flow] Waiting 3s before starting Scene ${si + 2}...`,
+        );
+        await sleep(3000);
+      }
+    }
+
+    // All scenes done — mark job as ready
+    console.log(
+      "[TikTok Flow] === All",
+      scenesCompleted,
+      "scenes completed for job:",
+      jobId,
+    );
+    await updateJobStatus(jobId, {
+      status: "ready",
+      errorMessage: "",
+    });
+
+    return { success: true, scenesCompleted };
+  } catch (err) {
+    console.error(
+      "[TikTok Flow] Multi-scene FAILED at scene:",
+      scenesCompleted + 1,
+      err.message,
+    );
+    await updateJobStatus(jobId, {
+      status: "failed",
+      errorMessage: `Scene ${scenesCompleted + 1} failed: ${err.message} (${scenesCompleted}/${scenes.length} completed)`,
+    });
+    return { error: err.message };
+  }
+}
+
 // ---- Generate Video from Gallery Image ----
 // Opens a new VIDEO project directly, uploads the gallery image into the
 // "Start" slot (first frame), enters the video prompt, and generates.
@@ -3432,7 +3858,7 @@ async function generateVideoFromImage({
     console.log("[TikTok Flow] Video Create clicked, waiting for result...");
 
     // Step 6: Wait for video result
-    await sleep(5000);
+    await sleep(3000);
     const resultEl = await waitForVideoResult(360000); // 6 min timeout
 
     // Step 7: Download and upload video
@@ -3649,7 +4075,7 @@ async function generateVideo({ jobId, prompt, imageUrl }) {
     console.log("[TikTok Flow] Video Create clicked, waiting for result...");
 
     // Step 4: Wait for video result (videos take longer)
-    await sleep(5000);
+    await sleep(3000);
     const resultEl = await waitForVideoResult(360000); // 6 min timeout
 
     // Step 5: Download video blob and upload to backend for watermark removal

@@ -45,6 +45,10 @@ model VideoJob {
   maxRetries    Int      @default(3) // max auto-retry attempts before giving up
   lastError     String   @default("") // category: retryable|fatal|timeout
   templateId    String   @default("") // links to VideoTemplate for consistent mode
+  groupId       String   @default("") // groups scenes from same Video Studio generation
+  sceneIndex    Int      @default(0)  // scene order: 0 = master scene, 1, 2, 3...
+  masterJobId   String   @default("") // job ID of scene 0 (whose image is the master reference)
+  scenePrompts  String   @default("") // JSON array of {imagePrompt, videoPrompt} for multi-scene jobs
   startedAt     DateTime? // when the job started processing (for timeout detection)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
