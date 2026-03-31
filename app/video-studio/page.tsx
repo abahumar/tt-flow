@@ -134,8 +134,14 @@ export default function VideoStudioPage() {
   }, []);
 
   const fetchTemplates = useCallback(async () => {
-    const res = await fetch("/api/video-templates");
-    setTemplates(await res.json());
+    try {
+      const res = await fetch("/api/video-templates");
+      if (res.ok) {
+        setTemplates(await res.json());
+      }
+    } catch {
+      // ignore
+    }
   }, []);
 
   useEffect(() => {
@@ -342,8 +348,10 @@ export default function VideoStudioPage() {
       );
       setHasGenerated(true);
       setQueuedCount(0);
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "Network error. Please try again.",
+      );
     } finally {
       setGenerating(false);
     }
@@ -369,6 +377,11 @@ export default function VideoStudioPage() {
 
     for (const scene of selected) {
       try {
+        // Build reference images array from background + model uploads
+        const refImages: string[] = [];
+        if (bgFilename) refImages.push(bgFilename);
+        if (modelFilename) refImages.push(modelFilename);
+
         const res = await fetch("/api/jobs", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -382,6 +395,7 @@ export default function VideoStudioPage() {
             tiktokCaption: scene.tiktokCaption,
             tiktokHashtags: scene.tiktokHashtags,
             templateId: selectedTemplateId || "",
+            referenceImages: refImages,
           }),
         });
         if (res.ok) count++;

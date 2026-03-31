@@ -2086,12 +2086,22 @@ function captureVideoViaCanvas(videoEl) {
 }
 
 // ---- Main: Generate Image ----
-async function generateImage({ jobId, prompt, productImages }) {
+async function generateImage({
+  jobId,
+  prompt,
+  productImages,
+  studioReferenceImages,
+}) {
   console.log("[TikTok Flow] === Starting IMAGE generation for job:", jobId);
   console.log("[TikTok Flow] Prompt:", prompt.substring(0, 100) + "...");
   console.log(
     "[TikTok Flow] Product images:",
     (productImages || []).length,
+    "images available",
+  );
+  console.log(
+    "[TikTok Flow] Studio reference images:",
+    (studioReferenceImages || []).length,
     "images available",
   );
 
@@ -2171,6 +2181,37 @@ async function generateImage({ jobId, prompt, productImages }) {
       console.warn(
         "[TikTok Flow] No product images available — generating from prompt only",
       );
+    }
+
+    // Step 2b: Upload Video Studio reference images (background, model) if available
+    if (studioReferenceImages && studioReferenceImages.length > 0) {
+      for (let i = 0; i < studioReferenceImages.length; i++) {
+        console.log(
+          `[TikTok Flow] Uploading studio reference image ${i + 1}/${studioReferenceImages.length}:`,
+          studioReferenceImages[i].substring(0, 80),
+        );
+        await withRetry(
+          () => uploadAndAddReferenceToPrompt(studioReferenceImages[i]),
+          {
+            maxAttempts: 2,
+            delayMs: 2000,
+            label: `Upload studio reference image ${i + 1}`,
+          },
+        );
+        console.log(
+          `[TikTok Flow] ✅ Studio reference image ${i + 1} uploaded and added to prompt`,
+        );
+
+        // Re-verify Image mode after each Add to Prompt
+        switched = false;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          switched = await switchToMode("image");
+          if (switched) break;
+          await sleep(1000);
+        }
+        await closeSettingsDropdown();
+        await sleep(1000);
+      }
     }
 
     // Step 3: Find the prompt input (contenteditable div)

@@ -1986,6 +1986,47 @@ async function processImageGeneration(job) {
     productImages = [];
   }
 
+  // Pre-fetch Video Studio reference images (background, model) from /api/upload/
+  let studioReferenceImages = [];
+  try {
+    const refArr = JSON.parse(job.referenceImages || "[]");
+    if (refArr.length > 0) {
+      console.log(
+        "[TikTok Flow] Fetching",
+        refArr.length,
+        "Video Studio reference image(s)...",
+      );
+      for (const filename of refArr) {
+        try {
+          const imgUrl = `${API_BASE}/upload/${filename}`;
+          const imgRes = await fetch(imgUrl);
+          if (imgRes.ok) {
+            const blob = await imgRes.blob();
+            const dataUrl = await new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result);
+              reader.readAsDataURL(blob);
+            });
+            studioReferenceImages.push(dataUrl);
+            console.log(
+              "[TikTok Flow] ✅ Fetched reference:",
+              filename,
+              "(" + Math.round(blob.size / 1024) + "KB)",
+            );
+          }
+        } catch (fetchErr) {
+          console.warn(
+            "[TikTok Flow] Could not fetch reference image:",
+            filename,
+            fetchErr.message,
+          );
+        }
+      }
+    }
+  } catch {
+    // no reference images
+  }
+
   try {
     const result = await new Promise((resolve) => {
       chrome.tabs.sendMessage(
@@ -1996,6 +2037,7 @@ async function processImageGeneration(job) {
             jobId: job.id,
             prompt: job.imagePrompt,
             productImages: productImages,
+            studioReferenceImages: studioReferenceImages,
           },
         },
         (response) => {

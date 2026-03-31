@@ -49,6 +49,8 @@ export async function POST(req: NextRequest) {
     imageOnly = false,
     imagePrompt: directImagePrompt,
     referenceImage,
+    referenceImages: refImagesInput,
+    templateId,
     galleryImageId,
     videoPrompt: userVideoPromptForGallery,
   } = body;
@@ -273,6 +275,11 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Build referenceImages JSON array
+  const referenceImages = Array.isArray(refImagesInput)
+    ? JSON.stringify(refImagesInput)
+    : "[]";
+
   const job = await prisma.videoJob.create({
     data: {
       productId,
@@ -283,6 +290,8 @@ export async function POST(req: NextRequest) {
       tiktokHashtags,
       tiktokProductName,
       tiktokDescription,
+      referenceImages,
+      templateId: templateId || "",
       status: "pending",
     },
     include: {

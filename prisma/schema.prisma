@@ -30,6 +30,7 @@ model VideoJob {
   videoType     String   @default("fungsi_produk") // marketing angle
   imageOnly     Boolean  @default(false) // true = stop after image generation (no video/posting)
   referenceImage String  @default("") // uploaded reference image filename for image-only jobs
+  referenceImages String @default("[]") // JSON array of reference image filenames (background, model, etc)
   imagePrompt   String   @default("")
   videoPrompt   String   @default("")
   imageUrl      String   @default("")

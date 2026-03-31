@@ -122,6 +122,8 @@ export async function POST(req: NextRequest) {
   let promptStrategy: string;
   let variantCount: number;
 
+  const avatarDna = AVATAR_DNA[avatarId] || AVATAR_DNA.woman_malay_hijab;
+
   if (mode === "storyline") {
     variantCount = consistentMode ? sceneCount : imageCount;
     if (consistentMode) {
@@ -188,7 +190,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const avatarDna = AVATAR_DNA[avatarId] || AVATAR_DNA.woman_malay_hijab;
   const avatarInstruction =
     avatarId === "product_only"
       ? `MODEL/AVATAR: ${avatarDna}`
