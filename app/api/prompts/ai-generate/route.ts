@@ -75,6 +75,11 @@ export async function POST(req: NextRequest) {
     apiKey,
     avatarId = "woman_malay_hijab",
     imageCount = 1,
+    // Video Studio consistent mode
+    consistentMode = false,
+    sceneCount = 3,
+    backgroundDesc = "",
+    modelDesc = "",
   } = body;
 
   if (!productId)
@@ -118,8 +123,33 @@ export async function POST(req: NextRequest) {
   let variantCount: number;
 
   if (mode === "storyline") {
-    variantCount = imageCount;
-    if (platform === "flow") {
+    variantCount = consistentMode ? sceneCount : imageCount;
+    if (consistentMode) {
+      // Video Studio mode — lock background + model, vary only scenes
+      const bgInstruction =
+        backgroundDesc ||
+        "Use the uploaded background image as the environment";
+      const modelInstruction = modelDesc || avatarDna;
+      promptStrategy = `
+        CONSISTENT VIDEO STUDIO MODE (${sceneCount} SCENES):
+        Generate exactly ${sceneCount} paired prompts. Each scene creates a separate standalone video.
+
+        STRICT CONSISTENCY RULES:
+        - BACKGROUND: ALL scenes MUST use this EXACT same background/setting: "${bgInstruction}"
+        - MODEL: ALL scenes MUST feature this EXACT same model: "${modelInstruction}"
+        - The background, lighting style, color palette, and model appearance MUST be IDENTICAL across all scenes.
+        - ONLY vary: camera angle, product interaction, pose/action, and emotional beat.
+
+        STRUCTURE (AIDA - UGC REVIEW STYLE):
+        1. SCENE 1 (ATTENTION/HOOK): Visual hook to stop scrolling. Model holds/shows product.
+        2. MIDDLE SCENES (INTEREST & DESIRE): Product demo/review with different angles and actions.
+        3. LAST SCENE (ACTION/CTA): Strong Call to Action. Model presents product to camera.
+
+        CRITICAL: FULLY RE-DESCRIBE the background and model for every prompt. NEVER say "Same as above".
+        Each image_prompt MUST start with: "From the image uploaded, accurate scale, no alter, no redesign."
+        Then describe the EXACT same background and model, with only the pose/action/camera changed.
+      `;
+    } else if (platform === "flow") {
       promptStrategy = `
         STORYLINE (${imageCount} IMAGES): Generate exactly ${imageCount} paired prompts (1 per image).
         STRUCTURE (AIDA - UGC REVIEW STYLE):

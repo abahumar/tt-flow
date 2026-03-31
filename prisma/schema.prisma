@@ -43,6 +43,7 @@ model VideoJob {
   retryCount    Int      @default(0) // how many times this job has been retried
   maxRetries    Int      @default(3) // max auto-retry attempts before giving up
   lastError     String   @default("") // category: retryable|fatal|timeout
+  templateId    String   @default("") // links to VideoTemplate for consistent mode
   startedAt     DateTime? // when the job started processing (for timeout detection)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -101,4 +102,15 @@ model GalleryImage {
   filename  String   // e.g. "abc123.png" — the file in /data/images/generated/
   prompt    String   @default("")
   createdAt DateTime @default(now())
+}
+
+model VideoTemplate {
+  id               String   @id @default(cuid())
+  name             String
+  backgroundImage  String   @default("") // filename in /data/images/references/
+  backgroundDesc   String   @default("") // text description of the background
+  modelImage       String   @default("") // filename in /data/images/references/
+  modelDesc        String   @default("") // text description of the model/avatar
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
