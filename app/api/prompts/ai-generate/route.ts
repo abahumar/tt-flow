@@ -37,6 +37,30 @@ const AVATAR_DNA: Record<string, string> = {
     "No human model. Focus entirely on the product packaging, textures, and ingredients. High-end product photography style with aesthetic props and clean backgrounds.",
 };
 
+const GENRE_INSTRUCTIONS: Record<string, string> = {
+  comedy:
+    "GENRE: COMEDY/SKETCH. Use humor, exaggerated reactions, funny relatable situations. Tone: Playful, 'Masuk air'.",
+  educational:
+    "GENRE: EDUCATIONAL/TIPS. Focus on value, hacks, 'How-To', and facts. Tone: Helpful, Smart, Trustworthy.",
+  emotional:
+    "GENRE: EMOTIONAL/STORYTELLING. Focus on pain points, feelings, transformation. Tone: Soft, Touching, Relatable.",
+  hardsell:
+    "GENRE: HARD SELL/PROMO. High energy, fast cuts, focus on discounts, urgency and 'Buy Now'. Tone: Hype, Exciting.",
+  softsell:
+    "GENRE: SOFT SELL/LIFESTYLE. Storytelling first, product second. Subtle integration into daily life. Tone: Chill, aesthetic, genuine recommendation like a friend.",
+  pov: "GENRE: POV (POINT OF VIEW). Relatable scenario starting with 'POV: ...'. Direct address to camera. Tone: Conversational, immersive, relatable situation.",
+  asmr: "GENRE: ASMR/SATISFYING. Focus intensely on sounds (tapping, unboxing, applying), textures, and visual satisfaction. Minimal dialogue, high sensory details. Tone: Calm, mesmerizing.",
+  vlog: "GENRE: VLOG/DAY IN LIFE. Documenting a routine where the product fits in naturally. 'A day with me' style. Tone: Casual, authentic, diary-style.",
+  review:
+    "GENRE: REVIEW/TESTIMONIAL. Personal honest review of the product. Show features, give opinion. Tone: Trustworthy, authentic, relatable.",
+  unboxing:
+    "GENRE: UNBOXING/FIRST IMPRESSION. First-look at the product, reactions, examining packaging and contents. Tone: Excited, curious, discovering.",
+  fungsi_produk:
+    "GENRE: PRODUCT DEMO/SHOWCASE. Focus on demonstrating the product's key features, how it works, and its benefits. Tone: Informative, confident.",
+  problem_solution:
+    "GENRE: PROBLEM-SOLUTION. Show a relatable problem, then reveal the product as the solution. Tone: Empathetic then triumphant.",
+};
+
 const ANTI_HALLUCINATION = `
   ANTI-HALLUCINATION & FORBIDDEN CONCEPTS:
   1. FORBIDDEN ACTIONS: NEVER OPEN, UNSEAL, or UNBOX products. AI cannot see inside and will hallucinate.
@@ -295,7 +319,7 @@ export async function POST(req: NextRequest) {
     Description: ${product.description || "N/A"}
     Price: ${product.price || "N/A"}
     Shop: ${product.shopName || "N/A"}
-    Marketing Angle: ${videoType}
+    ${GENRE_INSTRUCTIONS[videoType] || `GENRE: ${videoType.toUpperCase()}`}
 
     Output JSON: { "variations": [{ "description": "Title", "image_prompt": "...", ${outputFields}${dialogFields}, "tiktok_product_name": "Clean short product name for TikTok (max 30 chars, no special characters, no SKU codes)", "tiktok_description": "Compelling casual Malay product description with hashtags (max 200 chars)", "tiktok_caption": "Catchy casual Malay TikTok post caption (max 150 chars, no hashtags)", "tiktok_hashtags": ["fyp", "tiktokshop", "relevantTag1", "relevantTag2", "relevantTag3"] }] }
     Generate exactly ${variantCount} variations. All string fields must be plain strings (never objects).

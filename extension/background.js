@@ -65,6 +65,7 @@ async function checkJobTimeouts() {
           console.warn(
             `[TikTok Flow] Job ${job.id} timed out (${Math.round(elapsed / 60000)}min in ${job.status})`,
           );
+          contentScriptActiveJobs.delete(job.id);
           await handleJobFailure(
             job.id,
             `Job timed out after ${Math.round(timeout / 60000)} minutes`,
@@ -78,81 +79,30 @@ async function checkJobTimeouts() {
   }
 }
 
-// Unified failure handler with auto-retry logic
+// Unified failure handler — no retries, mark as failed and move to next job
 async function handleJobFailure(jobId, errorMessage, job) {
   const errorType = classifyError(errorMessage);
   console.log(
-    `[TikTok Flow] Job ${jobId} failed: "${errorMessage}" (${errorType})`,
+    `[TikTok Flow] Job ${jobId} failed: "${errorMessage}" (${errorType}) — marking as failed, moving to next job`,
   );
 
-  // Fetch current retry count if not provided
-  let retryCount = job?.retryCount || 0;
-  let maxRetries = job?.maxRetries || 3;
-  if (!job) {
-    try {
-      const res = await fetch(`${API_BASE}/jobs/${jobId}`);
-      const j = await res.json();
-      retryCount = j.retryCount || 0;
-      maxRetries = j.maxRetries || 3;
-    } catch {}
-  }
+  await fetch(`${API_BASE}/jobs/${jobId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      status: "failed",
+      errorMessage: errorMessage,
+      lastError: errorType,
+    }),
+  });
 
-  // Never retry posting phase — stop immediately and show error on dashboard
-  const currentStatus = job?.status || "pending";
-  if (currentStatus === "posting") {
-    console.log(
-      `[TikTok Flow] Posting failure — stopping job ${jobId} immediately`,
-    );
-    await fetch(`${API_BASE}/jobs/${jobId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        status: "failed",
-        errorMessage: `[POSTING FAILED] ${errorMessage}`,
-        lastError: errorType,
-      }),
-    });
-    return;
-  }
-
-  if (errorType !== "fatal" && retryCount < maxRetries) {
-    // Auto-retry: preserve status for non-posting jobs
-    const retryStatus = "pending";
-    const backoffSec = Math.min(10 * Math.pow(2, retryCount), 120); // 10s, 20s, 40s... max 120s
-    console.log(
-      `[TikTok Flow] Auto-retry ${retryCount + 1}/${maxRetries} in ${backoffSec}s for job ${jobId} (status: ${retryStatus})`,
-    );
-    await fetch(`${API_BASE}/jobs/${jobId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        status: retryStatus,
-        errorMessage: `Retry ${retryCount + 1}/${maxRetries}: ${errorMessage}`,
-        lastError: errorType,
-        retryCount: retryCount + 1,
-        startedAt: retryStatus === "posting" ? new Date().toISOString() : null,
-      }),
-    });
-    // Schedule retry after backoff
+  // Proceed to next job in queue after a short delay
+  if (autoModeEnabled && !isPaused) {
     setTimeout(() => {
-      if (autoModeEnabled && !isPaused && !isProcessingJob) {
+      if (!isProcessingJob) {
         processNextJob();
       }
-    }, backoffSec * 1000);
-  } else {
-    // Final failure — no more retries
-    await fetch(`${API_BASE}/jobs/${jobId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        status: "failed",
-        errorMessage:
-          errorType === "fatal"
-            ? `[FATAL] ${errorMessage}`
-            : `[MAX RETRIES] ${errorMessage}`,
-        lastError: errorType,
-      }),
-    });
+    }, 3000);
   }
 }
 
@@ -1385,6 +1335,9 @@ let autoModeEnabled = false;
 let isPaused = false;
 let currentCustomPromptId = null;
 let pendingPhaseComplete = null; // Queue for JOB_PHASE_COMPLETE events that arrive while busy
+// Jobs where the message channel closed but the content script is still working.
+// These are skipped by processNextJob — JOB_PHASE_COMPLETE will handle continuation.
+const contentScriptActiveJobs = new Set();
 
 // Acquire the processing lock. Returns a unique lock ID if acquired, null if already held.
 function acquireProcessingLock(reason) {
@@ -1539,6 +1492,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       "next",
       nextStatus,
     );
+    // Clear from content-script-active tracking (channel-closed recovery)
+    contentScriptActiveJobs.delete(jobId);
     // If lock is held (e.g. by processNextJob which triggered this phase),
     // the phase is already being handled inline. But if the lock holder is
     // processing THIS job, it means the content script is notifying us of
@@ -1654,7 +1609,13 @@ async function processNextJob() {
     // Check for active jobs (already in-progress)
     const currentJob = await fetchCurrentJob();
 
-    if (!currentJob) {
+    if (!currentJob || contentScriptActiveJobs.has(currentJob.id)) {
+      if (currentJob && contentScriptActiveJobs.has(currentJob.id)) {
+        console.log(
+          `[TikTok Flow] Skipping job ${currentJob.id} — content script is still handling it`,
+        );
+        return; // Don't start another job; wait for JOB_PHASE_COMPLETE
+      }
       // Try to start the next pending job (video or image-only)
       const startBody = {};
       if (currentCustomPromptId)
@@ -1669,7 +1630,20 @@ async function processNextJob() {
         console.log("[TikTok Flow] No jobs to process");
         return; // finally will release lock
       }
-      // Let finally release lock; it will schedule processNextJob via setTimeout
+      // Immediately process the newly started job instead of waiting for next alarm
+      console.log(
+        "[TikTok Flow] Started job via start-auto:",
+        data.id,
+        "— processing immediately",
+      );
+      processingJobId = data.id;
+      if (data.status === "generating_image") {
+        if (data.imageOnly) {
+          await processImageOnlyJob(data);
+        } else {
+          await processImageGeneration(data);
+        }
+      }
       return;
     }
 
@@ -1993,10 +1967,11 @@ async function processImageGeneration(job) {
 
   // Health check before starting
   const health = await healthCheckGoogleFlow();
-  if (!health.ok) {
+  let flowTabId = health.ok ? health.tabId : null;
+
+  if (!flowTabId) {
     console.warn("[TikTok Flow] Health check failed:", health.error);
-    // Try to open/recover Google Flow tab
-    const flowTabId = await ensureGoogleFlowTab();
+    flowTabId = await ensureGoogleFlowTab();
     if (!flowTabId) {
       await handleJobFailure(
         job.id,
@@ -2007,11 +1982,62 @@ async function processImageGeneration(job) {
     }
   }
 
-  const flowTabId = health.ok ? health.tabId : await findGoogleFlowTab();
-  if (!flowTabId) {
-    await handleJobFailure(job.id, "Google Flow tab not available", job);
-    return;
+  // Navigate to Flow gallery BEFORE sending GENERATE_IMAGE.
+  // If we're still on a previous project page, navigating within the content script
+  // (back button / history.back) can cause a full page reload that kills the script
+  // mid-execution. By navigating here first, the content script starts fresh on the
+  // gallery page and can click "New project" without any page reload.
+  try {
+    const tabInfo = await chrome.tabs.get(flowTabId);
+    const isOnGallery =
+      tabInfo.url &&
+      (tabInfo.url === "https://labs.google/fx/tools/flow" ||
+        tabInfo.url === "https://labs.google/fx/tools/flow/" ||
+        tabInfo.url.endsWith("/fx/tools/flow") ||
+        tabInfo.url.endsWith("/fx/tools/flow/"));
+    if (!isOnGallery) {
+      console.log(
+        "[TikTok Flow] Tab is on a project page (" +
+          tabInfo.url +
+          "), navigating to gallery first...",
+      );
+      await chrome.tabs.update(flowTabId, {
+        url: "https://labs.google/fx/tools/flow",
+      });
+      // Wait for page to fully load
+      await new Promise((resolve) => {
+        const listener = (updatedTabId, changeInfo) => {
+          if (updatedTabId === flowTabId && changeInfo.status === "complete") {
+            chrome.tabs.onUpdated.removeListener(listener);
+            resolve();
+          }
+        };
+        chrome.tabs.onUpdated.addListener(listener);
+        setTimeout(() => {
+          chrome.tabs.onUpdated.removeListener(listener);
+          resolve();
+        }, 30000);
+      });
+      // Wait for content script to be injected and responsive
+      for (let ping = 0; ping < 10; ping++) {
+        const h = await healthCheckGoogleFlow();
+        if (h.ok) {
+          flowTabId = h.tabId;
+          break;
+        }
+        console.log(
+          "[TikTok Flow] Waiting for content script after gallery nav... attempt",
+          ping + 1,
+        );
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
+  } catch (navErr) {
+    console.warn("[TikTok Flow] Could not check/navigate tab:", navErr.message);
   }
+
+  // Focus the tab
+  chrome.tabs.update(flowTabId, { active: true });
 
   // Extract product images to use as reference in Google Flow
   let productImages = [];
@@ -2127,27 +2153,51 @@ async function processImageGeneration(job) {
     });
 
     if (result.error) {
-      // Before marking as failed, check if the content script already advanced the job
-      // (it calls updateJobStatus directly). The message channel may have timed out
-      // even though the content script succeeded.
-      console.warn(
-        "[TikTok Flow] Image generation result has error:",
-        result.error,
-      );
+      // The message channel can close during long operations (image gen takes minutes)
+      // even though the content script is still working fine.
+      const isChannelClosed =
+        result.error.includes("message channel closed") ||
+        result.error.includes("listener indicated an asynchronous response");
+
+      // Check if job already advanced (content script updates status directly)
       try {
         const freshRes = await fetch(`${API_BASE}/jobs/${job.id}`);
         const freshJob = await freshRes.json();
         if (freshJob.status === "generating_video") {
           console.log(
-            "[TikTok Flow] Job already advanced to generating_video — content script succeeded despite message error.",
+            "[TikTok Flow] Job already advanced to generating_video — continuing.",
           );
           await processVideoGeneration(freshJob);
+          return;
+        }
+        if (freshJob.status === "ready" || freshJob.status === "posted") {
+          console.log(
+            "[TikTok Flow] Job already completed (status:",
+            freshJob.status,
+            ")",
+          );
+          return;
+        }
+        if (freshJob.status === "failed") {
+          console.log("[TikTok Flow] Job already marked failed.");
           return;
         }
       } catch (fetchErr) {
         console.warn("[TikTok Flow] Could not re-check job status:", fetchErr);
       }
-      // Job is still stuck — use retry logic
+
+      if (isChannelClosed) {
+        // Content script received the message (returned true) and is still working.
+        // Release the lock and let JOB_PHASE_COMPLETE handle continuation.
+        // Job timeout (15 min) is the safety net if content script truly fails.
+        contentScriptActiveJobs.add(job.id);
+        console.log(
+          "[TikTok Flow] Channel closed but content script is still working. Releasing lock — JOB_PHASE_COMPLETE will continue.",
+        );
+        return;
+      }
+
+      // Non-channel error — genuinely failed
       console.error("[TikTok Flow] Image generation failed:", result.error);
       await handleJobFailure(job.id, result.error, job);
     } else {
@@ -2217,6 +2267,49 @@ async function processMultiSceneJob(job, scenePrompts) {
       job,
     );
     return;
+  }
+
+  // Navigate to gallery first to avoid content script death during back-navigation
+  try {
+    const tabInfo = await chrome.tabs.get(flowTabId);
+    const isOnGallery =
+      tabInfo.url &&
+      (tabInfo.url === "https://labs.google/fx/tools/flow" ||
+        tabInfo.url === "https://labs.google/fx/tools/flow/" ||
+        tabInfo.url.endsWith("/fx/tools/flow") ||
+        tabInfo.url.endsWith("/fx/tools/flow/"));
+    if (!isOnGallery) {
+      console.log("[TikTok Flow] Multi-scene: navigating to gallery first...");
+      await chrome.tabs.update(flowTabId, {
+        url: "https://labs.google/fx/tools/flow",
+      });
+      await new Promise((resolve) => {
+        const listener = (updatedTabId, changeInfo) => {
+          if (updatedTabId === flowTabId && changeInfo.status === "complete") {
+            chrome.tabs.onUpdated.removeListener(listener);
+            resolve();
+          }
+        };
+        chrome.tabs.onUpdated.addListener(listener);
+        setTimeout(() => {
+          chrome.tabs.onUpdated.removeListener(listener);
+          resolve();
+        }, 30000);
+      });
+      for (let ping = 0; ping < 10; ping++) {
+        const h = await healthCheckGoogleFlow();
+        if (h.ok) {
+          flowTabId = h.tabId;
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
+  } catch (navErr) {
+    console.warn(
+      "[TikTok Flow] Multi-scene gallery nav error:",
+      navErr.message,
+    );
   }
 
   // Extract product images
@@ -2293,16 +2386,34 @@ async function processMultiSceneJob(job, scenePrompts) {
     });
 
     if (result.error) {
-      // Check if content script already marked the job
+      const isChannelClosed =
+        result.error.includes("message channel closed") ||
+        result.error.includes("listener indicated an asynchronous response");
       try {
         const freshRes = await fetch(`${API_BASE}/jobs/${job.id}`);
         const freshJob = await freshRes.json();
-        if (freshJob.status === "ready") {
-          console.log("[TikTok Flow] Multi-scene job already marked ready");
+        if (freshJob.status === "ready" || freshJob.status === "posted") {
+          console.log(
+            "[TikTok Flow] Multi-scene job already completed (status:",
+            freshJob.status,
+            ")",
+          );
+          return;
+        }
+        if (freshJob.status === "failed") {
+          console.log("[TikTok Flow] Multi-scene job already marked failed.");
           return;
         }
       } catch {
         /* ignore */
+      }
+
+      if (isChannelClosed) {
+        contentScriptActiveJobs.add(job.id);
+        console.log(
+          "[TikTok Flow] Multi-scene: channel closed but content script is still working. Releasing lock.",
+        );
+        return;
       }
       console.error("[TikTok Flow] Multi-scene job failed:", result.error);
       await handleJobFailure(job.id, result.error, job);
@@ -2409,18 +2520,34 @@ async function processImageOnlyJob(job) {
 
     if (result.error) {
       console.warn("[TikTok Flow] Image-only result has error:", result.error);
-      // Check if content script already advanced the job
+      const isChannelClosed =
+        result.error.includes("message channel closed") ||
+        result.error.includes("listener indicated an asynchronous response");
       try {
         const freshRes = await fetch(`${API_BASE}/jobs/${job.id}`);
         const freshJob = await freshRes.json();
-        if (freshJob.status === "ready") {
+        if (freshJob.status === "ready" || freshJob.status === "posted") {
           console.log(
-            "[TikTok Flow] Image-only job already marked ready — content script succeeded.",
+            "[TikTok Flow] Image-only job completed (status:",
+            freshJob.status,
+            ")",
           );
+          return;
+        }
+        if (freshJob.status === "failed") {
+          console.log("[TikTok Flow] Image-only job already failed.");
           return;
         }
       } catch (fetchErr) {
         console.warn("[TikTok Flow] Could not re-check job status:", fetchErr);
+      }
+
+      if (isChannelClosed) {
+        contentScriptActiveJobs.add(job.id);
+        console.log(
+          "[TikTok Flow] Image-only: channel closed but content script is still working. Releasing lock.",
+        );
+        return;
       }
       console.error(
         "[TikTok Flow] Standalone image generation failed:",
@@ -2553,6 +2680,35 @@ async function processVideoGeneration(job) {
       });
 
       if (result.error) {
+        const isChannelClosed =
+          result.error.includes("message channel closed") ||
+          result.error.includes("listener indicated an asynchronous response");
+        try {
+          const freshRes = await fetch(`${API_BASE}/jobs/${job.id}`);
+          const freshJob = await freshRes.json();
+          if (freshJob.status === "ready" || freshJob.status === "posted") {
+            console.log(
+              "[TikTok Flow] Gallery video job completed (status:",
+              freshJob.status,
+              ")",
+            );
+            return;
+          }
+          if (freshJob.status === "failed") {
+            console.log("[TikTok Flow] Gallery video job already failed.");
+            return;
+          }
+        } catch {
+          /* ignore */
+        }
+
+        if (isChannelClosed) {
+          contentScriptActiveJobs.add(job.id);
+          console.log(
+            "[TikTok Flow] Gallery video: channel closed but content script is still working. Releasing lock.",
+          );
+          return;
+        }
         console.error(
           "[TikTok Flow] Gallery video generation failed:",
           result.error,
@@ -2618,6 +2774,50 @@ async function processVideoGeneration(job) {
     });
 
     if (result.error) {
+      const isChannelClosed =
+        result.error.includes("message channel closed") ||
+        result.error.includes("listener indicated an asynchronous response");
+      try {
+        const freshRes = await fetch(`${API_BASE}/jobs/${job.id}`);
+        const freshJob = await freshRes.json();
+        if (freshJob.status === "ready" || freshJob.status === "posted") {
+          console.log(
+            "[TikTok Flow] Video job completed (status:",
+            freshJob.status,
+            ")",
+          );
+          const { autoPostEnabled } =
+            await chrome.storage.local.get("autoPostEnabled");
+          if (autoPostEnabled && freshJob.status === "ready") {
+            await fetch(`${API_BASE}/jobs/${job.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                status: "posting",
+                startedAt: new Date().toISOString(),
+              }),
+            });
+            const postRes = await fetch(`${API_BASE}/jobs/${job.id}`);
+            const postJob = await postRes.json();
+            await processPosting(postJob);
+          }
+          return;
+        }
+        if (freshJob.status === "failed") {
+          console.log("[TikTok Flow] Video job already marked failed.");
+          return;
+        }
+      } catch {
+        /* ignore */
+      }
+
+      if (isChannelClosed) {
+        contentScriptActiveJobs.add(job.id);
+        console.log(
+          "[TikTok Flow] Video gen: channel closed but content script is still working. Releasing lock.",
+        );
+        return;
+      }
       console.error("[TikTok Flow] Video generation failed:", result.error);
       await handleJobFailure(job.id, result.error, job);
     } else {

@@ -60,11 +60,17 @@ interface SceneOutput {
   selected: boolean;
 }
 
-const VIDEO_TYPES: Record<string, string> = {
-  fungsi_produk: "Fungsi Produk",
+const VIDEO_GENRES: Record<string, string> = {
+  softsell: "Soft Sell / Lifestyle",
+  hardsell: "Hard Sell / Promo",
+  comedy: "Comedy / Sketch",
+  educational: "Educational / Tips",
+  emotional: "Emotional / Storytelling",
+  pov: "POV (Point of View)",
+  asmr: "ASMR / Satisfying",
+  vlog: "Vlog / Day in Life",
   review: "Review Style",
   unboxing: "Unboxing Style",
-  problem_solution: "Problem-Solution",
 };
 
 const AVATARS = [
@@ -123,7 +129,7 @@ export default function VideoStudioPage() {
   // Product
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProductId, setSelectedProductId] = useState("");
-  const [videoType, setVideoType] = useState("fungsi_produk");
+  const [videoType, setVideoType] = useState("softsell");
   const [loading, setLoading] = useState(true);
 
   // Custom product
@@ -791,14 +797,14 @@ export default function VideoStudioPage() {
             <div className="flex flex-col gap-4 sm:flex-row">
               <div className="w-full sm:w-40">
                 <label className="mb-1 block text-xs font-medium text-gray-500">
-                  Marketing Angle
+                  Video Genre
                 </label>
                 <select
                   value={videoType}
                   onChange={(e) => setVideoType(e.target.value)}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  {Object.entries(VIDEO_TYPES).map(([k, v]) => (
+                  {Object.entries(VIDEO_GENRES).map(([k, v]) => (
                     <option key={k} value={k}>
                       {v}
                     </option>
@@ -876,14 +882,14 @@ export default function VideoStudioPage() {
                 </div>
                 <div className="w-full sm:w-40">
                   <label className="mb-1 block text-xs font-medium text-gray-500">
-                    Marketing Angle
+                    Video Genre
                   </label>
                   <select
                     value={videoType}
                     onChange={(e) => setVideoType(e.target.value)}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
-                    {Object.entries(VIDEO_TYPES).map(([k, v]) => (
+                    {Object.entries(VIDEO_GENRES).map(([k, v]) => (
                       <option key={k} value={k}>
                         {v}
                       </option>

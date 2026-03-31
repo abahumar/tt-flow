@@ -102,11 +102,17 @@ const STATUS_CONFIG: Record<
   failed: { label: "Gagal", color: "text-red-600 bg-red-50", icon: XCircle },
 };
 
-const VIDEO_TYPES: Record<string, string> = {
-  fungsi_produk: "Fungsi Produk",
+const VIDEO_GENRES: Record<string, string> = {
+  softsell: "Soft Sell / Lifestyle",
+  hardsell: "Hard Sell / Promo",
+  comedy: "Comedy / Sketch",
+  educational: "Educational / Tips",
+  emotional: "Emotional / Storytelling",
+  pov: "POV (Point of View)",
+  asmr: "ASMR / Satisfying",
+  vlog: "Vlog / Day in Life",
   review: "Review Style",
   unboxing: "Unboxing Style",
-  problem_solution: "Problem-Solution",
 };
 
 export default function AutomationPage() {
@@ -167,7 +173,7 @@ export default function AutomationPage() {
 
   const getProductSetting = (productId: string) =>
     productSettings[productId] || {
-      videoType: "fungsi_produk",
+      videoType: "softsell",
       promptId: "",
       userImagePrompt: "",
       userVideoPrompt: "",
@@ -228,6 +234,19 @@ export default function AutomationPage() {
     fetchJobs();
     fetchProducts();
   };
+
+  const queueJobs = jobs.filter((j) =>
+    [
+      "pending",
+      "generating_image",
+      "generating_video",
+      "multi_scene_processing",
+      "posting",
+    ].includes(j.status),
+  );
+  const logJobs = jobs.filter((j) =>
+    ["ready", "posted", "failed"].includes(j.status),
+  );
 
   const statusCounts = jobs.reduce(
     (acc, j) => {
@@ -434,7 +453,7 @@ export default function AutomationPage() {
                             {/* Video Type */}
                             <div className="flex-1 min-w-45">
                               <label className="mb-1 block text-[10px] font-medium text-gray-400 uppercase tracking-wide">
-                                Marketing Angle
+                                Video Genre
                               </label>
                               <select
                                 value={settings.videoType}
@@ -447,7 +466,7 @@ export default function AutomationPage() {
                                 }
                                 className="w-full rounded-md border border-gray-200 px-2.5 py-1.5 text-xs focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-400"
                               >
-                                {Object.entries(VIDEO_TYPES).map(
+                                {Object.entries(VIDEO_GENRES).map(
                                   ([key, label]) => (
                                     <option key={key} value={key}>
                                       {label}
@@ -627,21 +646,19 @@ export default function AutomationPage() {
           </div>
         )}
 
-        {/* Job list */}
+        {/* Job list — only pending/processing jobs */}
         {loading ? (
           <p className="py-6 text-center text-gray-400 text-sm">Loading...</p>
-        ) : jobs.length === 0 ? (
+        ) : queueJobs.length === 0 ? (
           <div className="rounded-lg border border-dashed border-gray-300 py-8 text-center text-sm text-gray-400">
             Queue kosong. Tambahkan produk dari katalog di atas.
           </div>
         ) : (
           <div className="max-h-100 overflow-y-auto space-y-1.5">
-            {jobs.map((job) => {
+            {queueJobs.map((job) => {
               const cfg = STATUS_CONFIG[job.status] || STATUS_CONFIG.pending;
               const Icon = cfg.icon;
               const images: string[] = JSON.parse(job.product?.images || "[]");
-              const isFatal = job.lastError === "fatal";
-              const isRetrying = job.retryCount > 0 && job.status === "pending";
               return (
                 <div
                   key={job.id}
@@ -668,57 +685,18 @@ export default function AutomationPage() {
                     <p className="text-xs text-gray-400">
                       {job.imageOnly
                         ? "Image Generation"
-                        : VIDEO_TYPES[job.videoType] || job.videoType}
-                      {job.retryCount > 0 && (
-                        <span className="ml-1 text-amber-500">
-                          · retry {job.retryCount}/{job.maxRetries}
-                        </span>
-                      )}
+                        : VIDEO_GENRES[job.videoType] || job.videoType}
                     </p>
                   </div>
                   <span
                     className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${cfg.color}`}
                   >
                     <Icon
-                      className={`h-3 w-3 ${job.status.includes("generating") || job.status === "posting" ? "animate-spin" : ""}`}
+                      className={`h-3 w-3 ${job.status.includes("generating") || job.status === "posting" || job.status === "multi_scene_processing" ? "animate-spin" : ""}`}
                     />
                     {cfg.label}
-                    {isRetrying && (
-                      <RefreshCw className="h-2.5 w-2.5 animate-spin ml-0.5" />
-                    )}
                   </span>
-                  {job.errorMessage && (
-                    <span
-                      className={`text-[10px] max-w-37.5 truncate ${isFatal ? "text-red-700 font-medium" : "text-red-500"}`}
-                      title={job.errorMessage}
-                    >
-                      {isFatal && (
-                        <AlertTriangle className="inline h-2.5 w-2.5 mr-0.5" />
-                      )}
-                      {job.errorMessage}
-                    </span>
-                  )}
-                  {(job.status === "ready" || job.status === "posted") &&
-                    job.videoUrl && (
-                      <a
-                        href={job.videoUrl}
-                        download={`${job.product?.title || job.id}.mp4`}
-                        className="rounded-md p-1 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
-                        title="Download video (watermark removed)"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                      </a>
-                    )}
-                  {job.status === "failed" && (
-                    <button
-                      onClick={() => handleRetryJob(job.id)}
-                      className="rounded-md p-1 text-amber-500 hover:text-amber-600 hover:bg-amber-50 transition-colors"
-                      title="Retry this job"
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                  {(job.status === "pending" || job.status === "failed") && (
+                  {job.status === "pending" && (
                     <button
                       onClick={() => handleDeleteJob(job.id)}
                       className="rounded-md p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
@@ -749,6 +727,97 @@ export default function AutomationPage() {
           </span>
         </div>
       </div>
+
+      {/* ─── Job Process Log ─── */}
+      {logJobs.length > 0 && (
+        <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-semibold tracking-wide text-gray-500 uppercase">
+              Log ({logJobs.length} job{logJobs.length !== 1 ? "s" : ""})
+            </h2>
+          </div>
+          <div className="max-h-80 overflow-y-auto space-y-1.5">
+            {logJobs.map((job) => {
+              const cfg = STATUS_CONFIG[job.status] || STATUS_CONFIG.pending;
+              const Icon = cfg.icon;
+              const images: string[] = JSON.parse(job.product?.images || "[]");
+              return (
+                <div
+                  key={job.id}
+                  className={`flex items-center gap-3 rounded-lg border p-2.5 ${job.status === "failed" ? "border-red-100 bg-red-50/30" : "border-gray-100 bg-white"}`}
+                >
+                  <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-gray-100">
+                    {images[0] ? (
+                      <img
+                        src={images[0]}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-[9px] text-gray-400">
+                        N/A
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">
+                      {job.product?.title ||
+                        (job.imageOnly ? "Image Only" : "No Product")}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {job.imageOnly
+                        ? "Image Generation"
+                        : VIDEO_GENRES[job.videoType] || job.videoType}
+                    </p>
+                    {job.errorMessage && (
+                      <p
+                        className="text-[10px] text-red-500 truncate mt-0.5"
+                        title={job.errorMessage}
+                      >
+                        <AlertTriangle className="inline h-2.5 w-2.5 mr-0.5" />
+                        {job.errorMessage}
+                      </p>
+                    )}
+                  </div>
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${cfg.color}`}
+                  >
+                    <Icon className="h-3 w-3" />
+                    {cfg.label}
+                  </span>
+                  {(job.status === "ready" || job.status === "posted") &&
+                    job.videoUrl && (
+                      <a
+                        href={job.videoUrl}
+                        download={`${job.product?.title || job.id}.mp4`}
+                        className="rounded-md p-1 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                        title="Download video"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                      </a>
+                    )}
+                  {job.status === "failed" && (
+                    <button
+                      onClick={() => handleRetryJob(job.id)}
+                      className="rounded-md p-1 text-amber-500 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                      title="Retry this job"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleDeleteJob(job.id)}
+                    className="rounded-md p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                    title="Remove from log"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
