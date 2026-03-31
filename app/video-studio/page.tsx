@@ -27,6 +27,7 @@ import {
   FolderOpen,
   Plus,
   X,
+  User,
 } from "lucide-react";
 
 interface Product {
@@ -66,8 +67,42 @@ const VIDEO_TYPES: Record<string, string> = {
   problem_solution: "Problem-Solution",
 };
 
+const AVATARS = [
+  {
+    id: "woman_malay_hijab",
+    label: "Wanita Melayu (Bertudung)",
+    emoji: "🧕",
+  },
+  {
+    id: "woman_malay_freehair",
+    label: "Wanita Melayu (Moden)",
+    emoji: "👩",
+  },
+  {
+    id: "woman_malay_corporate",
+    label: "Wanita Melayu (Korporat)",
+    emoji: "👩‍💼",
+  },
+  {
+    id: "man_malay_casual",
+    label: "Lelaki Melayu (Casual)",
+    emoji: "👨",
+  },
+  {
+    id: "man_malay_corporate",
+    label: "Lelaki Melayu (Korporat)",
+    emoji: "👨‍💼",
+  },
+  {
+    id: "product_only",
+    label: "Produk Sahaja",
+    emoji: "📦",
+  },
+] as const;
+
 export default function VideoStudioPage() {
   // Templates
+  const [useTemplate, setUseTemplate] = useState(false);
   const [templates, setTemplates] = useState<VideoTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [showCreateTemplate, setShowCreateTemplate] = useState(false);
@@ -91,7 +126,21 @@ export default function VideoStudioPage() {
   const [videoType, setVideoType] = useState("fungsi_produk");
   const [loading, setLoading] = useState(true);
 
+  // Custom product
+  const [useCustomProduct, setUseCustomProduct] = useState(false);
+  const [customProductFile, setCustomProductFile] = useState<File | null>(null);
+  const [customProductPreview, setCustomProductPreview] = useState<
+    string | null
+  >(null);
+  const [customProductFilename, setCustomProductFilename] = useState("");
+  const [customProductDesc, setCustomProductDesc] = useState("");
+  const customProductInputRef = useRef<HTMLInputElement>(null);
+
+  // Avatar
+  const [avatarId, setAvatarId] = useState("woman_malay_hijab");
+
   // Scene generation
+  const [useManualPrompts, setUseManualPrompts] = useState(false);
   const [sceneCount, setSceneCount] = useState(3);
   const [apiKey, setApiKey] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
@@ -180,7 +229,7 @@ export default function VideoStudioPage() {
   // Handle file select
   const handleFileSelect = (
     e: React.ChangeEvent<HTMLInputElement>,
-    type: "bg" | "model",
+    type: "bg" | "model" | "customProduct",
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -199,10 +248,14 @@ export default function VideoStudioPage() {
       setBgFile(file);
       setBgPreview(preview);
       setBgFilename("");
-    } else {
+    } else if (type === "model") {
       setModelFile(file);
       setModelPreview(preview);
       setModelFilename("");
+    } else if (type === "customProduct") {
+      setCustomProductFile(file);
+      setCustomProductPreview(preview);
+      setCustomProductFilename("");
     }
   };
 
@@ -212,12 +265,16 @@ export default function VideoStudioPage() {
     try {
       let bg = bgFilename;
       let model = modelFilename;
+      let customProd = customProductFilename;
       if (bgFile && !bgFilename) bg = await uploadFile(bgFile);
       if (modelFile && !modelFilename) model = await uploadFile(modelFile);
+      if (customProductFile && !customProductFilename)
+        customProd = await uploadFile(customProductFile);
       setBgFilename(bg);
       setModelFilename(model);
+      setCustomProductFilename(customProd);
       setUploading(false);
-      return { bg, model };
+      return { bg, model, customProd };
     } catch (e) {
       setUploading(false);
       throw e;
@@ -271,42 +328,50 @@ export default function VideoStudioPage() {
 
   // Generate scenes
   const handleGenerate = async () => {
-    if (!selectedProductId) {
-      setError("Pilih produk dulu");
-      return;
+    if (useCustomProduct) {
+      if (!customProductDesc.trim()) {
+        setError("Masukkan product description / USP");
+        return;
+      }
+    } else {
+      if (!selectedProductId) {
+        setError("Pilih produk dulu");
+        return;
+      }
     }
     if (!apiKey.trim()) {
       setError("Masukkan Gemini API key");
       return;
     }
-    if (!bgPreview && !bgFilename) {
-      setError("Upload background image dulu");
-      return;
-    }
-
     setGenerating(true);
     setError("");
     setHasGenerated(false);
     localStorage.setItem("gemini_api_key", apiKey);
 
     try {
-      await ensureUploads();
+      const uploads = await ensureUploads();
       const res = await fetch("/api/prompts/ai-generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          productId: selectedProductId,
+          productId: useCustomProduct ? undefined : selectedProductId,
+          customProduct: useCustomProduct
+            ? { description: customProductDesc.trim() }
+            : undefined,
           platform: "flow",
           mode: "storyline",
           videoType,
           apiKey,
-          avatarId: "woman_malay_hijab",
+          avatarId,
           consistentMode: true,
           sceneCount,
           includeDialog,
           includeEnglishDialog,
           backgroundDesc:
-            bgDesc || "Use the uploaded background image exactly as shown",
+            bgDesc ||
+            (bgFilename || bgPreview
+              ? "Use the uploaded background image exactly as shown"
+              : ""),
           modelDesc: modelDesc || "",
         }),
       });
@@ -381,10 +446,15 @@ export default function VideoStudioPage() {
     setError("");
 
     try {
-      // Build reference images array from background + model uploads
+      // Ensure custom product image is uploaded
+      await ensureUploads();
+
+      // Build reference images array from background + model + custom product uploads
       const refImages: string[] = [];
       if (bgFilename) refImages.push(bgFilename);
       if (modelFilename) refImages.push(modelFilename);
+      if (useCustomProduct && customProductFilename)
+        refImages.push(customProductFilename);
 
       // Scene 1 prompts go into main fields, all scenes go into scenePrompts
       const scene1 = selected[0];
@@ -397,7 +467,7 @@ export default function VideoStudioPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          productId: selectedProductId,
+          productId: useCustomProduct ? undefined : selectedProductId,
           videoType,
           userImagePrompt: scene1.imagePrompt,
           userVideoPrompt: scene1.videoPrompt,
@@ -450,20 +520,54 @@ export default function VideoStudioPage() {
       {/* ─── TEMPLATE SECTION ─── */}
       <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-5">
         <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Background & Model Template
-          </h2>
-          <button
-            onClick={() => setShowCreateTemplate(!showCreateTemplate)}
-            className="flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-700"
-          >
-            {showCreateTemplate ? <ChevronUp size={14} /> : <Plus size={14} />}
-            {showCreateTemplate ? "Close" : "New Template"}
-          </button>
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={useTemplate}
+              onChange={(e) => {
+                setUseTemplate(e.target.checked);
+                if (!e.target.checked) {
+                  setBgFile(null);
+                  setBgPreview(null);
+                  setBgFilename("");
+                  setBgDesc("");
+                  setModelFile(null);
+                  setModelPreview(null);
+                  setModelFilename("");
+                  setModelDesc("");
+                  setSelectedTemplateId("");
+                }
+              }}
+              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Use Background & Model Template
+            </h2>
+          </label>
+          {useTemplate && (
+            <button
+              onClick={() => setShowCreateTemplate(!showCreateTemplate)}
+              className="flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-700"
+            >
+              {showCreateTemplate ? (
+                <ChevronUp size={14} />
+              ) : (
+                <Plus size={14} />
+              )}
+              {showCreateTemplate ? "Close" : "New Template"}
+            </button>
+          )}
         </div>
 
+        {!useTemplate && (
+          <p className="text-xs text-gray-400">
+            Enable to upload custom background and model reference images for
+            scene generation.
+          </p>
+        )}
+
         {/* Saved templates */}
-        {templates.length > 0 && (
+        {useTemplate && templates.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {templates.map((t) => (
               <div key={t.id} className="flex items-center gap-1">
@@ -493,86 +597,92 @@ export default function VideoStudioPage() {
         )}
 
         {/* Upload area */}
-        <div className="grid grid-cols-2 gap-4">
-          {/* Background */}
-          <div>
-            <label className="mb-2 block text-xs font-medium text-gray-500">
-              Background Image
-            </label>
-            <input
-              ref={bgInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => handleFileSelect(e, "bg")}
-            />
-            <div
-              onClick={() => bgInputRef.current?.click()}
-              className="flex h-32 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 transition-colors hover:border-indigo-400 hover:bg-indigo-50/30"
-            >
-              {bgPreview ? (
-                <img
-                  src={bgPreview}
-                  alt="Background"
-                  className="h-full w-full rounded-lg object-cover"
-                />
-              ) : (
-                <div className="text-center">
-                  <Upload className="mx-auto h-6 w-6 text-gray-400" />
-                  <p className="mt-1 text-xs text-gray-400">Click to upload</p>
-                </div>
-              )}
+        {useTemplate && (
+          <div className="grid grid-cols-2 gap-4">
+            {/* Background */}
+            <div>
+              <label className="mb-2 block text-xs font-medium text-gray-500">
+                Background Image
+              </label>
+              <input
+                ref={bgInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => handleFileSelect(e, "bg")}
+              />
+              <div
+                onClick={() => bgInputRef.current?.click()}
+                className="flex h-32 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 transition-colors hover:border-indigo-400 hover:bg-indigo-50/30"
+              >
+                {bgPreview ? (
+                  <img
+                    src={bgPreview}
+                    alt="Background"
+                    className="h-full w-full rounded-lg object-cover"
+                  />
+                ) : (
+                  <div className="text-center">
+                    <Upload className="mx-auto h-6 w-6 text-gray-400" />
+                    <p className="mt-1 text-xs text-gray-400">
+                      Click to upload
+                    </p>
+                  </div>
+                )}
+              </div>
+              <textarea
+                value={bgDesc}
+                onChange={(e) => setBgDesc(e.target.value)}
+                placeholder="Describe background (e.g., Modern white kitchen with marble countertop...)"
+                rows={2}
+                className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-700 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+              />
             </div>
-            <textarea
-              value={bgDesc}
-              onChange={(e) => setBgDesc(e.target.value)}
-              placeholder="Describe background (e.g., Modern white kitchen with marble countertop...)"
-              rows={2}
-              className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-700 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-            />
-          </div>
 
-          {/* Model */}
-          <div>
-            <label className="mb-2 block text-xs font-medium text-gray-500">
-              Model Image <span className="text-gray-400">(optional)</span>
-            </label>
-            <input
-              ref={modelInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => handleFileSelect(e, "model")}
-            />
-            <div
-              onClick={() => modelInputRef.current?.click()}
-              className="flex h-32 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 transition-colors hover:border-indigo-400 hover:bg-indigo-50/30"
-            >
-              {modelPreview ? (
-                <img
-                  src={modelPreview}
-                  alt="Model"
-                  className="h-full w-full rounded-lg object-cover"
-                />
-              ) : (
-                <div className="text-center">
-                  <Upload className="mx-auto h-6 w-6 text-gray-400" />
-                  <p className="mt-1 text-xs text-gray-400">Click to upload</p>
-                </div>
-              )}
+            {/* Model */}
+            <div>
+              <label className="mb-2 block text-xs font-medium text-gray-500">
+                Model Image <span className="text-gray-400">(optional)</span>
+              </label>
+              <input
+                ref={modelInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => handleFileSelect(e, "model")}
+              />
+              <div
+                onClick={() => modelInputRef.current?.click()}
+                className="flex h-32 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 transition-colors hover:border-indigo-400 hover:bg-indigo-50/30"
+              >
+                {modelPreview ? (
+                  <img
+                    src={modelPreview}
+                    alt="Model"
+                    className="h-full w-full rounded-lg object-cover"
+                  />
+                ) : (
+                  <div className="text-center">
+                    <Upload className="mx-auto h-6 w-6 text-gray-400" />
+                    <p className="mt-1 text-xs text-gray-400">
+                      Click to upload
+                    </p>
+                  </div>
+                )}
+              </div>
+              <textarea
+                value={modelDesc}
+                onChange={(e) => setModelDesc(e.target.value)}
+                placeholder="Describe model (e.g., 25-year-old Malay woman with hijab, casual outfit...)"
+                rows={2}
+                className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-700 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+              />
             </div>
-            <textarea
-              value={modelDesc}
-              onChange={(e) => setModelDesc(e.target.value)}
-              placeholder="Describe model (e.g., 25-year-old Malay woman with hijab, casual outfit...)"
-              rows={2}
-              className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-700 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-            />
           </div>
-        </div>
+        )}
 
         {/* Save as template */}
-        {showCreateTemplate && (
+        {useTemplate && showCreateTemplate && (
           <div className="flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 p-3">
             <input
               type="text"
@@ -603,147 +713,365 @@ export default function VideoStudioPage() {
           Product & Scene Settings
         </h2>
 
-        {loading ? (
-          <p className="py-4 text-center text-sm text-gray-400">Loading...</p>
-        ) : products.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-gray-300 py-6 text-center text-sm text-gray-400">
-            No products. Go to Katalog Produk first.
+        {/* Custom Product toggle */}
+        <label className="flex cursor-pointer items-center gap-2">
+          <input
+            type="checkbox"
+            checked={useCustomProduct}
+            onChange={(e) => {
+              setUseCustomProduct(e.target.checked);
+              if (e.target.checked) {
+                setSelectedProductId("");
+              } else {
+                setCustomProductFile(null);
+                setCustomProductPreview(null);
+                setCustomProductFilename("");
+                setCustomProductDesc("");
+              }
+              setHasGenerated(false);
+              setScenes([]);
+            }}
+            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+          />
+          <span className="text-xs font-medium text-gray-600">
+            Custom Product (upload your own product image & description)
+          </span>
+        </label>
+
+        {useCustomProduct ? (
+          /* ─── Custom Product Form ─── */
+          <div className="space-y-3">
+            <div className="flex flex-col gap-4 sm:flex-row">
+              {/* Product image upload */}
+              <div className="w-full sm:w-48">
+                <label className="mb-1 block text-xs font-medium text-gray-500">
+                  Product Image
+                </label>
+                <input
+                  ref={customProductInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => handleFileSelect(e, "customProduct")}
+                />
+                <div
+                  onClick={() => customProductInputRef.current?.click()}
+                  className="flex h-32 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 transition-colors hover:border-indigo-400 hover:bg-indigo-50/30"
+                >
+                  {customProductPreview ? (
+                    <img
+                      src={customProductPreview}
+                      alt="Product"
+                      className="h-full w-full rounded-lg object-cover"
+                    />
+                  ) : (
+                    <div className="text-center">
+                      <Upload className="mx-auto h-6 w-6 text-gray-400" />
+                      <p className="mt-1 text-xs text-gray-400">
+                        Click to upload
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {/* Description / USP */}
+              <div className="flex-1">
+                <label className="mb-1 block text-xs font-medium text-gray-500">
+                  Product Description / USP
+                </label>
+                <textarea
+                  value={customProductDesc}
+                  onChange={(e) => setCustomProductDesc(e.target.value)}
+                  placeholder="Describe the product, its name, key features, USP, price...&#10;e.g., 'Vitamin C Serum 30ml - Brightening & anti-aging, RM49.90. Key USP: 20% pure Vitamin C, fast absorption, suitable for oily skin'"
+                  rows={5}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-700 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                />
+              </div>
+            </div>
+            <div className="flex flex-col gap-4 sm:flex-row">
+              <div className="w-full sm:w-40">
+                <label className="mb-1 block text-xs font-medium text-gray-500">
+                  Marketing Angle
+                </label>
+                <select
+                  value={videoType}
+                  onChange={(e) => setVideoType(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  {Object.entries(VIDEO_TYPES).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="w-full sm:w-32">
+                <label className="mb-1 block text-xs font-medium text-gray-500">
+                  Scenes
+                </label>
+                <select
+                  value={sceneCount}
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    setSceneCount(n);
+                    if (useManualPrompts) {
+                      setScenes(
+                        Array.from({ length: n }, (_, i) => ({
+                          description: `Scene ${i + 1}`,
+                          imagePrompt: scenes[i]?.imagePrompt || "",
+                          videoPrompt: scenes[i]?.videoPrompt || "",
+                          tiktokProductName: "",
+                          tiktokDescription: "",
+                          tiktokCaption: "",
+                          tiktokHashtags: [],
+                          selected: true,
+                        })),
+                      );
+                    }
+                  }}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  {[3, 4, 5].map((n) => (
+                    <option key={n} value={n}>
+                      {n} scenes
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
         ) : (
-          <div className="flex flex-col gap-4 sm:flex-row">
-            <div className="flex-1">
-              <label className="mb-1 block text-xs font-medium text-gray-500">
-                Product
-              </label>
-              <select
-                value={selectedProductId}
-                onChange={(e) => {
-                  setSelectedProductId(e.target.value);
-                  setHasGenerated(false);
-                  setScenes([]);
-                }}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="">-- Pilih produk --</option>
-                {products.map((prod) => (
-                  <option key={prod.id} value={prod.id}>
-                    {prod.title} {prod.price ? `(${prod.price})` : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="w-full sm:w-40">
-              <label className="mb-1 block text-xs font-medium text-gray-500">
-                Marketing Angle
-              </label>
-              <select
-                value={videoType}
-                onChange={(e) => setVideoType(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                {Object.entries(VIDEO_TYPES).map(([k, v]) => (
-                  <option key={k} value={k}>
-                    {v}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="w-full sm:w-32">
-              <label className="mb-1 block text-xs font-medium text-gray-500">
-                Scenes
-              </label>
-              <select
-                value={sceneCount}
-                onChange={(e) => setSceneCount(Number(e.target.value))}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                {[3, 4, 5].map((n) => (
-                  <option key={n} value={n}>
-                    {n} scenes
-                  </option>
-                ))}
-              </select>
+          /* ─── Existing Product Selector ─── */
+          <>
+            {loading ? (
+              <p className="py-4 text-center text-sm text-gray-400">
+                Loading...
+              </p>
+            ) : products.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-gray-300 py-6 text-center text-sm text-gray-400">
+                No products. Go to Katalog Produk first.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4 sm:flex-row">
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs font-medium text-gray-500">
+                    Product
+                  </label>
+                  <select
+                    value={selectedProductId}
+                    onChange={(e) => {
+                      setSelectedProductId(e.target.value);
+                      setHasGenerated(false);
+                      setScenes([]);
+                    }}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">-- Pilih produk --</option>
+                    {products.map((prod) => (
+                      <option key={prod.id} value={prod.id}>
+                        {prod.title} {prod.price ? `(${prod.price})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="w-full sm:w-40">
+                  <label className="mb-1 block text-xs font-medium text-gray-500">
+                    Marketing Angle
+                  </label>
+                  <select
+                    value={videoType}
+                    onChange={(e) => setVideoType(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    {Object.entries(VIDEO_TYPES).map(([k, v]) => (
+                      <option key={k} value={k}>
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="w-full sm:w-32">
+                  <label className="mb-1 block text-xs font-medium text-gray-500">
+                    Scenes
+                  </label>
+                  <select
+                    value={sceneCount}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      setSceneCount(n);
+                      if (useManualPrompts) {
+                        setScenes(
+                          Array.from({ length: n }, (_, i) => ({
+                            description: `Scene ${i + 1}`,
+                            imagePrompt: scenes[i]?.imagePrompt || "",
+                            videoPrompt: scenes[i]?.videoPrompt || "",
+                            tiktokProductName: "",
+                            tiktokDescription: "",
+                            tiktokCaption: "",
+                            tiktokHashtags: [],
+                            selected: true,
+                          })),
+                        );
+                      }
+                    }}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    {[3, 4, 5].map((n) => (
+                      <option key={n} value={n}>
+                        {n} scenes
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {/* Product preview */}
+            {selectedProduct && (
+              <div className="flex items-start gap-4 rounded-lg bg-gray-50 p-3">
+                <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-gray-200">
+                  {selectedImages[0] ? (
+                    <img
+                      src={selectedImages[0]}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-xs text-gray-400">
+                      N/A
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">{selectedProduct.title}</p>
+                  <p className="mt-0.5 text-xs text-gray-500">
+                    {selectedProduct.shopName && (
+                      <span>{selectedProduct.shopName} · </span>
+                    )}
+                    {selectedProduct.price}
+                  </p>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Avatar / Model Selection */}
+        {!useManualPrompts && (
+          <div>
+            <label className="mb-2 flex items-center gap-1.5 text-xs font-medium text-gray-500">
+              <User size={12} /> Model / Avatar
+            </label>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {AVATARS.map((av) => {
+                const isActive = avatarId === av.id;
+                return (
+                  <button
+                    key={av.id}
+                    onClick={() => setAvatarId(av.id)}
+                    className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-xs font-medium transition-all ${
+                      isActive
+                        ? "border-purple-400 bg-purple-50 text-purple-700 shadow-sm ring-1 ring-purple-200"
+                        : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    <span className="text-base">{av.emoji}</span>
+                    <span className="leading-tight">{av.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
 
-        {/* Product preview */}
-        {selectedProduct && (
-          <div className="flex items-start gap-4 rounded-lg bg-gray-50 p-3">
-            <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-gray-200">
-              {selectedImages[0] ? (
-                <img
-                  src={selectedImages[0]}
-                  alt=""
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center text-xs text-gray-400">
-                  N/A
-                </div>
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium">{selectedProduct.title}</p>
-              <p className="mt-0.5 text-xs text-gray-500">
-                {selectedProduct.shopName && (
-                  <span>{selectedProduct.shopName} · </span>
-                )}
-                {selectedProduct.price}
-              </p>
-            </div>
-          </div>
-        )}
+        {/* Manual Prompts toggle */}
+        <label className="flex cursor-pointer items-center gap-2">
+          <input
+            type="checkbox"
+            checked={useManualPrompts}
+            onChange={(e) => {
+              setUseManualPrompts(e.target.checked);
+              if (e.target.checked) {
+                // Initialize empty scenes based on sceneCount
+                setScenes(
+                  Array.from({ length: sceneCount }, (_, i) => ({
+                    description: `Scene ${i + 1}`,
+                    imagePrompt: "",
+                    videoPrompt: "",
+                    tiktokProductName: "",
+                    tiktokDescription: "",
+                    tiktokCaption: "",
+                    tiktokHashtags: [],
+                    selected: true,
+                  })),
+                );
+                setHasGenerated(true);
+                setQueuedCount(0);
+              } else {
+                setScenes([]);
+                setHasGenerated(false);
+              }
+            }}
+            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+          />
+          <span className="text-xs font-medium text-gray-600">
+            Manual Prompts (enter image & video prompts yourself)
+          </span>
+        </label>
 
         {/* Dialog toggles */}
-        <div className="flex gap-3">
-          <button
-            onClick={() => setIncludeDialog(!includeDialog)}
-            className={`flex-1 rounded-xl border py-2.5 text-xs font-bold transition-all ${
-              includeDialog
-                ? "border-black bg-black text-white shadow-md"
-                : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
-            }`}
-          >
-            Dialog Melayu: {includeDialog ? "On" : "Off"}
-          </button>
-          <button
-            onClick={() => setIncludeEnglishDialog(!includeEnglishDialog)}
-            className={`flex-1 rounded-xl border py-2.5 text-xs font-bold transition-all ${
-              includeEnglishDialog
-                ? "border-black bg-black text-white shadow-md"
-                : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
-            }`}
-          >
-            Dialog English: {includeEnglishDialog ? "On" : "Off"}
-          </button>
-        </div>
-
-        {/* API Key */}
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-500">
-            Gemini API Key
-          </label>
-          <div className="relative">
-            <input
-              type={showApiKey ? "text" : "password"}
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="AIza..."
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
+        {!useManualPrompts && (
+          <div className="flex gap-3">
             <button
-              onClick={() => setShowApiKey(!showApiKey)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              onClick={() => setIncludeDialog(!includeDialog)}
+              className={`flex-1 rounded-xl border py-2.5 text-xs font-bold transition-all ${
+                includeDialog
+                  ? "border-black bg-black text-white shadow-md"
+                  : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
+              }`}
             >
-              {showApiKey ? (
-                <EyeOff className="h-4 w-4" />
-              ) : (
-                <Eye className="h-4 w-4" />
-              )}
+              Dialog Melayu: {includeDialog ? "On" : "Off"}
+            </button>
+            <button
+              onClick={() => setIncludeEnglishDialog(!includeEnglishDialog)}
+              className={`flex-1 rounded-xl border py-2.5 text-xs font-bold transition-all ${
+                includeEnglishDialog
+                  ? "border-black bg-black text-white shadow-md"
+                  : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
+              }`}
+            >
+              Dialog English: {includeEnglishDialog ? "On" : "Off"}
             </button>
           </div>
-        </div>
+        )}
+
+        {/* API Key */}
+        {!useManualPrompts && (
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">
+              Gemini API Key
+            </label>
+            <div className="relative">
+              <input
+                type={showApiKey ? "text" : "password"}
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="AIza..."
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <button
+                onClick={() => setShowApiKey(!showApiKey)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                {showApiKey ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+          </div>
+        )}
 
         {error && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
@@ -752,22 +1080,29 @@ export default function VideoStudioPage() {
         )}
 
         {/* Generate button */}
-        <button
-          onClick={handleGenerate}
-          disabled={generating || !selectedProductId || !bgPreview}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3.5 text-sm font-bold text-white shadow-md transition-all hover:bg-indigo-700 hover:shadow-lg active:scale-95 disabled:opacity-50 disabled:shadow-none"
-        >
-          {generating || uploading ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
-          ) : (
-            <Sparkles className="h-5 w-5" />
-          )}
-          {uploading
-            ? "Uploading..."
-            : generating
-              ? "Generating Scenes..."
-              : `Generate ${sceneCount} Scenes`}
-        </button>
+        {!useManualPrompts && (
+          <button
+            onClick={handleGenerate}
+            disabled={
+              generating ||
+              (useCustomProduct
+                ? !customProductDesc.trim()
+                : !selectedProductId)
+            }
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3.5 text-sm font-bold text-white shadow-md transition-all hover:bg-indigo-700 hover:shadow-lg active:scale-95 disabled:opacity-50 disabled:shadow-none"
+          >
+            {generating || uploading ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <Sparkles className="h-5 w-5" />
+            )}
+            {uploading
+              ? "Uploading..."
+              : generating
+                ? "Generating Scenes..."
+                : `Generate ${sceneCount} Scenes`}
+          </button>
+        )}
       </div>
 
       {/* ─── SCENE OUTPUTS ─── */}
@@ -776,7 +1111,7 @@ export default function VideoStudioPage() {
           <div className="flex items-center justify-between px-1">
             <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-indigo-700">
               <Clapperboard size={16} />
-              Generated Scenes
+              {useManualPrompts ? "Manual Scenes" : "Generated Scenes"}
               <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500">
                 {selectedCount}/{scenes.length} selected
               </span>

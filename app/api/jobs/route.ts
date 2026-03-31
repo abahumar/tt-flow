@@ -116,45 +116,61 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(job);
   }
 
-  if (!productId) {
+  if (!productId && !userImagePrompt) {
     return NextResponse.json(
-      { error: "productId is required" },
+      { error: "productId or prompts required" },
       { status: 400 },
     );
   }
 
-  const product = await prisma.product.findUnique({
-    where: { id: productId },
-  });
-  if (!product) {
-    return NextResponse.json({ error: "Product not found" }, { status: 404 });
+  let product: {
+    title: string;
+    description: string | null;
+    price: string | null;
+    shopName?: string | null;
+    url?: string | null;
+  } | null = null;
+  if (productId) {
+    product = await prisma.product.findUnique({
+      where: { id: productId },
+    });
+    if (!product) {
+      return NextResponse.json({ error: "Product not found" }, { status: 404 });
+    }
   }
+
+  // Safe product info for prompt generation (works with or without product)
+  const pTitle = product?.title || "";
+  const pDesc = product?.description || null;
+  const pPrice = product?.price || null;
+  const pShopName =
+    (product as { shopName?: string | null } | null)?.shopName || null;
 
   let imagePrompt: string;
   let videoPrompt: string;
 
   const replacePlaceholders = (template: string) =>
     template
-      .replace(/{title}/g, product.title)
-      .replace(/{description}/g, product.description || product.title)
-      .replace(/{price}/g, product.price || "");
+      .replace(/{title}/g, pTitle)
+      .replace(/{description}/g, pDesc || pTitle)
+      .replace(/{price}/g, pPrice || "");
 
   // If user-defined prompts are provided, use them directly
   if (userImagePrompt || userVideoPrompt) {
     imagePrompt = userImagePrompt
       ? replacePlaceholders(userImagePrompt)
       : generateImagePrompt({
-          title: product.title,
-          description: product.description,
-          price: product.price,
+          title: pTitle,
+          description: pDesc,
+          price: pPrice,
           videoType: videoType as VideoType,
         });
     videoPrompt = userVideoPrompt
       ? replacePlaceholders(userVideoPrompt)
       : generateVideoPrompt({
-          title: product.title,
-          description: product.description,
-          price: product.price,
+          title: pTitle,
+          description: pDesc,
+          price: pPrice,
           videoType: videoType as VideoType,
         });
   } else if (customPromptId) {
@@ -165,45 +181,45 @@ export async function POST(req: NextRequest) {
       imagePrompt = customPrompt.imagePrompt
         ? replacePlaceholders(customPrompt.imagePrompt)
         : generateImagePrompt({
-            title: product.title,
-            description: product.description,
-            price: product.price,
+            title: pTitle,
+            description: pDesc,
+            price: pPrice,
             videoType: videoType as VideoType,
           });
       videoPrompt = customPrompt.videoPrompt
         ? replacePlaceholders(customPrompt.videoPrompt)
         : generateVideoPrompt({
-            title: product.title,
-            description: product.description,
-            price: product.price,
+            title: pTitle,
+            description: pDesc,
+            price: pPrice,
             videoType: videoType as VideoType,
           });
     } else {
       // Custom prompt not found, fall back to defaults
       imagePrompt = generateImagePrompt({
-        title: product.title,
-        description: product.description,
-        price: product.price,
+        title: pTitle,
+        description: pDesc,
+        price: pPrice,
         videoType: videoType as VideoType,
       });
       videoPrompt = generateVideoPrompt({
-        title: product.title,
-        description: product.description,
-        price: product.price,
+        title: pTitle,
+        description: pDesc,
+        price: pPrice,
         videoType: videoType as VideoType,
       });
     }
   } else {
     imagePrompt = generateImagePrompt({
-      title: product.title,
-      description: product.description,
-      price: product.price,
+      title: pTitle,
+      description: pDesc,
+      price: pPrice,
       videoType: videoType as VideoType,
     });
     videoPrompt = generateVideoPrompt({
-      title: product.title,
-      description: product.description,
-      price: product.price,
+      title: pTitle,
+      description: pDesc,
+      price: pPrice,
       videoType: videoType as VideoType,
     });
   }
@@ -212,17 +228,17 @@ export async function POST(req: NextRequest) {
     userCaption && userCaption.trim()
       ? userCaption.trim()
       : generateTikTokCaption({
-          title: product.title,
-          description: product.description,
-          price: product.price,
+          title: pTitle,
+          description: pDesc,
+          price: pPrice,
           videoType: videoType as VideoType,
         });
   const hashtags =
     userHashtags && Array.isArray(userHashtags) && userHashtags.length > 0
       ? userHashtags.map((h: string) => String(h).replace(/^#/, ""))
       : generateTikTokHashtags({
-          title: product.title,
-          shopName: product.shopName,
+          title: pTitle,
+          shopName: pShopName,
           videoType: videoType as VideoType,
         });
   const tiktokHashtags = JSON.stringify(hashtags);
@@ -231,13 +247,13 @@ export async function POST(req: NextRequest) {
   let tiktokProductName =
     userProductName && userProductName.trim()
       ? userProductName.trim()
-      : generateTikTokProductName(product.title);
+      : generateTikTokProductName(pTitle);
   let tiktokDescription =
     userDescription && userDescription.trim()
       ? userDescription.trim()
       : generateTikTokDescription({
-          title: product.title,
-          price: product.price,
+          title: pTitle,
+          price: pPrice,
           videoType: videoType as VideoType,
           hashtags,
         });
@@ -254,9 +270,9 @@ export async function POST(req: NextRequest) {
       if (geminiKeySetting?.value) {
         const geminiResult = await generateWithGemini(
           geminiKeySetting.value,
-          product.title,
-          product.description,
-          product.price,
+          pTitle,
+          pDesc,
+          pPrice,
           videoType as string,
           hashtags,
         );
@@ -286,7 +302,7 @@ export async function POST(req: NextRequest) {
 
   const job = await prisma.videoJob.create({
     data: {
-      productId,
+      productId: productId || undefined,
       videoType,
       imagePrompt,
       videoPrompt,

@@ -66,6 +66,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const {
     productId,
+    customProduct,
     platform = "flow",
     mode = "paired", // "paired" (default) | "storyline"
     duration = 10,
@@ -82,9 +83,9 @@ export async function POST(req: NextRequest) {
     modelDesc = "",
   } = body;
 
-  if (!productId)
+  if (!productId && !customProduct)
     return NextResponse.json(
-      { error: "productId is required" },
+      { error: "productId or customProduct is required" },
       { status: 400 },
     );
   if (!apiKey)
@@ -93,11 +94,32 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
 
-  const product = await prisma.product.findUnique({
-    where: { id: productId },
-  });
-  if (!product)
-    return NextResponse.json({ error: "Product not found" }, { status: 404 });
+  // Build product info from either DB product or custom input
+  let product: {
+    title: string;
+    description: string | null;
+    price: string | null;
+    shopName: string | null;
+  };
+  if (customProduct) {
+    product = {
+      title:
+        customProduct.description
+          ?.split(/[\n.\-,]/)[0]
+          ?.trim()
+          ?.substring(0, 60) || "Custom Product",
+      description: customProduct.description || "",
+      price: null,
+      shopName: null,
+    };
+  } else {
+    const dbProduct = await prisma.product.findUnique({
+      where: { id: productId },
+    });
+    if (!dbProduct)
+      return NextResponse.json({ error: "Product not found" }, { status: 404 });
+    product = dbProduct;
+  }
 
   const platformLogic =
     PLATFORM_LOGICS[platform]?.(duration) || PLATFORM_LOGICS.flow(duration);
@@ -132,35 +154,53 @@ export async function POST(req: NextRequest) {
         backgroundDesc ||
         "Use the uploaded background image as the environment";
       const modelInstruction = modelDesc || avatarDna;
+      const hasModelImage = !!modelDesc;
+      const hasBgImage = !!backgroundDesc;
+
+      const modelRule = hasModelImage
+        ? `IMPORTANT — MODEL REFERENCE IMAGE IS UPLOADED:
+        The model image is ALREADY uploaded as a visual reference. The AI image generator will USE it directly.
+        DO NOT re-describe the model's appearance (face, hair, clothing, hijab, skin tone, etc.).
+        Model context (for your understanding only, DO NOT put in prompts): "${modelInstruction}"`
+        : `MODEL/AVATAR TO USE IN ALL PROMPTS: ${modelInstruction}
+        CRITICAL: You MUST describe this exact model in every image_prompt. Include their appearance details (age, ethnicity, clothing, hijab if applicable).
+        The model description must be consistent across ALL scenes.`;
+
+      const bgRule = hasBgImage
+        ? `The background image is ALREADY uploaded as a visual reference. The AI image generator will USE it directly.
+        DO NOT re-describe the background/setting details (wall texture, floor, lighting, etc.).
+        Background context (for your understanding only, DO NOT put in prompts): "${bgInstruction}"`
+        : `No background reference image. Describe a suitable background/setting in each image_prompt.`;
+
+      const imagePromptExample = hasModelImage
+        ? `Example good image_prompt:
+        "From the image uploaded, accurate scale, no alter, no redesign. Model holds the product casually in her right hand, positioned slightly to the front. Static chest-up framing, centered, warm smile."
+
+        Example BAD image_prompt (DO NOT DO THIS):
+        "From the image uploaded... A friendly 25-year-old Malay woman with a warm smile, wearing a stylish light beige chiffon hijab... stands in a clean minimalist studio background with light grey concrete texture wall..."`
+        : `Example good image_prompt:
+        "From the image uploaded, accurate scale, no alter, no redesign. ${modelInstruction} holds the product casually in her right hand, positioned slightly to the front. Static chest-up framing, centered, warm smile."`;
+
       promptStrategy = `
         CONSISTENT VIDEO STUDIO MODE (${sceneCount} SCENES):
         Generate exactly ${sceneCount} paired prompts. Each scene creates a separate standalone video.
 
-        IMPORTANT — REFERENCE IMAGES ARE UPLOADED:
-        The background image, model image, and product image are ALREADY uploaded as visual references.
-        The AI image generator will USE these uploaded images directly.
-        DO NOT re-describe the model's appearance (face, hair, clothing, hijab, skin tone, etc.).
-        DO NOT re-describe the background/setting details (wall texture, floor, lighting, etc.).
-        The uploaded reference images handle the visual consistency automatically.
+        ${modelRule}
 
-        Background context (for your understanding only, DO NOT put in prompts): "${bgInstruction}"
-        Model context (for your understanding only, DO NOT put in prompts): "${modelInstruction}"
+        BACKGROUND:
+        ${bgRule}
 
         IMAGE PROMPT RULES:
         Each image_prompt MUST start with: "From the image uploaded, accurate scale, no alter, no redesign."
-        Then ONLY describe:
-        - How the model interacts with the product (holding, showing, using, etc.)
+        Then describe:
+        ${hasModelImage ? "- How the model interacts with the product (holding, showing, using, etc.)" : "- The model (using the exact avatar description above) and how they interact with the product"}
         - The model's pose and expression (smiling, looking at camera, looking at product, etc.)
         - Camera framing (chest-up, full body, close-up on hands, etc.)
         - Product position relative to the model (in right hand, on table, held up to camera, etc.)
-        DO NOT describe what the model looks like or what the background looks like.
-        Keep it SHORT and focused on pose + product interaction + camera angle.
+        ${hasBgImage ? "DO NOT describe what the background looks like." : "- A suitable background/setting for the scene."}
+        Keep it focused on pose + product interaction + camera angle.
 
-        Example good image_prompt:
-        "From the image uploaded, accurate scale, no alter, no redesign. Model holds the product casually in her right hand, positioned slightly to the front. Static chest-up framing, centered, warm smile."
-
-        Example BAD image_prompt (DO NOT DO THIS):
-        "From the image uploaded... A friendly 25-year-old Malay woman with a warm smile, wearing a stylish light beige chiffon hijab... stands in a clean minimalist studio background with light grey concrete texture wall..."
+        ${imagePromptExample}
 
         VIDEO PROMPT RULES:
         Write a single short sentence for the video_prompt field.
