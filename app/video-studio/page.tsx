@@ -378,7 +378,11 @@ export default function VideoStudioPage() {
             (bgFilename || bgPreview
               ? "Use the uploaded background image exactly as shown"
               : ""),
-          modelDesc: modelDesc || "",
+          modelDesc:
+            modelDesc ||
+            (useTemplate && (modelFilename || modelFile)
+              ? "Use the uploaded model reference image exactly as shown"
+              : ""),
         }),
       });
 
@@ -962,33 +966,34 @@ export default function VideoStudioPage() {
           </>
         )}
 
-        {/* Avatar / Model Selection */}
-        {!useManualPrompts && (
-          <div>
-            <label className="mb-2 flex items-center gap-1.5 text-xs font-medium text-gray-500">
-              <User size={12} /> Model / Avatar
-            </label>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {AVATARS.map((av) => {
-                const isActive = avatarId === av.id;
-                return (
-                  <button
-                    key={av.id}
-                    onClick={() => setAvatarId(av.id)}
-                    className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-xs font-medium transition-all ${
-                      isActive
-                        ? "border-purple-400 bg-purple-50 text-purple-700 shadow-sm ring-1 ring-purple-200"
-                        : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
-                    }`}
-                  >
-                    <span className="text-base">{av.emoji}</span>
-                    <span className="leading-tight">{av.label}</span>
-                  </button>
-                );
-              })}
+        {/* Avatar / Model Selection — hidden when custom model image uploaded */}
+        {!useManualPrompts &&
+          !(useTemplate && (modelPreview || modelFilename)) && (
+            <div>
+              <label className="mb-2 flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                <User size={12} /> Model / Avatar
+              </label>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {AVATARS.map((av) => {
+                  const isActive = avatarId === av.id;
+                  return (
+                    <button
+                      key={av.id}
+                      onClick={() => setAvatarId(av.id)}
+                      className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-xs font-medium transition-all ${
+                        isActive
+                          ? "border-purple-400 bg-purple-50 text-purple-700 shadow-sm ring-1 ring-purple-200"
+                          : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                      }`}
+                    >
+                      <span className="text-base">{av.emoji}</span>
+                      <span className="leading-tight">{av.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
         {/* Manual Prompts toggle */}
         <label className="flex cursor-pointer items-center gap-2">

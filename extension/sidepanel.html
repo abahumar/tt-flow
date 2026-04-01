@@ -324,13 +324,44 @@
           <input type="checkbox" id="autoPostToggle" />
           <span>Auto Post to TikTok</span>
         </label>
+        <label
+          style="
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            margin-bottom: 8px;
+          "
+        >
+          <span style="white-space: nowrap">Video Model:</span>
+          <select
+            id="videoModelSelect"
+            style="
+              flex: 1;
+              padding: 4px 8px;
+              border-radius: 6px;
+              border: 1px solid #e5e7eb;
+              font-size: 12px;
+              background: #fff;
+              color: #374151;
+              cursor: pointer;
+            "
+          >
+            <option value="Veo 3.1 - Lite">Veo 3.1 - Lite</option>
+            <option value="Veo 3.1 - Fast">Veo 3.1 - Fast</option>
+            <option value="Veo 3.1 - Fast [Lower Priority]">
+              Veo 3.1 - Fast [Lower Priority]
+            </option>
+            <option value="Veo 3.1 - Quality">Veo 3.1 - Quality</option>
+          </select>
+        </label>
         <button class="btn btn-scrape" id="scrapeBtn">
           📦 Scrape Current Page
         </button>
         <div id="scrapeResult"></div>
       </div>
 
-      <!-- Test TikTok Studio posting (for debugging) -->
+      <!-- Test Google Flow (for debugging) -->
       <div
         style="
           margin-top: 10px;
@@ -339,63 +370,22 @@
         "
       >
         <p style="font-size: 11px; color: #9ca3af; margin-bottom: 6px">
-          🧪 Debug: Test on current TikTok Studio tab
+          🧪 Debug: Test on Google Flow tab
         </p>
         <div class="btn-row">
           <button
             class="btn"
-            id="testProductLinkBtn"
+            id="testModelSelectBtn"
             style="flex: 1; font-size: 11px"
           >
-            🔗 Product Link
+            🎬 Test Model Select
           </button>
           <button
             class="btn"
-            id="testAiToggleBtn"
+            id="testInspectDomBtn"
             style="flex: 1; font-size: 11px"
           >
-            🤖 AI Toggle
-          </button>
-        </div>
-        <div class="btn-row" style="margin-top: 4px">
-          <button
-            class="btn"
-            id="testFillProductBtn"
-            style="flex: 1; font-size: 11px"
-          >
-            📝 Fill Product Info
-          </button>
-          <button
-            class="btn"
-            id="testScanDomBtn"
-            style="flex: 1; font-size: 11px"
-          >
-            🔍 Scan DOM
-          </button>
-        </div>
-        <div class="btn-row" style="margin-top: 4px">
-          <button
-            class="btn"
-            id="testFillCaptionBtn"
-            style="flex: 1; font-size: 11px"
-          >
-            📋 Fill Caption
-          </button>
-          <button
-            class="btn"
-            id="testSaveDraftBtn"
-            style="flex: 1; font-size: 11px"
-          >
-            💾 Save Draft
-          </button>
-        </div>
-        <div class="btn-row" style="margin-top: 4px">
-          <button
-            class="btn btn-primary"
-            id="testFullPostBtn"
-            style="flex: 1; font-size: 11px"
-          >
-            🚀 Full Post Test
+            🔍 Inspect DOM
           </button>
         </div>
         <div id="testResult" style="margin-top: 6px"></div>

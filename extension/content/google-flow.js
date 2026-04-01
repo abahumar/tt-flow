@@ -97,6 +97,41 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse(inspectResult);
       return true;
 
+    case "TEST_SELECT_MODEL":
+      (async () => {
+        try {
+          const modelName = payload?.modelName || "Veo 3.1 - Fast";
+          console.log("[TikTok Flow] TEST_SELECT_MODEL:", modelName);
+
+          // Switch to Video mode (opens settings dropdown)
+          let switched = false;
+          for (let attempt = 0; attempt < 3; attempt++) {
+            switched = await switchToMode("video");
+            if (switched) break;
+            await sleep(1000);
+          }
+          // Set aspect ratio (dropdown still open)
+          await selectTriggerOption("PORTRAIT", "9:16");
+          await sleep(500);
+
+          // Select model (dropdown still open — model button is inside it)
+          const result = await trySelectModel(modelName);
+          await sleep(500);
+
+          // Close the settings dropdown
+          await closeSettingsDropdown();
+
+          sendResponse({
+            message: result
+              ? `Model selected: ${modelName}`
+              : `Model not found: ${modelName}`,
+          });
+        } catch (err) {
+          sendResponse({ error: err.message });
+        }
+      })();
+      return true;
+
     case "OPEN_NEW_PROJECT":
       openNewProjectAndResetToImage()
         .then((result) => sendResponse({ success: result }))
@@ -1901,32 +1936,100 @@ async function downloadAndUploadVideo(resultEl, jobId, sceneIndex) {
 
   let videoBlob = null;
 
-  // Strategy 1: Find a download button/link with an HTTPS URL (best quality)
-  const downloadLinks = document.querySelectorAll(
-    'a[download][href*=".mp4"], a[download][href*="video"], a[href*="download"][href*="video"]',
-  );
-  for (const link of downloadLinks) {
-    const href = link.href || link.getAttribute("href") || "";
-    if (href && href.startsWith("http")) {
-      console.log("[TikTok Flow] Found download link:", href.substring(0, 100));
-      try {
-        const resp = await fetch(href);
-        if (resp.ok) {
-          videoBlob = await resp.blob();
-          console.log(
-            "[TikTok Flow] Downloaded via link:",
-            videoBlob.size,
-            "bytes",
-          );
-          break;
+  // ---- IMPORTANT: For multi-scene, we MUST prioritise the resultEl ----
+  // Strategy 1 & 2 search the ENTIRE page and can grab download links from
+  // a *previous* scene's video. So we try resultEl-based strategies first.
+
+  // Strategy A (was 3): Fetch the video element's src (blob: or https:) — MOST RELIABLE for multi-scene
+  const videoSrc =
+    resultEl.src ||
+    resultEl.querySelector?.("source")?.src ||
+    (resultEl.isDownloadLink ? resultEl.src : null);
+
+  if (videoSrc) {
+    console.log(
+      "[TikTok Flow] Fetching video src:",
+      videoSrc.substring(0, 100),
+    );
+    try {
+      const resp = await fetch(videoSrc);
+      if (resp.ok) {
+        videoBlob = await resp.blob();
+        console.log(
+          "[TikTok Flow] Downloaded via resultEl src:",
+          videoBlob.size,
+          "bytes",
+        );
+      }
+    } catch (e) {
+      console.warn(
+        "[TikTok Flow] Video src fetch failed (possibly cross-origin blob):",
+        e.message,
+      );
+    }
+  }
+
+  // Strategy B (was 4): Use canvas capture for resultEl (re-encodes, lower quality)
+  if (!videoBlob && resultEl.tagName === "VIDEO") {
+    console.log("[TikTok Flow] Trying canvas capture on resultEl...");
+    try {
+      videoBlob = await captureVideoViaCanvas(resultEl);
+      console.log(
+        "[TikTok Flow] Captured via canvas:",
+        videoBlob.size,
+        "bytes",
+      );
+    } catch (e) {
+      console.warn("[TikTok Flow] Canvas capture failed:", e.message);
+    }
+  }
+
+  // Strategy C: If resultEl is a download link (synthetic from waitForVideoResult),
+  // its src already points to the correct URL — handled above by (resultEl.isDownloadLink).
+  // But if that failed, try to find a download link NEAR the resultEl (scoped search).
+  if (!videoBlob && resultEl.isDownloadLink && resultEl.src) {
+    // resultEl.src was already tried above; skip to global fallback
+    console.log(
+      "[TikTok Flow] Download link resultEl src already tried, moving to global fallback",
+    );
+  }
+
+  // Strategy D (fallback — was 1): Find the LATEST download link on the page.
+  // For multi-scene, we take the LAST matching link (newest) instead of the first.
+  if (!videoBlob) {
+    const downloadLinks = [
+      ...document.querySelectorAll(
+        'a[download][href*=".mp4"], a[download][href*="video"], a[href*="download"][href*="video"]',
+      ),
+    ];
+    // Reverse so we try the most recently added (last in DOM) link first
+    downloadLinks.reverse();
+    for (const link of downloadLinks) {
+      const href = link.href || link.getAttribute("href") || "";
+      if (href && href.startsWith("http")) {
+        console.log(
+          "[TikTok Flow] Found download link (latest first):",
+          href.substring(0, 100),
+        );
+        try {
+          const resp = await fetch(href);
+          if (resp.ok) {
+            videoBlob = await resp.blob();
+            console.log(
+              "[TikTok Flow] Downloaded via page link:",
+              videoBlob.size,
+              "bytes",
+            );
+            break;
+          }
+        } catch (e) {
+          console.warn("[TikTok Flow] Download link fetch failed:", e.message);
         }
-      } catch (e) {
-        console.warn("[TikTok Flow] Download link fetch failed:", e.message);
       }
     }
   }
 
-  // Strategy 2: Click the download/export button if visible
+  // Strategy E (fallback — was 2): Click the download/export button if visible
   if (!videoBlob) {
     const downloadBtn =
       findButtonByText("Download") ||
@@ -1935,7 +2038,6 @@ async function downloadAndUploadVideo(resultEl, jobId, sceneIndex) {
       document.querySelector('button[aria-label*="export" i]');
     if (downloadBtn) {
       console.log("[TikTok Flow] Trying download button click...");
-      // Try to extract the download URL from the button's action
       const href = downloadBtn.href || downloadBtn.closest("a")?.href;
       if (href && href.startsWith("http")) {
         try {
@@ -1952,52 +2054,6 @@ async function downloadAndUploadVideo(resultEl, jobId, sceneIndex) {
           console.warn("[TikTok Flow] Button href fetch failed:", e.message);
         }
       }
-    }
-  }
-
-  // Strategy 3: Fetch the video element's src (blob: or https:)
-  if (!videoBlob) {
-    const videoSrc =
-      resultEl.src ||
-      resultEl.querySelector?.("source")?.src ||
-      (resultEl.isDownloadLink ? resultEl.src : null);
-
-    if (videoSrc) {
-      console.log(
-        "[TikTok Flow] Fetching video src:",
-        videoSrc.substring(0, 100),
-      );
-      try {
-        const resp = await fetch(videoSrc);
-        if (resp.ok) {
-          videoBlob = await resp.blob();
-          console.log(
-            "[TikTok Flow] Downloaded via src:",
-            videoBlob.size,
-            "bytes",
-          );
-        }
-      } catch (e) {
-        console.warn(
-          "[TikTok Flow] Video src fetch failed (possibly cross-origin blob):",
-          e.message,
-        );
-      }
-    }
-  }
-
-  // Strategy 4: Use canvas capture as last resort (re-encodes, lower quality)
-  if (!videoBlob && resultEl.tagName === "VIDEO") {
-    console.log("[TikTok Flow] Trying canvas capture fallback...");
-    try {
-      videoBlob = await captureVideoViaCanvas(resultEl);
-      console.log(
-        "[TikTok Flow] Captured via canvas:",
-        videoBlob.size,
-        "bytes",
-      );
-    } catch (e) {
-      console.warn("[TikTok Flow] Canvas capture failed:", e.message);
     }
   }
 
@@ -3500,12 +3556,14 @@ async function generateMultiScene({
   scenes,
   productImages,
   studioReferenceImages,
+  videoModel,
 }) {
   console.log(
     "[TikTok Flow] === Starting MULTI-SCENE generation for job:",
     jobId,
   );
   console.log("[TikTok Flow] Total scenes:", scenes.length);
+  console.log("[TikTok Flow] Video model:", videoModel || "default");
 
   let scenesCompleted = 0;
 
@@ -3663,11 +3721,15 @@ async function generateMultiScene({
       });
       await sleep(2000);
 
-      // Set 9:16 for video
+      // Set 9:16 for video and select model
       await openSettingsDropdown();
       await sleep(500);
       await selectTriggerOption("PORTRAIT", "9:16");
       await sleep(500);
+      if (videoModel) {
+        await trySelectModel(videoModel);
+        await sleep(500);
+      }
       await closeSettingsDropdown();
       await sleep(500);
 
@@ -3768,6 +3830,7 @@ async function generateVideoFromImage({
   jobId,
   prompt,
   referenceImageDataUrl,
+  videoModel,
 }) {
   console.log(
     "[TikTok Flow] === Starting VIDEO FROM IMAGE generation for job:",
@@ -3781,25 +3844,35 @@ async function generateVideoFromImage({
     "[TikTok Flow] Reference image provided:",
     !!referenceImageDataUrl,
   );
+  console.log("[TikTok Flow] Video model:", videoModel || "default");
 
   try {
     verifyFlowPage();
     await sleep(2000);
 
-    // Step 1: Navigate to a fresh project in Video mode
-    await withRetry(() => navigateToNewProject("video"), {
+    // Step 1: Navigate to a fresh project in IMAGE mode first.
+    // Google Flow remembers the last-used mode. "Add to Prompt" for reference
+    // images only works reliably in Image mode. We upload + add reference in
+    // Image mode, then switch to Video mode before clicking Create.
+    await withRetry(() => navigateToNewProject("image"), {
       maxAttempts: 5,
       delayMs: 3000,
-      label: "Navigate to new video project",
+      label: "Navigate to new image project",
     });
     await sleep(1500);
 
-    // Step 2: Ensure Video mode is selected
+    // Step 2: Ensure IMAGE mode is selected (so the reference upload UI is correct)
+    console.log("[TikTok Flow] Ensuring Image mode for reference upload...");
     let switched = false;
     for (let attempt = 0; attempt < 3; attempt++) {
-      switched = await switchToMode("video");
+      switched = await switchToMode("image");
       if (switched) break;
       await sleep(1000);
+    }
+    if (!switched) {
+      console.warn(
+        "[TikTok Flow] Could not switch to Image mode — proceeding anyway",
+      );
     }
 
     // Step 2.1: Set aspect ratio to 9:16 (PORTRAIT)
@@ -3807,20 +3880,24 @@ async function generateVideoFromImage({
     await selectTriggerOption("PORTRAIT", "9:16");
     await sleep(500);
     await closeSettingsDropdown();
-    await sleep(1000);
+    await sleep(500);
 
-    // Step 3: Upload the gallery image into the "Start" slot (first frame for video)
+    // Step 3: Upload the gallery image as a reference and "Add to Prompt"
+    // (same pattern as generateImageOnly — this is the proven working flow)
     if (referenceImageDataUrl) {
       console.log(
-        "[TikTok Flow] Uploading gallery image as video start frame...",
+        "[TikTok Flow] Uploading gallery image as reference in Image mode...",
       );
-      await withRetry(() => uploadStartImageForVideo(referenceImageDataUrl), {
-        maxAttempts: 3,
-        delayMs: 2000,
-        label: "Upload gallery image as start frame",
-      });
+      await withRetry(
+        () => uploadAndAddReferenceToPrompt(referenceImageDataUrl),
+        {
+          maxAttempts: 3,
+          delayMs: 2000,
+          label: "Upload gallery image and add to prompt",
+        },
+      );
       console.log(
-        "[TikTok Flow] ✅ Gallery image uploaded as video start frame",
+        "[TikTok Flow] ✅ Gallery image uploaded and added to prompt",
       );
       await sleep(1000);
     } else {
@@ -3829,7 +3906,31 @@ async function generateVideoFromImage({
       );
     }
 
-    // Step 4: Find and fill the video prompt
+    // Step 4: Switch to VIDEO mode for generation
+    console.log("[TikTok Flow] Switching to Video mode for generation...");
+    switched = false;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      switched = await switchToMode("video");
+      if (switched) break;
+      await sleep(1000);
+    }
+    if (!switched) {
+      console.warn(
+        "[TikTok Flow] Could not switch to Video mode — proceeding anyway",
+      );
+    }
+
+    // Step 4.1: Set video model if specified
+    if (videoModel) {
+      await openSettingsDropdown();
+      await sleep(500);
+      await trySelectModel(videoModel);
+      await sleep(500);
+      await closeSettingsDropdown();
+      await sleep(500);
+    }
+
+    // Step 5: Find and fill the video prompt
     let promptEl = findPromptInput();
     if (!promptEl) {
       await sleep(3000);
@@ -3843,7 +3944,7 @@ async function generateVideoFromImage({
     await sleep(300);
     await fillPrompt(promptEl, prompt);
 
-    // Step 5: Click Create for video
+    // Step 6: Click Create for video
     let createBtn = null;
     for (let attempt = 0; attempt < 5; attempt++) {
       await sleep(500);
@@ -3857,11 +3958,11 @@ async function generateVideoFromImage({
     simulateClick(createBtn);
     console.log("[TikTok Flow] Video Create clicked, waiting for result...");
 
-    // Step 6: Wait for video result
+    // Step 7: Wait for video result
     await sleep(3000);
     const resultEl = await waitForVideoResult(360000); // 6 min timeout
 
-    // Step 7: Download and upload video
+    // Step 8: Download and upload video
     let videoUrl;
     try {
       const uploadResult = await downloadAndUploadVideo(resultEl, jobId);
@@ -4024,9 +4125,10 @@ async function uploadStartImageForVideo(imageDataUrl) {
 // ---- Main: Generate Video ----
 // Right-clicks the generated image → Animate → fills video prompt → Create.
 // Stays on the SAME project page as the image generation (no new project).
-async function generateVideo({ jobId, prompt, imageUrl }) {
+async function generateVideo({ jobId, prompt, imageUrl, videoModel }) {
   console.log("[TikTok Flow] === Starting VIDEO generation for job:", jobId);
   console.log("[TikTok Flow] Prompt:", prompt.substring(0, 100) + "...");
+  console.log("[TikTok Flow] Video model:", videoModel || "default");
 
   try {
     verifyFlowPage();
@@ -4040,7 +4142,7 @@ async function generateVideo({ jobId, prompt, imageUrl }) {
     });
     await sleep(2000);
 
-    // Step 1.5: Ensure 9:16 (PORTRAIT) aspect ratio for video
+    // Step 1.5: Ensure 9:16 (PORTRAIT) aspect ratio for video and select model
     console.log(
       "[TikTok Flow] Setting video aspect ratio to 9:16 (PORTRAIT)...",
     );
@@ -4048,6 +4150,10 @@ async function generateVideo({ jobId, prompt, imageUrl }) {
     await sleep(500);
     await selectTriggerOption("PORTRAIT", "9:16");
     await sleep(500);
+    if (videoModel) {
+      await trySelectModel(videoModel);
+      await sleep(500);
+    }
     await closeSettingsDropdown();
     await sleep(500);
 
@@ -4689,48 +4795,66 @@ async function tryDirectFileUpload(imageUrl) {
 }
 
 // ---- Try to select a specific AI model ----
-// The model selector is INSIDE the settings dropdown popup.
-// The dropdown must already be open.
+// The model selector is a button[aria-haspopup="menu"] INSIDE the settings dropdown.
+// It shows the current model name (e.g. "Veo 3.1 - Lite") with an arrow_drop_down icon.
+// Clicking it opens a nested menu with model options.
+// The settings dropdown MUST be open before calling this.
 async function trySelectModel(modelName = "Veo 3.1 - Fast") {
   try {
+    console.log("[TikTok Flow] Selecting model:", modelName);
     const popup = findDropdownPopup();
     const searchRoot = popup || document;
 
-    // Find the model dropdown trigger — look for a button containing a model name
-    // (e.g. "🍌 Nano Banana Pro") or a combobox role
-    let trigger = searchRoot.querySelector('[role="combobox"]');
-    if (!trigger) {
-      // Look for buttons inside the popup that contain known model name patterns
-      const popupBtns = searchRoot.querySelectorAll("button");
-      for (const btn of popupBtns) {
+    // Step 1: Find the model trigger button (aria-haspopup="menu" with model name text)
+    let modelTrigger = null;
+    const menuBtns = searchRoot.querySelectorAll(
+      'button[aria-haspopup="menu"]',
+    );
+    for (const btn of menuBtns) {
+      const text = btn.textContent.trim();
+      if (/Veo|Imagen|Flash|Nano/.test(text)) {
+        modelTrigger = btn;
+        break;
+      }
+    }
+
+    if (!modelTrigger) {
+      // Fallback: any button in the popup whose text contains known model names
+      const allBtns = searchRoot.querySelectorAll("button");
+      for (const btn of allBtns) {
         const text = btn.textContent.trim();
-        if (
-          /Nano|Veo|Flash|Imagen/.test(text) &&
-          btn.getBoundingClientRect().width > 30
-        ) {
-          trigger = btn;
+        if (/Veo|Imagen|Flash/.test(text) && /arrow_drop_down/.test(text)) {
+          modelTrigger = btn;
           break;
         }
       }
     }
 
-    if (!trigger) {
-      console.log("[TikTok Flow] No model selector found — using default");
-      return;
+    if (!modelTrigger) {
+      console.log(
+        "[TikTok Flow] No model selector found in dropdown — using default",
+      );
+      return false;
     }
 
-    // Check if the desired model is already selected
-    if (trigger.textContent.includes(modelName)) {
+    const currentModel = modelTrigger.textContent
+      .replace("arrow_drop_down", "")
+      .trim();
+    console.log("[TikTok Flow] Current model:", currentModel);
+
+    // Check if already selected
+    if (currentModel.includes(modelName)) {
       console.log("[TikTok Flow] Model already selected:", modelName);
-      return;
+      return true;
     }
 
-    // Click to open the nested model dropdown
-    simulateClick(trigger);
-    await sleep(600);
+    // Step 2: Click the model trigger to open the nested model menu
+    simulateClick(modelTrigger);
+    await sleep(800);
 
-    // Find options — they appear in a second popover
+    // Step 3: Find and click the desired model option in the nested menu
     const optionSelectors = [
+      '[role="menuitemradio"]',
       '[role="menuitem"]',
       '[role="option"]',
       "[data-radix-collection-item]",
@@ -4739,28 +4863,51 @@ async function trySelectModel(modelName = "Veo 3.1 - Fast") {
     for (const sel of optionSelectors) {
       const options = document.querySelectorAll(sel);
       for (const opt of options) {
-        if (opt.textContent.trim().includes(modelName)) {
+        const text = opt.textContent.trim();
+        if (text.includes(modelName)) {
           const clickTarget =
             opt.closest(
-              "button, [role='menuitem'], [data-radix-collection-item]",
+              'button, [role="menuitemradio"], [role="menuitem"], [data-radix-collection-item]',
             ) || opt;
           simulateClick(clickTarget);
-          console.log("[TikTok Flow] Selected model:", opt.textContent.trim());
-          await sleep(300);
-          return;
+          console.log("[TikTok Flow] Selected model:", text.substring(0, 40));
+          await sleep(500);
+          return true;
         }
       }
     }
 
-    // Close model dropdown if we didn't find the option
-    simulateClick(trigger);
+    // Step 4: Also try matching any visible button/div with model name text
+    const allElements = document.querySelectorAll("button, div[role], span");
+    for (const el of allElements) {
+      const text = el.textContent.trim();
+      const rect = el.getBoundingClientRect();
+      if (
+        text === modelName &&
+        rect.width > 20 &&
+        rect.height > 10 &&
+        rect.width < 400
+      ) {
+        const clickTarget = el.closest("button") || el;
+        simulateClick(clickTarget);
+        console.log("[TikTok Flow] Selected model via element match:", text);
+        await sleep(500);
+        return true;
+      }
+    }
+
+    // Close the model submenu if we didn't find the option
+    simulateClick(modelTrigger);
+    await sleep(300);
     console.log(
       "[TikTok Flow] Model option not found:",
       modelName,
       "— using default",
     );
+    return false;
   } catch (err) {
     console.warn("[TikTok Flow] Model selection failed:", err.message);
+    return false;
   }
 }
 
@@ -4838,14 +4985,20 @@ function inspectFlowUI() {
 
   // Check for model selector (button with known model names inside it)
   let modelBtn = null;
+  const modelButtons = [];
   for (const btn of document.querySelectorAll("button")) {
     const text = btn.textContent.trim();
     if (
       /Nano|Veo|Flash|Imagen/.test(text) &&
       btn.getBoundingClientRect().width > 30
     ) {
-      modelBtn = btn;
-      break;
+      if (!modelBtn) modelBtn = btn;
+      modelButtons.push({
+        text: text.substring(0, 40),
+        id: btn.id || "",
+        class: btn.className?.substring(0, 50) || "",
+        state: btn.getAttribute("data-state") || "",
+      });
     }
   }
   const modelInfo = modelBtn
@@ -4853,6 +5006,7 @@ function inspectFlowUI() {
         found: true,
         text: modelBtn.textContent.trim().substring(0, 40),
         class: modelBtn.className?.substring(0, 50),
+        allModels: modelButtons,
       }
     : { found: false };
 

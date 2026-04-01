@@ -1,5 +1,15 @@
 const API_BASE = "http://localhost:3000/api";
 
+// ---- Fetch video model setting from chrome.storage.local ----
+async function getVideoModel() {
+  try {
+    const { videoModel } = await chrome.storage.local.get("videoModel");
+    return videoModel || "Veo 3.1 - Fast";
+  } catch {
+    return "Veo 3.1 - Fast";
+  }
+}
+
 // ---- Error Classification ----
 // Categorize errors as retryable (transient) or fatal (permanent)
 const FATAL_ERROR_PATTERNS = [
@@ -448,24 +458,55 @@ function handleMessage(message, sender, sendResponse) {
       healthCheckGoogleFlow().then(sendResponse);
       return true;
 
-    case "TEST_TIKTOK_POST":
-      // Debug: send test commands to TikTok Studio tab for individual step testing
+    case "TEST_SELECT_MODEL":
+      // Debug: test model selection on Google Flow tab
       (async () => {
         try {
-          const { action } = payload || {};
-          const studioTabId = await findTikTokStudioTab();
-          if (!studioTabId) {
+          const health = await healthCheckGoogleFlow();
+          if (!health.ok) {
             sendResponse({
               error:
-                "No TikTok Studio tab found. Open tiktokstudio/upload first.",
+                "No Google Flow tab found. Open labs.google/fx/tools/flow first.",
             });
             return;
           }
-          chrome.tabs.update(studioTabId, { active: true });
+          const modelName = payload?.modelName || "Veo 3.1 - Fast";
           const result = await new Promise((resolve) => {
             chrome.tabs.sendMessage(
-              studioTabId,
-              { type: "TEST_ACTION", payload: { action } },
+              health.tabId,
+              { type: "TEST_SELECT_MODEL", payload: { modelName } },
+              (response) => {
+                if (chrome.runtime.lastError) {
+                  resolve({ error: chrome.runtime.lastError.message });
+                } else {
+                  resolve(response || { error: "No response" });
+                }
+              },
+            );
+          });
+          sendResponse(result);
+        } catch (err) {
+          sendResponse({ error: err.message });
+        }
+      })();
+      return true;
+
+    case "TEST_INSPECT_DOM":
+      // Debug: inspect Google Flow DOM
+      (async () => {
+        try {
+          const health = await healthCheckGoogleFlow();
+          if (!health.ok) {
+            sendResponse({
+              error:
+                "No Google Flow tab found. Open labs.google/fx/tools/flow first.",
+            });
+            return;
+          }
+          const result = await new Promise((resolve) => {
+            chrome.tabs.sendMessage(
+              health.tabId,
+              { type: "INSPECT_DOM" },
               (response) => {
                 if (chrome.runtime.lastError) {
                   resolve({ error: chrome.runtime.lastError.message });
@@ -2362,6 +2403,7 @@ async function processMultiSceneJob(job, scenePrompts) {
     );
   }
 
+  const multiSceneVideoModel = await getVideoModel();
   try {
     const result = await new Promise((resolve) => {
       chrome.tabs.sendMessage(
@@ -2373,6 +2415,7 @@ async function processMultiSceneJob(job, scenePrompts) {
             scenes: scenePrompts,
             productImages,
             studioReferenceImages,
+            videoModel: multiSceneVideoModel,
           },
         },
         (response) => {
@@ -2656,6 +2699,7 @@ async function processVideoGeneration(job) {
     }
 
     try {
+      const galleryVideoModel = await getVideoModel();
       const result = await new Promise((resolve) => {
         chrome.tabs.sendMessage(
           flowTabId,
@@ -2667,6 +2711,7 @@ async function processVideoGeneration(job) {
                 job.videoPrompt ||
                 "Create a smooth cinematic video showcasing this product with gentle camera movement, soft lighting, 9:16 vertical format.",
               referenceImageDataUrl,
+              videoModel: galleryVideoModel,
             },
           },
           (response) => {
@@ -2751,6 +2796,7 @@ async function processVideoGeneration(job) {
   // IMPORTANT: Use findGoogleFlowTab() instead of ensureGoogleFlowTab().
   // We must stay on the SAME project page where the image was generated.
 
+  const videoModel = await getVideoModel();
   try {
     const result = await new Promise((resolve) => {
       chrome.tabs.sendMessage(
@@ -2761,6 +2807,7 @@ async function processVideoGeneration(job) {
             jobId: job.id,
             prompt: job.videoPrompt,
             imageUrl: job.imageUrl,
+            videoModel: videoModel,
           },
         },
         (response) => {

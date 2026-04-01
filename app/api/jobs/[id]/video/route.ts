@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { sendVideoToTelegram } from "@/lib/telegram";
 import { writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
 import { execSync } from "child_process";
@@ -108,6 +109,14 @@ export async function POST(
           caption: job?.tiktokCaption || "",
         },
       });
+
+      // Send video to Telegram channel (non-blocking)
+      const telegramCaption = job?.tiktokCaption
+        ? `${job.tiktokCaption}\n\nType: ${job.videoType || "video"}`
+        : `New video created (${job?.videoType || "video"})`;
+      sendVideoToTelegram(processedPath, telegramCaption).catch((err) =>
+        console.error("[Telegram] Background send failed:", err),
+      );
     }
 
     return NextResponse.json({

@@ -270,16 +270,27 @@ function observeNewContent(filter, timeout = 120000) {
 
 /**
  * Take a snapshot of current images/videos on the page
+ * Includes download link hrefs so multi-scene generation can tell old from new
  */
 function snapshotMedia() {
+  const videoSrcs = [...document.querySelectorAll("video")]
+    .map((v) => v.src || v.querySelector("source")?.src || "")
+    .filter(Boolean);
+
+  // Also capture download link hrefs (mp4/video) so waitForVideoResult
+  // can distinguish old download links from newly-appeared ones.
+  const downloadHrefs = [
+    ...document.querySelectorAll(
+      'a[download][href*=".mp4"], a[download][href*="video"]',
+    ),
+  ]
+    .map((a) => a.href || a.getAttribute("href") || "")
+    .filter(Boolean);
+
   return {
     images: new Set(
       [...document.querySelectorAll("img")].map((i) => i.src).filter(Boolean),
     ),
-    videos: new Set(
-      [...document.querySelectorAll("video")]
-        .map((v) => v.src || v.querySelector("source")?.src || "")
-        .filter(Boolean),
-    ),
+    videos: new Set([...videoSrcs, ...downloadHrefs]),
   };
 }

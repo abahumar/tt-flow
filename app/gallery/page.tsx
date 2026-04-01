@@ -14,6 +14,7 @@ import {
   BookmarkPlus,
   ChevronDown,
   ChevronUp,
+  Send,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -66,6 +67,9 @@ export default function GalleryPage() {
   const [savingVideoPrompt, setSavingVideoPrompt] = useState(false);
   const [saveVideoPromptName, setSaveVideoPromptName] = useState("");
   const [showSaveVideoForm, setShowSaveVideoForm] = useState(false);
+  const [sendingTelegram, setSendingTelegram] = useState<Set<string>>(
+    new Set(),
+  );
   const router = useRouter();
 
   const fetchGallery = useCallback(async () => {
@@ -135,6 +139,48 @@ export default function GalleryPage() {
       return next;
     });
     if (previewImage?.id === image.id) setPreviewImage(null);
+  };
+
+  const handleSendVideoToTelegram = async (video: GalleryVideo) => {
+    setSendingTelegram((prev) => new Set(prev).add(video.id));
+    try {
+      const res = await fetch(`/api/gallery/${video.id}/telegram`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert("Failed to send: " + (err.error || "Unknown error"));
+      }
+    } catch {
+      alert("Failed to send video to Telegram");
+    } finally {
+      setSendingTelegram((prev) => {
+        const next = new Set(prev);
+        next.delete(video.id);
+        return next;
+      });
+    }
+  };
+
+  const handleSendImageToTelegram = async (image: GalleryImage) => {
+    setSendingTelegram((prev) => new Set(prev).add(image.id));
+    try {
+      const res = await fetch(`/api/gallery/${image.id}/telegram?type=image`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert("Failed to send: " + (err.error || "Unknown error"));
+      }
+    } catch {
+      alert("Failed to send image to Telegram");
+    } finally {
+      setSendingTelegram((prev) => {
+        const next = new Set(prev);
+        next.delete(image.id);
+        return next;
+      });
+    }
   };
 
   const openCreateVideoModal = (image: GalleryImage) => {
@@ -307,6 +353,18 @@ export default function GalleryPage() {
                         <Download className="h-4 w-4" />
                       </button>
                       <button
+                        onClick={() => handleSendVideoToTelegram(video)}
+                        disabled={sendingTelegram.has(video.id)}
+                        title="Send to Telegram"
+                        className="rounded-full bg-blue-500 p-2 text-white shadow-lg transition-transform hover:scale-110 disabled:opacity-50"
+                      >
+                        {sendingTelegram.has(video.id) ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="h-4 w-4" />
+                        )}
+                      </button>
+                      <button
                         onClick={() => handleDeleteVideo(video)}
                         disabled={deleting.has(video.id)}
                         className="rounded-full bg-red-600 p-2 text-white shadow-lg transition-transform hover:scale-110 disabled:opacity-50"
@@ -385,6 +443,18 @@ export default function GalleryPage() {
                       <Download className="h-4 w-4" />
                     </button>
                     <button
+                      onClick={() => handleSendImageToTelegram(image)}
+                      disabled={sendingTelegram.has(image.id)}
+                      title="Send to Telegram"
+                      className="rounded-full bg-blue-500 p-2 text-white shadow-lg transition-transform hover:scale-110 disabled:opacity-50"
+                    >
+                      {sendingTelegram.has(image.id) ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
+                    </button>
+                    <button
                       onClick={() => handleDeleteImage(image)}
                       disabled={deleting.has(image.id)}
                       className="rounded-full bg-red-600 p-2 text-white shadow-lg transition-transform hover:scale-110 disabled:opacity-50"
@@ -441,6 +511,17 @@ export default function GalleryPage() {
               >
                 <Download className="h-4 w-4" />
                 Download
+              </button>
+              <button
+                onClick={() => handleSendVideoToTelegram(previewVideo)}
+                disabled={sendingTelegram.has(previewVideo.id)}
+                className="flex items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-600 disabled:opacity-50"
+              >
+                {sendingTelegram.has(previewVideo.id) ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
               </button>
               <button
                 onClick={() => handleDeleteVideo(previewVideo)}
@@ -503,6 +584,17 @@ export default function GalleryPage() {
                 className="flex items-center justify-center gap-2 rounded-lg bg-pink-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-pink-600"
               >
                 <Download className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => handleSendImageToTelegram(previewImage)}
+                disabled={sendingTelegram.has(previewImage.id)}
+                className="flex items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-600 disabled:opacity-50"
+              >
+                {sendingTelegram.has(previewImage.id) ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
               </button>
               <button
                 onClick={() => handleDeleteImage(previewImage)}

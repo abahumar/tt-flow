@@ -38,6 +38,18 @@ const SETTING_FIELDS = [
     placeholder: "AIzaSy...",
     type: "password",
   },
+  {
+    key: "telegram_bot_token",
+    label: "Telegram Bot Token",
+    placeholder: "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11",
+    type: "password",
+  },
+  {
+    key: "telegram_chat_id",
+    label: "Telegram Chat ID / Channel",
+    placeholder: "@mychannel or -1001234567890",
+    type: "text",
+  },
 ];
 
 export default function SettingsPage() {

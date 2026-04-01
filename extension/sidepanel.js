@@ -289,6 +289,16 @@ document.getElementById("autoPostToggle").addEventListener("change", (e) => {
   chrome.storage.local.set({ autoPostEnabled: e.target.checked });
 });
 
+// Video model selector
+chrome.storage.local.get("videoModel", ({ videoModel }) => {
+  const select = document.getElementById("videoModelSelect");
+  if (select && videoModel) select.value = videoModel;
+});
+
+document.getElementById("videoModelSelect").addEventListener("change", (e) => {
+  chrome.storage.local.set({ videoModel: e.target.value });
+});
+
 // ---- Attach event listeners ----
 document
   .getElementById("autoModeBtn")
@@ -297,14 +307,14 @@ document
   .getElementById("scrapeBtn")
   .addEventListener("click", handleScrapeCurrentPage);
 
-// ---- Test TikTok Studio buttons ----
-function sendTestToStudioTab(testAction) {
+// ---- Test Google Flow buttons ----
+function sendTestToFlowTab(testType, extraPayload = {}) {
   const resultEl = document.getElementById("testResult");
   resultEl.innerHTML =
     '<div style="font-size:11px;color:#6b7280">Running test...</div>';
 
   chrome.runtime.sendMessage(
-    { type: "TEST_TIKTOK_POST", payload: { action: testAction } },
+    { type: testType, payload: extraPayload },
     (response) => {
       if (chrome.runtime.lastError) {
         resultEl.innerHTML = `<div style="font-size:11px;color:#dc2626">Error: ${chrome.runtime.lastError.message}</div>`;
@@ -313,33 +323,26 @@ function sendTestToStudioTab(testAction) {
       if (response?.error) {
         resultEl.innerHTML = `<div style="font-size:11px;color:#dc2626">${escapeHtml(response.error)}</div>`;
       } else {
-        resultEl.innerHTML = `<div style="font-size:11px;color:#059669">✓ ${escapeHtml(response?.message || "Test sent")}</div>`;
+        const msg =
+          response?.message ||
+          response?.modelSelector?.text ||
+          JSON.stringify(response).substring(0, 200);
+        resultEl.innerHTML = `<div style="font-size:11px;color:#059669">✓ ${escapeHtml(msg)}</div>`;
       }
     },
   );
 }
 
 document
-  .getElementById("testProductLinkBtn")
-  .addEventListener("click", () => sendTestToStudioTab("product_link"));
+  .getElementById("testModelSelectBtn")
+  .addEventListener("click", async () => {
+    const { videoModel } = await chrome.storage.local.get("videoModel");
+    const model = videoModel || "Veo 3.1 - Fast";
+    sendTestToFlowTab("TEST_SELECT_MODEL", { modelName: model });
+  });
 document
-  .getElementById("testAiToggleBtn")
-  .addEventListener("click", () => sendTestToStudioTab("ai_toggle"));
-document
-  .getElementById("testFillProductBtn")
-  .addEventListener("click", () => sendTestToStudioTab("fill_product_info"));
-document
-  .getElementById("testScanDomBtn")
-  .addEventListener("click", () => sendTestToStudioTab("scan_dom"));
-document
-  .getElementById("testFillCaptionBtn")
-  .addEventListener("click", () => sendTestToStudioTab("fill_caption"));
-document
-  .getElementById("testSaveDraftBtn")
-  .addEventListener("click", () => sendTestToStudioTab("save_draft"));
-document
-  .getElementById("testFullPostBtn")
-  .addEventListener("click", () => sendTestToStudioTab("full_post"));
+  .getElementById("testInspectDomBtn")
+  .addEventListener("click", () => sendTestToFlowTab("TEST_INSPECT_DOM"));
 
 // Event delegation for dynamically rendered buttons
 document.body.addEventListener("click", (e) => {
