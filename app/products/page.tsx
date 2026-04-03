@@ -58,6 +58,20 @@ export default function ProductsPage() {
     shopName: "",
   });
 
+  // Convert product ID or URL to a full TikTok Shop URL
+  const toProductUrl = (input: string): string => {
+    const trimmed = input.trim();
+    // If it's already a URL, return as-is
+    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+      return trimmed;
+    }
+    // If it looks like a product ID (10+ digit number), convert to URL
+    if (/^\d{10,}$/.test(trimmed)) {
+      return `https://shop.tiktok.com/view/product/${trimmed}`;
+    }
+    return trimmed;
+  };
+
   const fetchProducts = async () => {
     setLoading(true);
     const res = await fetch("/api/products");
@@ -76,6 +90,8 @@ export default function ProductsPage() {
     if (!url.trim()) return;
     setScraping(true);
 
+    const productUrl = toProductUrl(url);
+
     // Try to communicate with the extension
     try {
       // Check if extension is available by trying to send a message via a custom event
@@ -84,7 +100,7 @@ export default function ProductsPage() {
         // Use chrome.runtime.sendMessage via external messaging
         const result = await sendToExtension(extensionId, {
           type: "SCRAPE_PRODUCT_BY_URL",
-          payload: { url: url.trim() },
+          payload: { url: productUrl },
         });
 
         if (result?.success) {
@@ -102,7 +118,7 @@ export default function ProductsPage() {
     const res = await fetch("/api/products/scrape", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: url.trim() }),
+      body: JSON.stringify({ url: productUrl }),
     });
 
     if (res.ok) {
@@ -159,7 +175,7 @@ export default function ProductsPage() {
   const handleBulkImport = async () => {
     const lines = bulkUrls
       .split(/[\n,]+/)
-      .map((l) => l.trim())
+      .map((l) => toProductUrl(l.trim()))
       .filter((l) => l.length > 0);
     if (lines.length === 0) return;
 
@@ -255,10 +271,10 @@ export default function ProductsPage() {
       >
         <div className="flex gap-3">
           <input
-            type="url"
+            type="text"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://shop.tiktok.com/product/..."
+            placeholder="Product ID or URL (e.g. 1734586118503434079)"
             className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
             required
           />
@@ -392,16 +408,15 @@ export default function ProductsPage() {
           </div>
 
           <p className="text-xs text-purple-600/70">
-            Paste multiple TikTok Shop product URLs below — one per line or
-            comma-separated. They will be queued for scraping via the Chrome
-            extension.
+            Paste product IDs or URLs below — one per line or comma-separated.
+            IDs will be auto-converted to TikTok Shop URLs.
           </p>
 
           <textarea
             value={bulkUrls}
             onChange={(e) => setBulkUrls(e.target.value)}
             placeholder={
-              "https://shop.tiktok.com/product/123...\nhttps://shop.tiktok.com/product/456...\nhttps://shop.tiktok.com/product/789..."
+              "1734586118503434079\n1729300000000123456\nhttps://shop.tiktok.com/view/product/789..."
             }
             rows={6}
             className="w-full rounded-lg border border-purple-300 bg-white px-3 py-2 font-mono text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"

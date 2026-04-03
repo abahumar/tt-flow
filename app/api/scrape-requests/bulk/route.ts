@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+// Convert product ID to full TikTok Shop URL
+function toProductUrl(input: string): string {
+  const trimmed = input.trim();
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return trimmed;
+  }
+  if (/^\d{10,}$/.test(trimmed)) {
+    return `https://shop.tiktok.com/view/product/${trimmed}`;
+  }
+  return trimmed;
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { urls } = body;
@@ -35,7 +47,7 @@ export async function POST(req: NextRequest) {
   };
 
   for (const rawUrl of urls) {
-    const url = typeof rawUrl === "string" ? rawUrl.trim() : "";
+    const url = typeof rawUrl === "string" ? toProductUrl(rawUrl.trim()) : "";
 
     if (!url) {
       results.skippedInvalid++;
@@ -48,9 +60,9 @@ export async function POST(req: NextRequest) {
     } catch {
       results.skippedInvalid++;
       results.details.push({
-        url,
+        url: rawUrl,
         status: "invalid",
-        reason: "Invalid URL format",
+        reason: "Invalid URL or product ID format",
       });
       continue;
     }

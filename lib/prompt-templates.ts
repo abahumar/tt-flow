@@ -166,7 +166,7 @@ const SEEIUWTOA_ELEMENTS: FormulaElement[] = [
     visualDirection:
       "Model shows relatable problem WITHOUT product. Frustrated/emotional expression in everyday setting.",
     dialogDirection:
-      "Hook with pain point or dream the audience relates to. Use one of the hook templates.",
+      "Hook with pain point or dream the audience relates to. MAX 15 words. Use one of the hook templates.",
   },
   {
     code: "EX",
@@ -176,7 +176,7 @@ const SEEIUWTOA_ELEMENTS: FormulaElement[] = [
     visualDirection:
       "Model shows heightened frustration/emotion. More dramatic expression, body language conveys stress.",
     dialogDirection:
-      "Amplify the situation emotionally. Make audience feel understood. Escalate the pain point.",
+      "Amplify the situation emotionally. MAX 15 words. Make audience feel understood.",
   },
   {
     code: "ED",
@@ -186,7 +186,7 @@ const SEEIUWTOA_ELEMENTS: FormulaElement[] = [
     visualDirection:
       "Model in thoughtful/informative pose. Can hold phone showing info or gesture knowingly at camera.",
     dialogDirection:
-      "Reveal insight or root cause. Include a fact or data point. Educational but casual tone.",
+      "Reveal insight or root cause with a fact. MAX 18 words. Educational but casual tone.",
   },
   {
     code: "IN",
@@ -195,7 +195,7 @@ const SEEIUWTOA_ELEMENTS: FormulaElement[] = [
     visualDirection:
       "Model reveals product for the first time. Happy/relieved expression. Product clearly visible.",
     dialogDirection:
-      "Introduce the product naturally as the solution. Not hard sell — more like sharing a discovery.",
+      "Introduce the product naturally as the solution. MAX 15 words. Like sharing a discovery.",
   },
   {
     code: "US",
@@ -204,7 +204,7 @@ const SEEIUWTOA_ELEMENTS: FormulaElement[] = [
     visualDirection:
       "Close-up of product features/details. Model demonstrates or points at key feature.",
     dialogDirection:
-      "Highlight specific unique benefits. What makes it different and better.",
+      "Highlight specific unique benefits. MAX 15 words. What makes it different and better.",
   },
   {
     code: "WHO",
@@ -214,7 +214,7 @@ const SEEIUWTOA_ELEMENTS: FormulaElement[] = [
     visualDirection:
       "Model gestures warmly toward camera, inclusive body language. Product held casually.",
     dialogDirection:
-      "Describe who benefits from this product. Expand audience — 'Sesuai untuk...'",
+      "Describe who benefits. MAX 15 words. 'Sesuai untuk...' — expand audience.",
   },
   {
     code: "TR",
@@ -223,7 +223,7 @@ const SEEIUWTOA_ELEMENTS: FormulaElement[] = [
     visualDirection:
       "Model shows confident, trustworthy expression. Can gesture as if sharing proof or testimonial.",
     dialogDirection:
-      "Share social proof, testimonial, or credibility element. 'Ramai dah guna...', 'Dah terbukti...'",
+      "Share social proof or credibility. MAX 15 words. 'Ramai dah guna...', 'Dah terbukti...'",
   },
   {
     code: "OF",
@@ -232,7 +232,7 @@ const SEEIUWTOA_ELEMENTS: FormulaElement[] = [
     visualDirection:
       "Model presents product with excited/urgent expression. Product prominent, inviting composition.",
     dialogDirection:
-      "State the offer, price, or promotion. Create urgency — 'Harga promosi terhad...'",
+      "State the offer/price with urgency. MAX 12 words. 'Harga promosi terhad...'",
   },
   {
     code: "AC",
@@ -241,7 +241,7 @@ const SEEIUWTOA_ELEMENTS: FormulaElement[] = [
     visualDirection:
       "Model presents product directly to camera. Big warm smile, inviting expression. Product very prominent.",
     dialogDirection:
-      "Direct call to action — 'Tekan beg kuning sekarang!', 'Grab sebelum habis!'",
+      "Direct call to action. MAX 8 words. 'Tekan beg kuning sekarang!'",
   },
 ];
 
@@ -260,7 +260,7 @@ export const VIDEO_FORMATS = {
         visualDirection:
           "Model holds product up to camera, excited expression, product clearly visible. Close-up chest-up framing.",
         dialogDirection:
-          "Quick hook — what is this product and why should they care. 1-2 sentences max.",
+          "Quick hook — what is this product and why should they care. MAX 10 words. Example: 'Korang kena try ni, serious berbaloi!'",
       },
       {
         code: "USP",
@@ -269,7 +269,7 @@ export const VIDEO_FORMATS = {
         visualDirection:
           "Model demonstrates product key feature, pointing at detail. Medium shot, product in focus.",
         dialogDirection:
-          "One killer benefit that differentiates. Short and punchy.",
+          "One killer benefit that differentiates. MAX 12 words. Short and punchy. Example: 'Bahan dia premium, tahan lama, tak mudah rosak!'",
       },
       {
         code: "AC",
@@ -277,7 +277,8 @@ export const VIDEO_FORMATS = {
         purpose: "CTA — tekan beg kuning / grab sekarang.",
         visualDirection:
           "Model holds product beside face, warm inviting smile, product prominent. Chest-up framing.",
-        dialogDirection: "Direct CTA — 'Tekan beg kuning!', 'Grab sekarang!'",
+        dialogDirection:
+          "Direct CTA. MAX 8 words. Example: 'Tekan beg kuning sekarang!'",
       },
     ] as FormulaElement[],
   },
@@ -295,7 +296,7 @@ export const VIDEO_FORMATS = {
         visualDirection:
           "Model looks frustrated/disappointed in everyday setting. No product visible yet.",
         dialogDirection:
-          "Hook with a relatable problem the audience faces. Use hook templates.",
+          "Hook with a relatable problem. MAX 15 words. Use hook templates. Example: 'Penat kan rambut gugur tak henti-henti?'",
       },
       {
         code: "IN",
@@ -304,7 +305,7 @@ export const VIDEO_FORMATS = {
         visualDirection:
           "Model holds up product with relieved/happy expression. Product clearly shown.",
         dialogDirection:
-          "Introduce product naturally — 'Tapi lepas guna ni, semua berubah...'",
+          "Introduce product naturally. MAX 15 words. Example: 'Tapi lepas guna ni, semua berubah...'",
       },
       {
         code: "USP",
@@ -313,7 +314,7 @@ export const VIDEO_FORMATS = {
         visualDirection:
           "Close-up of product feature/label. Model points at key detail.",
         dialogDirection:
-          "Specific unique benefit — ingredient, technology, result.",
+          "Specific unique benefit. MAX 12 words. Example: 'Ada Biotin & Keratin, memang proven berkesan!'",
       },
       {
         code: "AC",
@@ -322,7 +323,7 @@ export const VIDEO_FORMATS = {
         visualDirection:
           "Model smiles warmly holding product beside face, inviting expression.",
         dialogDirection:
-          "CTA with urgency — 'Harga promosi terhad!', 'Tekan beg kuning sekarang!'",
+          "CTA with urgency. MAX 10 words. Example: 'Grab sekarang, harga promosi terhad je!'",
       },
     ] as FormulaElement[],
   },
@@ -505,6 +506,13 @@ DIALOG TONE — GAYA BAHASA SANTAI:
 - Seeding produk secara natural — jangan paksa atau hard sell.
 - Prioritize: Emotion → Story → Product → Conversion.
 - Dialog mesti mudah di sebut untuk AI voice — ayat pendek, direct, natural flow.
+
+CRITICAL WORD LIMIT PER SCENE:
+- Each scene generates ONE ~8 second video clip.
+- Dialog per scene MUST NOT exceed 15-20 words (roughly 8 seconds of speech).
+- Be CONCISE. Every word must carry meaning. Cut filler words ruthlessly.
+- If the message needs more words, simplify it — don't exceed the limit.
+- Clear > clever. The audience must understand the message in one listen.
 `;
 
 // ---- TikTok Product Name (clean, max 30 chars, no special characters) ----

@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+// Convert product ID to full TikTok Shop URL
+function toProductUrl(input: string): string {
+  const trimmed = input.trim();
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return trimmed;
+  }
+  if (/^\d{10,}$/.test(trimmed)) {
+    return `https://shop.tiktok.com/view/product/${trimmed}`;
+  }
+  return trimmed;
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { url, scraped, manual } = body;
@@ -83,13 +95,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "URL is required" }, { status: 400 });
   }
 
+  const productUrl = toProductUrl(url);
+
   try {
-    new URL(url);
+    new URL(productUrl);
   } catch {
-    return NextResponse.json({ error: "Invalid URL format" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid URL or product ID format" },
+      { status: 400 },
+    );
   }
 
-  const existing = await prisma.product.findUnique({ where: { url } });
+  const existing = await prisma.product.findUnique({
+    where: { url: productUrl },
+  });
   if (existing) {
     return NextResponse.json(
       { error: "Product already exists", product: existing },

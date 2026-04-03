@@ -12,12 +12,14 @@ import {
   Film,
   ImageIcon,
   Clapperboard,
+  PenTool,
 } from "lucide-react";
 
 const nav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/products", label: "Katalog Produk", icon: ShoppingBag },
   { href: "/tools", label: "Prompt Tools", icon: Wand2 },
+  { href: "/content-tools", label: "Content Tools", icon: PenTool },
   { href: "/image-tools", label: "Image Tools", icon: ImageIcon },
   { href: "/video-studio", label: "Video Studio", icon: Clapperboard },
   { href: "/automation", label: "Automation", icon: Zap },
