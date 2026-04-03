@@ -23,6 +23,7 @@ interface VideoJob {
   productId: string;
   status: string;
   videoType: string;
+  imageOnly: boolean;
   imagePrompt: string;
   videoPrompt: string;
   imageUrl: string;

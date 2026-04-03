@@ -602,10 +602,22 @@ async function sendToExtension(
 ): Promise<{ success?: boolean; error?: string; product?: unknown } | null> {
   return new Promise((resolve) => {
     try {
-      if (typeof chrome !== "undefined" && chrome.runtime?.sendMessage) {
-        chrome.runtime.sendMessage(extensionId, message, (response) => {
-          resolve(response || null);
-        });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const c = (globalThis as any).chrome;
+      if (typeof c !== "undefined" && c.runtime?.sendMessage) {
+        c.runtime.sendMessage(
+          extensionId,
+          message,
+          (
+            response: {
+              success?: boolean;
+              error?: string;
+              product?: unknown;
+            } | null,
+          ) => {
+            resolve(response || null);
+          },
+        );
       } else {
         resolve(null);
       }

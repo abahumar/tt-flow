@@ -29,6 +29,11 @@ import {
   X,
   User,
 } from "lucide-react";
+import {
+  VIDEO_FORMATS,
+  type VideoFormatId,
+  getFormatSceneInstructions,
+} from "@/lib/prompt-templates";
 
 interface Product {
   id: string;
@@ -152,6 +157,7 @@ export default function VideoStudioPage() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [includeDialog, setIncludeDialog] = useState(false);
   const [includeEnglishDialog, setIncludeEnglishDialog] = useState(false);
+  const [videoFormat, setVideoFormat] = useState<VideoFormatId | "">("");
   const [generating, setGenerating] = useState(false);
   const [scenes, setScenes] = useState<SceneOutput[]>([]);
   const [hasGenerated, setHasGenerated] = useState(false);
@@ -373,6 +379,7 @@ export default function VideoStudioPage() {
           sceneCount,
           includeDialog,
           includeEnglishDialog,
+          videoFormat: videoFormat || null,
           backgroundDesc:
             bgDesc ||
             (bgFilename || bgPreview
@@ -815,6 +822,29 @@ export default function VideoStudioPage() {
                   ))}
                 </select>
               </div>
+              <div className="w-full sm:w-48">
+                <label className="mb-1 block text-xs font-medium text-gray-500">
+                  Video Format
+                </label>
+                <select
+                  value={videoFormat}
+                  onChange={(e) => {
+                    const fmt = e.target.value as VideoFormatId | "";
+                    setVideoFormat(fmt);
+                    if (fmt && VIDEO_FORMATS[fmt]) {
+                      setSceneCount(VIDEO_FORMATS[fmt].suggestedScenes);
+                    }
+                  }}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">Standard (AIDA)</option>
+                  {Object.entries(VIDEO_FORMATS).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="w-full sm:w-32">
                 <label className="mb-1 block text-xs font-medium text-gray-500">
                   Scenes
@@ -841,7 +871,10 @@ export default function VideoStudioPage() {
                   }}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  {[3, 4, 5].map((n) => (
+                  {(videoFormat === "complete"
+                    ? [3, 4, 5, 7, 9]
+                    : [3, 4, 5]
+                  ).map((n) => (
                     <option key={n} value={n}>
                       {n} scenes
                     </option>
@@ -849,6 +882,11 @@ export default function VideoStudioPage() {
                 </select>
               </div>
             </div>
+            {videoFormat && VIDEO_FORMATS[videoFormat] && (
+              <p className="mt-1 text-[11px] text-indigo-600">
+                {VIDEO_FORMATS[videoFormat].description}
+              </p>
+            )}
           </div>
         ) : (
           /* ─── Existing Product Selector ─── */
@@ -900,6 +938,29 @@ export default function VideoStudioPage() {
                     ))}
                   </select>
                 </div>
+                <div className="w-full sm:w-48">
+                  <label className="mb-1 block text-xs font-medium text-gray-500">
+                    Video Format
+                  </label>
+                  <select
+                    value={videoFormat}
+                    onChange={(e) => {
+                      const fmt = e.target.value as VideoFormatId | "";
+                      setVideoFormat(fmt);
+                      if (fmt && VIDEO_FORMATS[fmt]) {
+                        setSceneCount(VIDEO_FORMATS[fmt].suggestedScenes);
+                      }
+                    }}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">Standard (AIDA)</option>
+                    {Object.entries(VIDEO_FORMATS).map(([k, v]) => (
+                      <option key={k} value={k}>
+                        {v.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div className="w-full sm:w-32">
                   <label className="mb-1 block text-xs font-medium text-gray-500">
                     Scenes
@@ -926,7 +987,10 @@ export default function VideoStudioPage() {
                     }}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
-                    {[3, 4, 5].map((n) => (
+                    {(videoFormat === "complete"
+                      ? [3, 4, 5, 7, 9]
+                      : [3, 4, 5]
+                    ).map((n) => (
                       <option key={n} value={n}>
                         {n} scenes
                       </option>
@@ -934,6 +998,11 @@ export default function VideoStudioPage() {
                   </select>
                 </div>
               </div>
+            )}
+            {videoFormat && VIDEO_FORMATS[videoFormat as VideoFormatId] && (
+              <p className="mt-1 text-[11px] text-indigo-600">
+                {VIDEO_FORMATS[videoFormat as VideoFormatId].description}
+              </p>
             )}
 
             {/* Product preview */}
@@ -1148,98 +1217,114 @@ export default function VideoStudioPage() {
             </div>
           </div>
 
-          {scenes.map((s, i) => (
-            <div
-              key={i}
-              className={`overflow-hidden rounded-xl border bg-white shadow-sm transition-all hover:shadow-md ${
-                s.selected
-                  ? "border-indigo-300 ring-1 ring-indigo-100"
-                  : "border-gray-200 opacity-60"
-              }`}
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-5 py-3">
-                <label className="flex cursor-pointer items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={s.selected}
-                    onChange={() => toggleScene(i)}
-                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+          {scenes.map((s, i) => {
+            const formatInstructions = videoFormat
+              ? getFormatSceneInstructions(
+                  videoFormat as VideoFormatId,
+                  sceneCount,
+                )
+              : [];
+            const sceneLabel = formatInstructions[i]?.label;
+            return (
+              <div
+                key={i}
+                className={`overflow-hidden rounded-xl border bg-white shadow-sm transition-all hover:shadow-md ${
+                  s.selected
+                    ? "border-indigo-300 ring-1 ring-indigo-100"
+                    : "border-gray-200 opacity-60"
+                }`}
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-5 py-3">
+                  <label className="flex cursor-pointer items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={s.selected}
+                      onChange={() => toggleScene(i)}
+                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-[11px] font-bold uppercase tracking-widest text-gray-500">
+                        Scene {i + 1}: {s.description}
+                      </span>
+                      {sceneLabel && (
+                        <span className="text-[10px] font-semibold text-indigo-500">
+                          🎯 {sceneLabel}
+                        </span>
+                      )}
+                    </div>
+                  </label>
+                </div>
+
+                {/* Image Prompt */}
+                <div className="border-b border-gray-100">
+                  <div className="flex items-center justify-between bg-amber-50/50 px-5 py-2">
+                    <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+                      <ImageIcon className="h-3.5 w-3.5" /> Image Prompt (First
+                      Frame)
+                    </span>
+                    <button
+                      onClick={() => handleCopy(s.imagePrompt, `img-${i}`)}
+                      className={`text-[10px] font-bold ${
+                        copiedKey === `img-${i}`
+                          ? "text-green-600"
+                          : "text-gray-400 hover:text-gray-700"
+                      }`}
+                    >
+                      {copiedKey === `img-${i}` ? "Copied!" : "Copy"}
+                    </button>
+                  </div>
+                  <textarea
+                    ref={(el) => {
+                      imgRefs.current[i] = el;
+                      if (el) adjustHeight(el);
+                    }}
+                    value={s.imagePrompt}
+                    onChange={(e) => {
+                      const next = [...scenes];
+                      next[i] = { ...next[i], imagePrompt: e.target.value };
+                      setScenes(next);
+                    }}
+                    className="min-h-20 w-full resize-none overflow-hidden bg-white px-5 py-3 text-sm leading-relaxed text-gray-700 focus:outline-none"
+                    spellCheck={false}
                   />
-                  <span className="text-[11px] font-bold uppercase tracking-widest text-gray-500">
-                    Scene {i + 1}: {s.description}
-                  </span>
-                </label>
-              </div>
-
-              {/* Image Prompt */}
-              <div className="border-b border-gray-100">
-                <div className="flex items-center justify-between bg-amber-50/50 px-5 py-2">
-                  <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">
-                    <ImageIcon className="h-3.5 w-3.5" /> Image Prompt (First
-                    Frame)
-                  </span>
-                  <button
-                    onClick={() => handleCopy(s.imagePrompt, `img-${i}`)}
-                    className={`text-[10px] font-bold ${
-                      copiedKey === `img-${i}`
-                        ? "text-green-600"
-                        : "text-gray-400 hover:text-gray-700"
-                    }`}
-                  >
-                    {copiedKey === `img-${i}` ? "Copied!" : "Copy"}
-                  </button>
                 </div>
-                <textarea
-                  ref={(el) => {
-                    imgRefs.current[i] = el;
-                    if (el) adjustHeight(el);
-                  }}
-                  value={s.imagePrompt}
-                  onChange={(e) => {
-                    const next = [...scenes];
-                    next[i] = { ...next[i], imagePrompt: e.target.value };
-                    setScenes(next);
-                  }}
-                  className="min-h-20 w-full resize-none overflow-hidden bg-white px-5 py-3 text-sm leading-relaxed text-gray-700 focus:outline-none"
-                  spellCheck={false}
-                />
-              </div>
 
-              {/* Video Prompt */}
-              <div>
-                <div className="flex items-center justify-between bg-blue-50/50 px-5 py-2">
-                  <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-blue-700">
-                    <Video className="h-3.5 w-3.5" /> Video Prompt (Motion)
-                  </span>
-                  <button
-                    onClick={() => handleCopy(s.videoPrompt, `vid-${i}`)}
-                    className={`text-[10px] font-bold ${
-                      copiedKey === `vid-${i}`
-                        ? "text-green-600"
-                        : "text-gray-400 hover:text-gray-700"
-                    }`}
-                  >
-                    {copiedKey === `vid-${i}` ? "Copied!" : "Copy"}
-                  </button>
+                {/* Video Prompt */}
+                <div>
+                  <div className="flex items-center justify-between bg-blue-50/50 px-5 py-2">
+                    <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-blue-700">
+                      <Video className="h-3.5 w-3.5" /> Video Prompt (Motion)
+                    </span>
+                    <button
+                      onClick={() => handleCopy(s.videoPrompt, `vid-${i}`)}
+                      className={`text-[10px] font-bold ${
+                        copiedKey === `vid-${i}`
+                          ? "text-green-600"
+                          : "text-gray-400 hover:text-gray-700"
+                      }`}
+                    >
+                      {copiedKey === `vid-${i}` ? "Copied!" : "Copy"}
+                    </button>
+                  </div>
+                  <textarea
+                    ref={(el) => {
+                      vidRefs.current[i] = el;
+                      if (el) adjustHeight(el);
+                    }}
+                    value={s.videoPrompt}
+                    onChange={(e) => {
+                      const next = [...scenes];
+                      next[i] = { ...next[i], videoPrompt: e.target.value };
+                      setScenes(next);
+                    }}
+                    className="min-h-20 w-full resize-none overflow-hidden bg-white px-5 py-3 font-mono text-sm leading-relaxed text-gray-700 focus:outline-none"
+                    spellCheck={false}
+                  />
                 </div>
-                <textarea
-                  ref={(el) => {
-                    vidRefs.current[i] = el;
-                    if (el) adjustHeight(el);
-                  }}
-                  value={s.videoPrompt}
-                  onChange={(e) => {
-                    const next = [...scenes];
-                    next[i] = { ...next[i], videoPrompt: e.target.value };
-                    setScenes(next);
-                  }}
-                  className="min-h-20 w-full resize-none overflow-hidden bg-white px-5 py-3 font-mono text-sm leading-relaxed text-gray-700 focus:outline-none"
-                  spellCheck={false}
-                />
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

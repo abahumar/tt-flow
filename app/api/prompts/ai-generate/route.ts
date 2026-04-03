@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import {
+  VIDEO_FORMATS,
+  type VideoFormatId,
+  getFormatSceneInstructions,
+  HOOK_TEMPLATES,
+  GENRE_HOOK_STYLE,
+  DIALOG_TONE_SANTAI,
+} from "@/lib/prompt-templates";
 
 const PLATFORM_LOGICS: Record<string, (duration: number) => string> = {
   flow: () => `
@@ -105,6 +113,7 @@ export async function POST(req: NextRequest) {
     sceneCount = 3,
     backgroundDesc = "",
     modelDesc = "",
+    videoFormat = null, // "super_short" | "short" | "complete" | null
   } = body;
 
   if (!productId && !customProduct)
@@ -149,11 +158,13 @@ export async function POST(req: NextRequest) {
     PLATFORM_LOGICS[platform]?.(duration) || PLATFORM_LOGICS.flow(duration);
 
   // --- DIALOG LOGIC ---
+  const santaiTone = videoFormat && includeDialog ? DIALOG_TONE_SANTAI : "";
   const dialogLogic = `
     DIALOGUE STRUCTURE: Strictly follow [HOOK] + [CONTENT] + [CTA].
     ${includeDialog ? '1. MALAY ("dialog"): Soft Selling, Friendly. Must be a single string.' : ""}
     ${includeEnglishDialog ? '2. ENGLISH ("dialog_english"): Translated version. Must be a single string.' : ""}
     ${!includeDialog && !includeEnglishDialog ? "NO DIALOG REQUIRED." : ""}
+    ${santaiTone}
   `;
 
   const dialogFields = [
@@ -239,10 +250,37 @@ export async function POST(req: NextRequest) {
         Example BAD video_prompt (TOO LONG/STRUCTURED — DO NOT DO THIS):
         "Scene: Model holds product prominently. Camera: Static medium shot. Action: Model gently lifts the product..."
 
-        STRUCTURE (AIDA - UGC REVIEW STYLE):
+        ${
+          videoFormat && VIDEO_FORMATS[videoFormat as VideoFormatId]
+            ? (() => {
+                const fmtId = videoFormat as VideoFormatId;
+                const fmt = VIDEO_FORMATS[fmtId];
+                const scenes = getFormatSceneInstructions(fmtId, sceneCount);
+                const hookStyle = GENRE_HOOK_STYLE[videoType] || "curiosity";
+                const hookExamples = HOOK_TEMPLATES[hookStyle]
+                  .slice(0, 3)
+                  .join("\n        ");
+
+                return `STRUCTURE (${fmt.name} — ${fmt.description}):
+        ${scenes
+          .map(
+            (s) => `${s.sceneNumber}. SCENE ${s.sceneNumber} (${s.label}):
+           VISUAL: ${s.visualDirection}
+           DIALOG: ${s.dialogDirection}`,
+          )
+          .join("\n        ")}
+
+        HOOK TEMPLATES (for Scene 1, fill blanks with product context — style: ${hookStyle}):
+        ${hookExamples}
+
+        IMPORTANT: Scene 1 MUST use a hook template style. Fill the blanks with product-relevant content.
+        Each scene's visual and dialog MUST match the element purpose described above.`;
+              })()
+            : `STRUCTURE (AIDA - UGC REVIEW STYLE):
         1. SCENE 1 (ATTENTION/HOOK): Model holds/shows product prominently. Eye-catching pose.
         2. MIDDLE SCENES (INTEREST & DESIRE): Different product interactions — close-up, demo, turning product.
-        3. LAST SCENE (ACTION/CTA): Model presents product directly to camera. Inviting expression.
+        3. LAST SCENE (ACTION/CTA): Model presents product directly to camera. Inviting expression.`
+        }
 
         ONLY vary across scenes: pose, product interaction, camera angle, expression, and simple action.
       `;

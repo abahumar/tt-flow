@@ -141,10 +141,10 @@ export async function POST(req: NextRequest) {
 
   // Safe product info for prompt generation (works with or without product)
   const pTitle = product?.title || "";
-  const pDesc = product?.description || null;
-  const pPrice = product?.price || null;
+  const pDesc = product?.description || "";
+  const pPrice = product?.price || "";
   const pShopName =
-    (product as { shopName?: string | null } | null)?.shopName || null;
+    (product as { shopName?: string | null } | null)?.shopName || "";
 
   let imagePrompt: string;
   let videoPrompt: string;

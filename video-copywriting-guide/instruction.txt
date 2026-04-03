@@ -24,6 +24,60 @@ U – Unique selling point
 O – Offer or value
 A – Action or call to action
 
+=== 3 JENIS FORMAT VIDEO ===
+
+1. Super Short (8s) — 3 scenes:
+   [Hook jual apa] + [Killer USP] + [Action]
+
+2. Short (20s) — 4 scenes:
+   [Hook Problem] + [Intro Product] + [Killer USP] + [Action]
+
+3. Complete (40s) — 5 to 9 scenes:
+   Full SEEIUWTOA: [Situasi] + [Exaggerate] + [Educate] + [Intro Product] + [USP] + [Who] + [Trust] + [Offer] + [Action]
+
+Scene count mappings for Complete format:
+• 5 scenes: [ST+EX] [ED] [IN+US] [WHO+TR] [OF+AC]
+• 7 scenes: [ST] [EX] [ED] [IN+US] [WHO] [TR] [OF+AC]
+• 9 scenes: 1 element per scene (1:1 mapping)
+
+=== HOOK TEMPLATES (Fill-in-the-blank) ===
+
+Controversial Hooks:
+1. "Bukan _________ — sebenarnya _________."
+2. "Ramai buat _________ tiap hari... tapi tak sedar itu punca _________."
+3. "Kau ingat _________? Sebenarnya _________."
+4. "Lagi kau _________, lagi kau _________."
+5. "Masalah kau bukan _________ — tapi _________."
+
+Curiosity Hooks:
+1. "Aku baru sedar satu benda pasal _________... selama ni aku buat salah."
+2. "Kenapa ada orang _________ walaupun _________?"
+3. "Ada satu benda pasal _________ aku wish aku tahu awal..."
+4. "Macam mana _________ boleh bagi _________?"
+5. "Apa sebenarnya yang orang _________ buat berbeza dalam _________?"
+
+Story-Based Hooks:
+1. "Dulu aku pun _________... sampai satu hari aku sedar _________."
+2. "Aku pernah _________ lama... sampai aku ubah satu benda ni: _________."
+3. "Semua berubah bila aku start _________."
+4. "Aku ingat _________... rupanya _________."
+5. "Aku hampir _________... tapi _________ ubah semua."
+
+Genre → Hook Style:
+• Comedy/POV/Hardsell → Controversial Hooks
+• Educational/Review/Product Demo → Curiosity Hooks
+• Emotional/Softsell/Vlog/Unboxing → Story-Based Hooks
+
+=== GAYA BAHASA SANTAI (Dialog Tone) ===
+
+• Write in natural Malaysian conversational Bahasa Melayu. Santai, friendly, tapi masih teratur.
+• JANGAN guna bahasa skema/baku. Tulis macam kawan bercakap.
+• Use sapaan yang sesuai: "korang", "sis", "babe", "bestie" for younger audience.
+• Use emoji sparingly to add emotion.
+• NEVER sound like a textbook or formal announcement.
+• Seeding produk secara natural — jangan paksa atau hard sell.
+• Dialog mesti mudah di sebut untuk AI voice — ayat pendek, direct, natural flow.
+
 Your output must include:
 
 1. Video Hook that stops scrolling
