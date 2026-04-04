@@ -7,9 +7,19 @@ export async function PATCH(
 ) {
   const { id } = await params;
   const body = await req.json();
+
+  // Build update data — only include fields that are provided
+  const data: Record<string, unknown> = {};
+  if (body.videoReady !== undefined) data.videoReady = Boolean(body.videoReady);
+  if (body.usp !== undefined) data.usp = String(body.usp);
+  if (body.targetAudience !== undefined)
+    data.targetAudience = String(body.targetAudience);
+  if (body.description !== undefined)
+    data.description = String(body.description);
+
   const product = await prisma.product.update({
     where: { id },
-    data: { videoReady: Boolean(body.videoReady) },
+    data,
   });
   return NextResponse.json(product);
 }

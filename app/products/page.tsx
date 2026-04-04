@@ -27,6 +27,8 @@ interface Product {
   images: string;
   price: string;
   shopName: string;
+  usp: string;
+  targetAudience: string;
   videoReady: boolean;
   scrapedAt: string;
   _count?: { videoJobs: number };
@@ -39,6 +41,12 @@ export default function ProductsPage() {
   const [scraping, setScraping] = useState(false);
   const [creatingJobId, setCreatingJobId] = useState<string | null>(null);
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editData, setEditData] = useState<{
+    usp: string;
+    targetAudience: string;
+  }>({ usp: "", targetAudience: "" });
+  const [savingEdit, setSavingEdit] = useState(false);
   const [showManual, setShowManual] = useState(false);
   const [showBulk, setShowBulk] = useState(false);
   const [bulkUrls, setBulkUrls] = useState("");
@@ -56,6 +64,8 @@ export default function ProductsPage() {
     description: "",
     price: "",
     shopName: "",
+    usp: "",
+    targetAudience: "",
   });
 
   // Convert product ID or URL to a full TikTok Shop URL
@@ -161,6 +171,8 @@ export default function ProductsPage() {
         description: "",
         price: "",
         shopName: "",
+        usp: "",
+        targetAudience: "",
       });
       setShowManual(false);
       fetchProducts();
@@ -231,6 +243,28 @@ export default function ProductsPage() {
     };
     reader.readAsText(file);
     e.target.value = "";
+  };
+
+  const handleStartEdit = (p: Product) => {
+    setEditingId(p.id);
+    setEditData({ usp: p.usp || "", targetAudience: p.targetAudience || "" });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingId) return;
+    setSavingEdit(true);
+    const res = await fetch(`/api/products/${editingId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(editData),
+    });
+    if (res.ok) {
+      fetchProducts();
+      setEditingId(null);
+    } else {
+      alert("Failed to save changes");
+    }
+    setSavingEdit(false);
   };
 
   const handleDelete = async (id: string) => {
@@ -377,6 +411,22 @@ export default function ProductsPage() {
             }
             placeholder="Product description (helps with better AI prompts)"
             rows={2}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          />
+          <textarea
+            value={manual.usp}
+            onChange={(e) => setManual((m) => ({ ...m, usp: e.target.value }))}
+            placeholder="USP / Kelebihan Utama (cth: Tahan 24 jam, tanpa paraben, kulit glowing dalam 7 hari)"
+            rows={2}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          />
+          <input
+            type="text"
+            value={manual.targetAudience}
+            onChange={(e) =>
+              setManual((m) => ({ ...m, targetAudience: e.target.value }))
+            }
+            placeholder="Target Audience (cth: Ibu-ibu busy, remaja kulit berjerawat, pekerja ofis)"
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
           />
           <button
@@ -559,6 +609,75 @@ export default function ProductsPage() {
                     <ExternalLink className="h-3 w-3" /> View on TikTok
                   </a>
 
+                  {/* USP & Target Audience indicators */}
+                  {(p.usp || p.targetAudience) && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {p.usp && (
+                        <span
+                          className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 truncate max-w-full"
+                          title={p.usp}
+                        >
+                          USP ✓
+                        </span>
+                      )}
+                      {p.targetAudience && (
+                        <span
+                          className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-600 truncate max-w-full"
+                          title={p.targetAudience}
+                        >
+                          Audience ✓
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Inline Edit Form */}
+                  {editingId === p.id && (
+                    <div className="mt-2 space-y-1.5 rounded-lg border border-indigo-200 bg-indigo-50/50 p-2">
+                      <textarea
+                        value={editData.usp}
+                        onChange={(e) =>
+                          setEditData((d) => ({ ...d, usp: e.target.value }))
+                        }
+                        placeholder="USP / Kelebihan Utama"
+                        rows={2}
+                        className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-400 focus:outline-none"
+                      />
+                      <input
+                        type="text"
+                        value={editData.targetAudience}
+                        onChange={(e) =>
+                          setEditData((d) => ({
+                            ...d,
+                            targetAudience: e.target.value,
+                          }))
+                        }
+                        placeholder="Target Audience"
+                        className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-400 focus:outline-none"
+                      />
+                      <div className="flex gap-1">
+                        <button
+                          onClick={handleSaveEdit}
+                          disabled={savingEdit}
+                          className="flex-1 flex items-center justify-center gap-1 rounded bg-indigo-500 px-2 py-1 text-[10px] font-medium text-white hover:bg-indigo-600 disabled:opacity-50"
+                        >
+                          {savingEdit ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Check className="h-3 w-3" />
+                          )}{" "}
+                          Save
+                        </button>
+                        <button
+                          onClick={() => setEditingId(null)}
+                          className="flex-1 flex items-center justify-center gap-1 rounded border border-gray-200 px-2 py-1 text-[10px] font-medium text-gray-500 hover:bg-gray-50"
+                        >
+                          <X className="h-3 w-3" /> Batal
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Actions */}
                   <div className="flex items-center gap-1.5 mt-auto pt-2">
                     {p.videoReady || addedIds.has(p.id) ? (
@@ -579,6 +698,13 @@ export default function ProductsPage() {
                         {creatingJobId === p.id ? "..." : "Create Video"}
                       </button>
                     )}
+                    <button
+                      onClick={() => handleStartEdit(p)}
+                      className="rounded-lg border border-gray-200 p-1.5 text-gray-400 hover:bg-indigo-50 hover:text-indigo-500 transition-colors"
+                      title="Edit USP & Target Audience"
+                    >
+                      <PenLine className="h-3.5 w-3.5" />
+                    </button>
                     <button
                       onClick={() => handleDelete(p.id)}
                       className="rounded-lg border border-gray-200 p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"

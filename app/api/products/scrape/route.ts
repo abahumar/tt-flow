@@ -44,6 +44,8 @@ export async function POST(req: NextRequest) {
         images: JSON.stringify(scraped.images || []),
         price: scraped.price || "",
         shopName: scraped.shopName || "TikTok Shop",
+        usp: scraped.usp || "",
+        targetAudience: scraped.targetAudience || "",
       },
     });
     return NextResponse.json(product, { status: 201 });
@@ -85,6 +87,8 @@ export async function POST(req: NextRequest) {
         images: JSON.stringify(manual.images || []),
         price: manual.price || "",
         shopName: manual.shopName || "TikTok Shop",
+        usp: manual.usp || "",
+        targetAudience: manual.targetAudience || "",
       },
     });
     return NextResponse.json(product, { status: 201 });

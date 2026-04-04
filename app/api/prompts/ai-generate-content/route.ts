@@ -30,6 +30,8 @@ export async function POST(req: NextRequest) {
     description: string | null;
     price: string | null;
     shopName: string | null;
+    usp: string | null;
+    targetAudience: string | null;
   };
   if (customProduct) {
     product = {
@@ -37,6 +39,8 @@ export async function POST(req: NextRequest) {
       description: customProduct.description || "",
       price: customProduct.price || null,
       shopName: null,
+      usp: customProduct.usp || null,
+      targetAudience: customProduct.targetAudience || null,
     };
   } else {
     const dbProduct = await prisma.product.findUnique({
@@ -44,7 +48,14 @@ export async function POST(req: NextRequest) {
     });
     if (!dbProduct)
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
-    product = dbProduct;
+    product = {
+      title: dbProduct.title,
+      description: dbProduct.description,
+      price: dbProduct.price,
+      shopName: dbProduct.shopName,
+      usp: dbProduct.usp,
+      targetAudience: dbProduct.targetAudience,
+    };
   }
 
   const toneMap: Record<string, string> = {
@@ -73,6 +84,8 @@ PRODUCT INFO:
 - Description: ${product.description || "N/A"}
 - Price: ${product.price || "N/A"}
 ${product.shopName ? `- Shop: ${product.shopName}` : ""}
+${product.usp ? `- USP (Key Selling Points): ${product.usp}` : ""}
+${product.targetAudience ? `- Target Audience: ${product.targetAudience}` : ""}
 
 TASK: Generate ${variationCount} variations of TikTok content metadata: ${contentTypesList}
 

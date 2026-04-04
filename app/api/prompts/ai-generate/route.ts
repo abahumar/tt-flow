@@ -113,7 +113,11 @@ export async function POST(req: NextRequest) {
     sceneCount = 3,
     backgroundDesc = "",
     modelDesc = "",
+    // USP/audience overrides from V2 UI
+    customUsp = "",
+    customTargetAudience = "",
     videoFormat = null, // "super_short" | "short" | "complete" | null
+    varyBackground = false,
   } = body;
 
   if (!productId && !customProduct)
@@ -133,6 +137,8 @@ export async function POST(req: NextRequest) {
     description: string | null;
     price: string | null;
     shopName: string | null;
+    usp: string | null;
+    targetAudience: string | null;
   };
   if (customProduct) {
     product = {
@@ -144,6 +150,8 @@ export async function POST(req: NextRequest) {
       description: customProduct.description || "",
       price: null,
       shopName: null,
+      usp: customProduct.usp || null,
+      targetAudience: customProduct.targetAudience || null,
     };
   } else {
     const dbProduct = await prisma.product.findUnique({
@@ -151,7 +159,232 @@ export async function POST(req: NextRequest) {
     });
     if (!dbProduct)
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
-    product = dbProduct;
+    product = {
+      ...dbProduct,
+      usp: customUsp || dbProduct.usp || null,
+      targetAudience: customTargetAudience || dbProduct.targetAudience || null,
+    };
+  }
+
+  // ─── GEMPAK MODE (Video Studio v2) ───
+  if (mode === "gempak") {
+    const isCustomModel = avatarId === "custom";
+    const avatarDna = isCustomModel
+      ? `CUSTOM MODEL — ${modelDesc || "Use the uploaded model reference image exactly as shown. Describe what you see: age, ethnicity, clothing, hijab if any, expression, vibe."}`
+      : AVATAR_DNA[avatarId] || AVATAR_DNA.woman_malay_hijab;
+    const genreInst =
+      GENRE_INSTRUCTIONS[videoType] || `GENRE: ${videoType.toUpperCase()}`;
+    const dialogInst = includeDialog
+      ? `Include dialog in casual Bahasa Melayu for each scene. Max 20 words per scene. ${DIALOG_TONE_SANTAI}`
+      : "NO DIALOG REQUIRED.";
+    const englishDialogInst = includeEnglishDialog
+      ? 'Also include "dialog_english" field with English translation.'
+      : "";
+    const dialogOutputFields = [
+      includeDialog ? '"script": "Dialog BM (max 20 words)"' : null,
+      includeEnglishDialog ? '"dialog_english": "English translation"' : null,
+    ]
+      .filter(Boolean)
+      .join(",\n      ");
+
+    const gempakPrompt = `
+You are a Top Malaysian TikTok Content Creator & Expert Video Director for Google Flow AI.
+Create a high-converting video script in CASUAL BAHASA MALAYSIA (slang).
+
+${genreInst}
+MODEL/AVATAR DNA: ${avatarDna}
+NUMBER OF SCENES: ${sceneCount}
+
+PRODUCT INFO:
+Name: ${product.title}
+Description: ${product.description || "N/A"}
+Price: ${product.price || "N/A"}
+Shop: ${product.shopName || "N/A"}
+${product.usp ? `USP (Unique Selling Points): ${product.usp}` : ""}
+${product.targetAudience ? `Target Audience: ${product.targetAudience}` : ""}
+${backgroundDesc ? `BACKGROUND CONTEXT: ${backgroundDesc}` : ""}
+${modelDesc ? `MODEL CONTEXT: ${modelDesc}` : ""}
+${
+  product.usp || product.targetAudience
+    ? `
+USP & AUDIENCE RULES:
+${product.usp ? `- The USP stage scene MUST highlight these specific selling points: "${product.usp}". Do NOT invent features — use ONLY the USP provided.` : ""}
+${
+  product.targetAudience
+    ? `- The HOOK must speak DIRECTLY to the target audience: "${product.targetAudience}". Use language, scenarios, and pain points relatable to this audience.
+- The CTA must appeal specifically to this audience segment.
+- TikTok captions and hashtags should target this audience.`
+    : ""
+}
+`
+    : ""
+}
+
+IMPORTANT — REFERENCE IMAGES:
+- The PRODUCT IMAGE has been uploaded as a reference image in Google Flow.
+- ${isCustomModel ? "The MODEL FACE has also been uploaded as a reference image." : ""}
+- The AI image generator (Google Flow) will have access to these uploaded reference images.
+- Your visual_prompt_en MUST instruct Google Flow to use these uploaded reference images exactly as they are.
+- DO NOT invent or describe a different product. The product in the reference image IS the product.
+
+${dialogInst}
+${englishDialogInst}
+
+RULES FOR visual_prompt_en (CRITICAL — this goes to Google Flow image generator):
+- Each visual_prompt_en must be a SELF-CONTAINED, detailed description for AI image generation.
+- MUST start with: "From the image uploaded, accurate scale, no alter, no redesign."
+- The product MUST be the EXACT product from the uploaded reference image — same packaging, same label, same colors, same branding. DO NOT change or redesign the product.
+- Include: subject appearance (based on MODEL DNA above), pose, expression, camera framing, product placement.
+- MUST specify 9:16 vertical composition.
+- Scene 1 is the MASTER REFERENCE — establish the model look here. Other scenes MUST keep the same model.
+${varyBackground ? "- VARY the background/setting for EACH scene — use different locations, times of day, or environments (e.g., kitchen, living room, outdoor café, park, vanity table, office desk). This keeps the video visually dynamic. The MODEL and PRODUCT must stay consistent, but the BACKGROUND must change every scene." : ""}
+- Keep descriptions cinematic, realistic, 8k quality.
+- Focus on: pose + product interaction + camera angle + expression.
+- BE SPECIFIC about camera framing: "Static chest-up framing", "Full body medium shot", "Close-up hands detail".
+
+${ANTI_HALLUCINATION}
+
+RULES FOR video_prompt:
+- Write a SINGLE SHORT sentence describing subtle motion from the static frame.
+- MAX 15 words. NO structured format. NO labels.
+- Focus on ONE gentle action + camera framing.
+- Example: "Model gently lifts product toward camera, slight smile, static chest-up framing."
+
+Output JSON:
+{
+  "script_title": "Catchy viral title in casual Malay",
+  "visual_dna": "Detailed, consistent model appearance description based on avatar DNA. Include: age, ethnicity, clothing style, hijab if applicable, expression, vibe.",
+  "genre_style": "Genre name",
+  "variations": [
+    {
+      "description": "Stage name (e.g. HOOK, USP, CTA)",
+      "time": "0-3s",
+      "stage": "HOOK",
+      ${dialogOutputFields ? dialogOutputFields + "," : ""}
+      "visual_prompt_en": "Detailed visual scene description starting with 'From the image uploaded, accurate scale, no alter, no redesign.' — product must match uploaded reference exactly",
+      "video_prompt": "Short single sentence motion description (max 15 words)",
+      "tiktok_product_name": "Clean product name (max 30 chars)",
+      "tiktok_description": "Casual Malay product description with hashtags (max 200 chars)",
+      "tiktok_caption": "Catchy casual Malay TikTok caption (max 150 chars)",
+      "tiktok_hashtags": ["fyp", "tiktokshop", "relevant", "tags"]
+    }
+  ]
+}
+
+Generate EXACTLY ${sceneCount} variations/scenes. Each must have a different stage and time range.
+All string fields must be plain strings (never objects or arrays).
+`;
+
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: gempakPrompt }] }],
+            generationConfig: { responseMimeType: "application/json" },
+          }),
+          cache: "no-store" as RequestCache,
+        },
+      );
+
+      if (!res.ok) {
+        const err = await res.json();
+        return NextResponse.json(
+          { error: err.error?.message || "Gemini API error" },
+          { status: res.status },
+        );
+      }
+
+      const data = await res.json();
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      const cleaned = rawText.replace(/```json|```/g, "").trim();
+
+      let parsed: Record<string, unknown>;
+      try {
+        parsed = JSON.parse(cleaned);
+      } catch {
+        const fixed = cleaned.replace(
+          /(?<=:[\s]*")([\s\S]*?)(?="[\s]*[,}\]])/g,
+          (match: string) =>
+            match
+              .replace(/\\/g, "\\\\")
+              .replace(/\n/g, "\\n")
+              .replace(/\r/g, "\\r")
+              .replace(/\t/g, "\\t")
+              .replace(/(?<!\\)"/g, '\\"'),
+        );
+        parsed = JSON.parse(fixed);
+      }
+
+      const scriptTitle = String(parsed.script_title || "");
+      const visualDna = String(parsed.visual_dna || "");
+      const genreStyle = String(parsed.genre_style || videoType);
+      const rawVariations = (parsed.variations || []) as Record<
+        string,
+        unknown
+      >[];
+
+      const variations = rawVariations.map((v, i) => {
+        const visualPromptEn = String(v.visual_prompt_en || "");
+        // Construct the full image prompt with visual DNA embedded (GempakStudio style)
+        const imagePrompt = visualPromptEn
+          ? `Generate a high-quality 9:16 vertical photo. SCENE: ${visualPromptEn}. MODEL DNA: ${visualDna}. STYLE: Cinematic, realistic, 8k.`
+          : "";
+
+        let hashtags: string[] = [];
+        if (Array.isArray(v.tiktok_hashtags)) {
+          hashtags = (v.tiktok_hashtags as string[]).map((h) =>
+            String(h).replace(/^#/, ""),
+          );
+        }
+
+        return {
+          description: String(v.description || `Scene ${i + 1}`),
+          imagePrompt,
+          videoPrompt: (() => {
+            const motion = String(v.video_prompt || "");
+            const script = String(v.script || "")
+              .replace(
+                /[\u{1F600}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FEFF}\u{1F000}-\u{1FFFF}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]/gu,
+                "",
+              )
+              .trim();
+            if (script && includeDialog) {
+              return `${motion} Dialog: "${script}"`;
+            }
+            return motion;
+          })(),
+          visualPromptEn,
+          script: String(v.script || ""),
+          dialogEnglish: String(v.dialog_english || ""),
+          time: String(v.time || ""),
+          stage: String(v.stage || ""),
+          tiktokProductName: String(v.tiktok_product_name || "")
+            .substring(0, 30)
+            .trim(),
+          tiktokDescription: String(v.tiktok_description || "").trim(),
+          tiktokCaption: String(v.tiktok_caption || "").trim(),
+          tiktokHashtags: hashtags,
+        };
+      });
+
+      return NextResponse.json({
+        type: "gempak",
+        scriptTitle,
+        visualDna,
+        genreStyle,
+        variations,
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Unknown error";
+      console.error(`[ai-generate/gempak] Failed: ${msg}`);
+      return NextResponse.json(
+        { error: `AI generation failed: ${msg}` },
+        { status: 500 },
+      );
+    }
   }
 
   const platformLogic =
