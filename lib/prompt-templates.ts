@@ -497,15 +497,22 @@ export const GENRE_HOOK_STYLE: Record<string, HookStyle> = {
 // ---- Gaya Bahasa Santai Tone Directive ----
 
 export const DIALOG_TONE_SANTAI = `
-DIALOG TONE — GAYA BAHASA SANTAI:
-- Write in natural Malaysian conversational Bahasa Melayu. Santai, friendly, tapi masih teratur.
-- JANGAN guna bahasa skema/baku. Tulis macam kawan bercakap.
-- Use sapaan yang sesuai: "korang", "sis", "babe", "bestie" for younger audience.
+DIALOG TONE — GAYA BAHASA SANTAI (KUALA LUMPUR SLANG):
+- Write in natural KL (Kuala Lumpur) conversational Bahasa Melayu. Santai, friendly, tapi masih teratur.
+- JANGAN guna bahasa skema/baku. Tulis macam budak KL bercakap.
+- WAJIB guna slang KL — contoh: "wei", "lah", "kan", "gila", "memang", "confirm", "serious ah", "best gila", "power", "fuh", "perghhh", "siot", "dah lah", "takkan", "mesti try".
+- JANGAN guna slang Indonesia — DILARANG pakai: "banget", "dong", "nih", "sih", "gue/gw", "lu", "emang", "udah", "nggak", "tuh", "deh", "yuk", "kuy", "mager", "baper", "kepo". Ini content untuk audience Malaysia, BUKAN Indonesia.
+- Use sapaan yang sesuai: "korang", "sis", "babe", "bestie", "wei", "bro" for younger audience.
 - Use emoji sparingly to add emotion: 😩 😍 🔥 ✅ 💪
 - NEVER sound like a textbook or formal announcement.
 - Seeding produk secara natural — jangan paksa atau hard sell.
 - Prioritize: Emotion → Story → Product → Conversion.
 - Dialog mesti mudah di sebut untuk AI voice — ayat pendek, direct, natural flow.
+
+VARIASI PEMBUKAAN SCENE 1 (HOOK):
+- JANGAN selalu mulakan Scene 1 dengan "Aduh". Variasikan pembukaan setiap kali generate.
+- Contoh pembukaan lain yang boleh digunakan: soalan retorik ("Korang pernah tak...?"), fakta mengejutkan ("Tau tak...?"), sapaan terus ("Wei korang!"), cabaran ("Cuba teka..."), pernyataan bold ("Serious cakap..."), luahan ("Fuh gila..."), atau cerita pendek ("Hari tu aku...").
+- Setiap kali generate, pilih pembukaan yang BERBEZA. Jangan ulang pattern yang sama.
 
 CRITICAL WORD LIMIT PER SCENE:
 - Each scene generates ONE ~8 second video clip.

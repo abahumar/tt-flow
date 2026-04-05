@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendVideoToTelegram } from "@/lib/telegram";
+import { combineSceneVideos, addHookOverlay, addTextOverlay, addHookAndOverlay, type TextOverlay } from "@/lib/ffmpeg";
 import { writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
 import { execSync } from "child_process";
@@ -87,6 +88,63 @@ export async function POST(
       processedPath = rawPath;
     }
 
+    // Single-scene overlay: apply hook/overlay text if overlayConfig is set
+    if (!isMultiScene && !isTest) {
+      const jobForOverlay = await prisma.videoJob.findUnique({ where: { id } });
+      if (jobForOverlay?.overlayConfig) {
+        try {
+          const config = JSON.parse(jobForOverlay.overlayConfig);
+          const hookTitle = config.hookTitle || "";
+          const overlay = config.overlays?.[0];
+          const hasHook = !!hookTitle.trim();
+          const hasOverlay = overlay && overlay.text?.trim();
+
+          if (hasHook || hasOverlay) {
+            const overlayedPath = join(VIDEO_DIR, `${id}-overlayed.mp4`);
+            const fontSize = config.overlayFontSize || 48;
+
+            if (hasHook && hasOverlay) {
+              addHookAndOverlay({
+                inputPath: processedPath,
+                outputPath: overlayedPath,
+                hookTitle,
+                hookSubtitle: config.hookSubtitle || undefined,
+                hookDuration: 0.5,
+                overlay: {
+                  text: String(overlay.text).substring(0, 200),
+                  position: ["top", "bottom", "center"].includes(overlay.position) ? overlay.position : "bottom",
+                  fontSize,
+                },
+              });
+            } else if (hasHook) {
+              addHookOverlay({
+                inputPath: processedPath,
+                outputPath: overlayedPath,
+                title: hookTitle,
+                subtitle: config.hookSubtitle || undefined,
+                displayDuration: 0.5,
+              });
+            } else if (hasOverlay) {
+              addTextOverlay(processedPath, overlayedPath, {
+                text: String(overlay.text).substring(0, 200),
+                position: ["top", "bottom", "center"].includes(overlay.position) ? overlay.position : "bottom",
+                fontSize,
+              });
+            }
+
+            // Replace the clean video with the overlayed version
+            if (existsSync(overlayedPath)) {
+              execSync(`mv "${overlayedPath}" "${processedPath}"`, { stdio: "pipe" });
+              console.log(`[Video] Applied overlay to single-scene job ${id}`);
+            }
+          }
+        } catch (overlayErr) {
+          console.warn(`[Video] Single-scene overlay failed for job ${id}:`, overlayErr);
+          // Continue without overlay — video is still usable
+        }
+      }
+    }
+
     // Update job with the video serve URL
     const videoServeUrl = isMultiScene
       ? `http://localhost:3000/api/jobs/${id}/video?scene=${sceneIndex}`
@@ -117,6 +175,71 @@ export async function POST(
       sendVideoToTelegram(processedPath, telegramCaption).catch((err) =>
         console.error("[Telegram] Background send failed:", err),
       );
+
+      // Auto-combine: run for all multi-scene jobs after all scene videos are ready
+      if (isMultiScene && job?.scenePrompts) {
+        try {
+          const scenes = JSON.parse(job.scenePrompts);
+          const allExist = scenes.every((_: unknown, idx: number) => {
+            const sf = join(VIDEO_DIR, `${id}-s${idx}.mp4`);
+            const rf = join(VIDEO_DIR, `${id}-s${idx}-raw.mp4`);
+            return existsSync(sf) || existsSync(rf);
+          });
+
+          if (allExist && scenes.length > 0) {
+            console.log(
+              `[Video] All ${scenes.length} scenes ready, auto-combining job ${id}`,
+            );
+            const config = JSON.parse(job.overlayConfig);
+            const overlays: (TextOverlay | null)[] = (
+              config.overlays || []
+            ).map((o: TextOverlay | null) => {
+              if (!o || !o.text) return null;
+              const pos = ["top", "bottom", "center"].includes(o.position)
+                ? o.position
+                : "bottom";
+              return {
+                text: String(o.text).substring(0, 200),
+                position: pos,
+              } as TextOverlay;
+            });
+
+            combineSceneVideos({
+              jobId: id,
+              sceneCount: scenes.length,
+              hookTitle: config.hookTitle || undefined,
+              hookSubtitle: config.hookSubtitle || undefined,
+              overlays,
+              overlayFontSize: config.overlayFontSize || 48,
+            });
+
+            const combinedVideoUrl = `http://localhost:3000/api/jobs/${id}/video?type=combined`;
+            await prisma.videoJob.update({
+              where: { id },
+              data: { combinedVideoUrl },
+            });
+
+            // Add combined video to gallery
+            await prisma.galleryVideo.create({
+              data: {
+                filename: `${id}-combined.mp4`,
+                videoType: job.videoType || "combined",
+                caption: config.hookTitle
+                  ? `${config.hookTitle} — ${job.tiktokCaption || ""}`
+                  : job.tiktokCaption || "",
+              },
+            });
+
+            console.log(`[Video] Auto-combine complete for job ${id}`);
+          }
+        } catch (combineErr) {
+          console.error(
+            `[Video] Auto-combine failed for job ${id}:`,
+            combineErr,
+          );
+          // Non-fatal — individual scene videos still available
+        }
+      }
     }
 
     return NextResponse.json({
@@ -142,7 +265,16 @@ export async function GET(
 ) {
   const { id } = await params;
   const sceneParam = req.nextUrl.searchParams.get("scene");
-  const videoId = sceneParam !== null ? `${id}-s${sceneParam}` : id;
+  const typeParam = req.nextUrl.searchParams.get("type");
+
+  let videoId: string;
+  if (typeParam === "combined") {
+    videoId = `${id}-combined`;
+  } else if (sceneParam !== null) {
+    videoId = `${id}-s${sceneParam}`;
+  } else {
+    videoId = id;
+  }
 
   await ensureVideoDir();
 

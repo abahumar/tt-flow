@@ -253,6 +253,8 @@ RULES FOR video_prompt:
 Output JSON:
 {
   "script_title": "Catchy viral title in casual Malay",
+  "hook_title": "Short punchy hook title for intro card (3-5 words, catchy, e.g. 'Rahsia Kulit Glowing!')",
+  "hook_subtitle": "Product name or tagline for intro subtitle",
   "visual_dna": "Detailed, consistent model appearance description based on avatar DNA. Include: age, ethnicity, clothing style, hijab if applicable, expression, vibe.",
   "genre_style": "Genre name",
   "variations": [
@@ -263,6 +265,7 @@ Output JSON:
       ${dialogOutputFields ? dialogOutputFields + "," : ""}
       "visual_prompt_en": "Detailed visual scene description starting with 'From the image uploaded, accurate scale, no alter, no redesign.' — product must match uploaded reference exactly",
       "video_prompt": "Short single sentence motion description (max 15 words)",
+      "overlay_text": "Short punchy text (5-8 words) to display on screen during this scene, summarizing the key message. Example: 'Tahan 24 Jam, Kulit Glowing!'. Leave empty for scenes that don't need text.",
       "tiktok_product_name": "Clean product name (max 30 chars)",
       "tiktok_description": "Casual Malay product description with hashtags (max 200 chars)",
       "tiktok_caption": "Catchy casual Malay TikTok caption (max 150 chars)",
@@ -319,6 +322,8 @@ All string fields must be plain strings (never objects or arrays).
       }
 
       const scriptTitle = String(parsed.script_title || "");
+      const hookTitle = String(parsed.hook_title || "");
+      const hookSubtitle = String(parsed.hook_subtitle || "");
       const visualDna = String(parsed.visual_dna || "");
       const genreStyle = String(parsed.genre_style || videoType);
       const rawVariations = (parsed.variations || []) as Record<
@@ -367,12 +372,15 @@ All string fields must be plain strings (never objects or arrays).
           tiktokDescription: String(v.tiktok_description || "").trim(),
           tiktokCaption: String(v.tiktok_caption || "").trim(),
           tiktokHashtags: hashtags,
+          overlayText: String(v.overlay_text || ""),
         };
       });
 
       return NextResponse.json({
         type: "gempak",
         scriptTitle,
+        hookTitle,
+        hookSubtitle,
         visualDna,
         genreStyle,
         variations,
@@ -592,7 +600,7 @@ All string fields must be plain strings (never objects or arrays).
     Shop: ${product.shopName || "N/A"}
     ${GENRE_INSTRUCTIONS[videoType] || `GENRE: ${videoType.toUpperCase()}`}
 
-    Output JSON: { "variations": [{ "description": "Title", "image_prompt": "...", ${outputFields}${dialogFields}, "tiktok_product_name": "Clean short product name for TikTok (max 30 chars, no special characters, no SKU codes)", "tiktok_description": "Compelling casual Malay product description with hashtags (max 200 chars)", "tiktok_caption": "Catchy casual Malay TikTok post caption (max 150 chars, no hashtags)", "tiktok_hashtags": ["fyp", "tiktokshop", "relevantTag1", "relevantTag2", "relevantTag3"] }] }
+    Output JSON: { "hook_title": "Short punchy hook title for intro card (3-5 words)", "hook_subtitle": "Product name or tagline", "variations": [{ "description": "Title", "image_prompt": "...", ${outputFields}${dialogFields}, "overlay_text": "Short punchy text (5-8 words) for on-screen display, summarizing key message for this scene", "tiktok_product_name": "Clean short product name for TikTok (max 30 chars, no special characters, no SKU codes)", "tiktok_description": "Compelling casual Malay product description with hashtags (max 200 chars)", "tiktok_caption": "Catchy casual Malay TikTok post caption (max 150 chars, no hashtags)", "tiktok_hashtags": ["fyp", "tiktokshop", "relevantTag1", "relevantTag2", "relevantTag3"] }] }
     Generate exactly ${variantCount} variations. All string fields must be plain strings (never objects).
   `;
 
@@ -622,7 +630,11 @@ All string fields must be plain strings (never objects or arrays).
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
     const cleaned = rawText.replace(/```json|```/g, "").trim();
 
-    let parsed: { variations?: Record<string, unknown>[] };
+    let parsed: {
+      variations?: Record<string, unknown>[];
+      hook_title?: string;
+      hook_subtitle?: string;
+    };
     try {
       parsed = JSON.parse(cleaned);
     } catch {
@@ -703,11 +715,18 @@ All string fields must be plain strings (never objects or arrays).
           tiktokDescription: String(v.tiktok_description || "").trim(),
           tiktokCaption: String(v.tiktok_caption || "").trim(),
           tiktokHashtags: hashtags,
+          overlayText: String(v.overlay_text || ""),
         };
       },
     );
 
-    return NextResponse.json({ type: "paired", platform, variations });
+    return NextResponse.json({
+      type: "paired",
+      platform,
+      hookTitle: String(parsed.hook_title || ""),
+      hookSubtitle: String(parsed.hook_subtitle || ""),
+      variations,
+    });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Unknown error";
     const cause =

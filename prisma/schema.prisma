@@ -51,6 +51,8 @@ model VideoJob {
   sceneIndex    Int      @default(0)  // scene order: 0 = master scene, 1, 2, 3...
   masterJobId   String   @default("") // job ID of scene 0 (whose image is the master reference)
   scenePrompts  String   @default("") // JSON array of {imagePrompt, videoPrompt} for multi-scene jobs
+  combinedVideoUrl String @default("") // URL of final combined multi-scene video
+  overlayConfig String   @default("") // JSON: {hookTitle, hookSubtitle, overlays: [{text, position}]}
   startedAt     DateTime? // when the job started processing (for timeout detection)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

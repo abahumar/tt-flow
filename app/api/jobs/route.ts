@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
     scenePrompts,
     galleryImageId,
     videoPrompt: userVideoPromptForGallery,
+    overlayConfig,
   } = body;
 
   // Create video job from a gallery image — skip image generation
@@ -77,6 +78,7 @@ export async function POST(req: NextRequest) {
       data: {
         imagePrompt: galleryImage.prompt,
         videoPrompt: userVideoPromptForGallery || "",
+        overlayConfig: overlayConfig || "",
         status: "generating_video",
         startedAt: new Date().toISOString(),
       },
@@ -316,6 +318,7 @@ export async function POST(req: NextRequest) {
       sceneIndex: typeof sceneIndex === "number" ? sceneIndex : 0,
       masterJobId: masterJobId || "",
       scenePrompts: scenePrompts || "",
+      overlayConfig: overlayConfig || "",
       status: "pending",
     },
     include: {

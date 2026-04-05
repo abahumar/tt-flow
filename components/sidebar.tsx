@@ -13,6 +13,7 @@ import {
   ImageIcon,
   Clapperboard,
   PenTool,
+  Sparkles,
 } from "lucide-react";
 
 const nav = [
@@ -22,6 +23,7 @@ const nav = [
   { href: "/content-tools", label: "Content Tools", icon: PenTool },
   { href: "/image-tools", label: "Image Tools", icon: ImageIcon },
   { href: "/video-studio", label: "Video Studio", icon: Clapperboard },
+  { href: "/video-studio-v2", label: "Studio v2", icon: Sparkles },
   { href: "/automation", label: "Automation", icon: Zap },
   { href: "/gallery", label: "Video Gallery", icon: Film },
   { href: "/settings", label: "Settings", icon: Settings },

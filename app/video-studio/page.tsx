@@ -62,6 +62,8 @@ interface SceneOutput {
   tiktokDescription: string;
   tiktokCaption: string;
   tiktokHashtags: string[];
+  overlayText: string;
+  overlayPosition: "top" | "bottom" | "center";
   selected: boolean;
 }
 
@@ -165,6 +167,16 @@ export default function VideoStudioPage() {
   // Queue
   const [sendingAll, setSendingAll] = useState(false);
   const [queuedCount, setQueuedCount] = useState(0);
+
+  // Hook & Combine
+  const [hookTitle, setHookTitle] = useState("");
+  const [hookSubtitle, setHookSubtitle] = useState("");
+  const [enableHook, setEnableHook] = useState(false);
+  const [overlayFontSize, setOverlayFontSize] = useState(48);
+  const [combining, setCombining] = useState(false);
+  const [combinedVideoUrl, setCombinedVideoUrl] = useState("");
+  const [combineError, setCombineError] = useState("");
+  const [lastJobId, setLastJobId] = useState("");
 
   // UI
   const [error, setError] = useState("");
@@ -410,6 +422,7 @@ export default function VideoStudioPage() {
             tiktokDescription?: string;
             tiktokCaption?: string;
             tiktokHashtags?: string[];
+            overlayText?: string;
           }[])
         ).map(
           (v: {
@@ -420,6 +433,7 @@ export default function VideoStudioPage() {
             tiktokDescription?: string;
             tiktokCaption?: string;
             tiktokHashtags?: string[];
+            overlayText?: string;
           }) => ({
             description: v.description || "",
             imagePrompt: v.imagePrompt || "",
@@ -428,10 +442,18 @@ export default function VideoStudioPage() {
             tiktokDescription: v.tiktokDescription || "",
             tiktokCaption: v.tiktokCaption || "",
             tiktokHashtags: v.tiktokHashtags || [],
+            overlayText: v.overlayText || "",
+            overlayPosition: "bottom" as const,
             selected: true,
           }),
         ),
       );
+      // Set hook title from AI response
+      if (data.hookTitle) {
+        setHookTitle(data.hookTitle);
+        setHookSubtitle(data.hookSubtitle || "");
+        setEnableHook(true);
+      }
       setHasGenerated(true);
       setQueuedCount(0);
     } catch (e) {
@@ -480,6 +502,19 @@ export default function VideoStudioPage() {
         videoPrompt: s.videoPrompt,
       }));
 
+      // Build overlayConfig for auto-combine after all scenes are generated
+      const overlays = selected.map((s) =>
+        s.overlayText
+          ? { text: s.overlayText, position: s.overlayPosition }
+          : null,
+      );
+      const overlayConfig = JSON.stringify({
+        hookTitle: enableHook ? hookTitle : "",
+        hookSubtitle: enableHook ? hookSubtitle : "",
+        overlays,
+        overlayFontSize,
+      });
+
       const res = await fetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -495,10 +530,14 @@ export default function VideoStudioPage() {
           templateId: selectedTemplateId || "",
           referenceImages: refImages,
           scenePrompts: JSON.stringify(allScenePrompts),
+          overlayConfig,
         }),
       });
       if (res.ok) {
+        const jobData = await res.json();
         setQueuedCount(selected.length);
+        setLastJobId(jobData.id || "");
+        setCombinedVideoUrl("");
       } else {
         setError("Failed to create job");
       }
@@ -513,6 +552,46 @@ export default function VideoStudioPage() {
     navigator.clipboard.writeText(txt);
     setCopiedKey(key);
     setTimeout(() => setCopiedKey(null), 1500);
+  };
+
+  // Combine videos
+  const handleCombine = async () => {
+    if (!lastJobId) {
+      setCombineError("Queue scenes first before combining");
+      return;
+    }
+    setCombining(true);
+    setCombineError("");
+    setCombinedVideoUrl("");
+
+    try {
+      const overlays = scenes.map((s) =>
+        s.overlayText
+          ? { text: s.overlayText, position: s.overlayPosition }
+          : null,
+      );
+
+      const res = await fetch(`/api/jobs/${lastJobId}/combine`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          hookTitle: enableHook ? hookTitle : undefined,
+          hookSubtitle: enableHook ? hookSubtitle : undefined,
+          overlays,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setCombineError(data.error || "Combine failed");
+        return;
+      }
+      setCombinedVideoUrl(data.combinedVideoUrl);
+    } catch {
+      setCombineError("Network error during combine");
+    } finally {
+      setCombining(false);
+    }
   };
 
   const selectedProduct = products.find((p) => p.id === selectedProductId);
@@ -864,6 +943,8 @@ export default function VideoStudioPage() {
                           tiktokDescription: "",
                           tiktokCaption: "",
                           tiktokHashtags: [],
+                          overlayText: "",
+                          overlayPosition: "bottom" as const,
                           selected: true,
                         })),
                       );
@@ -980,6 +1061,8 @@ export default function VideoStudioPage() {
                             tiktokDescription: "",
                             tiktokCaption: "",
                             tiktokHashtags: [],
+                            overlayText: "",
+                            overlayPosition: "bottom" as const,
                             selected: true,
                           })),
                         );
@@ -1082,6 +1165,8 @@ export default function VideoStudioPage() {
                     tiktokDescription: "",
                     tiktokCaption: "",
                     tiktokHashtags: [],
+                    overlayText: "",
+                    overlayPosition: "bottom" as const,
                     selected: true,
                   })),
                 );
@@ -1285,7 +1370,7 @@ export default function VideoStudioPage() {
                       next[i] = { ...next[i], imagePrompt: e.target.value };
                       setScenes(next);
                     }}
-                    className="min-h-20 w-full resize-none overflow-hidden bg-white px-5 py-3 text-sm leading-relaxed text-gray-700 focus:outline-none"
+                    className="min-h-20 w-full resize-y bg-white px-5 py-3 text-sm leading-relaxed text-gray-700 focus:outline-none"
                     spellCheck={false}
                   />
                 </div>
@@ -1318,13 +1403,173 @@ export default function VideoStudioPage() {
                       next[i] = { ...next[i], videoPrompt: e.target.value };
                       setScenes(next);
                     }}
-                    className="min-h-20 w-full resize-none overflow-hidden bg-white px-5 py-3 font-mono text-sm leading-relaxed text-gray-700 focus:outline-none"
+                    className="min-h-20 w-full resize-y bg-white px-5 py-3 font-mono text-sm leading-relaxed text-gray-700 focus:outline-none"
                     spellCheck={false}
+                  />
+                </div>
+
+                {/* Text Overlay (optional) */}
+                <div className="border-t border-gray-100">
+                  <div className="flex items-center justify-between bg-green-50/50 px-5 py-2">
+                    <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-green-700">
+                      📝 Text Overlay (Optional)
+                    </span>
+                    <select
+                      value={s.overlayPosition}
+                      onChange={(e) => {
+                        const next = [...scenes];
+                        next[i] = {
+                          ...next[i],
+                          overlayPosition: e.target.value as
+                            | "top"
+                            | "bottom"
+                            | "center",
+                        };
+                        setScenes(next);
+                      }}
+                      className="rounded border border-gray-200 px-2 py-0.5 text-[10px] text-gray-600 focus:outline-none"
+                    >
+                      <option value="top">Top</option>
+                      <option value="center">Center</option>
+                      <option value="bottom">Bottom</option>
+                    </select>
+                  </div>
+                  <input
+                    type="text"
+                    value={s.overlayText}
+                    onChange={(e) => {
+                      const next = [...scenes];
+                      next[i] = { ...next[i], overlayText: e.target.value };
+                      setScenes(next);
+                    }}
+                    placeholder="e.g. Tahan 24 Jam, Kulit Glowing!"
+                    className="w-full bg-white px-5 py-2.5 text-sm text-gray-700 placeholder-gray-300 focus:outline-none"
+                    maxLength={200}
                   />
                 </div>
               </div>
             );
           })}
+
+          {/* ─── HOOK TITLE & COMBINE CONFIG ─── */}
+          <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-5">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Video Combine Settings (Optional)
+              </h2>
+
+              {/* Hook Title Toggle */}
+              <label className="flex cursor-pointer items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={enableHook}
+                  onChange={(e) => setEnableHook(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span className="text-xs font-medium text-gray-600">
+                  Include Title Hook (intro card)
+                </span>
+              </label>
+
+              {enableHook && (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-500">
+                      Hook Title
+                    </label>
+                    <input
+                      type="text"
+                      value={hookTitle}
+                      onChange={(e) => setHookTitle(e.target.value)}
+                      placeholder="e.g. Rahsia Kulit Glowing!"
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      maxLength={100}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-500">
+                      Subtitle (optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={hookSubtitle}
+                      onChange={(e) => setHookSubtitle(e.target.value)}
+                      placeholder="e.g. Product name or tagline"
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      maxLength={150}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <p className="text-[11px] text-gray-400">
+                Edit text overlays per scene above. When you click Queue, settings are saved.
+                Video will auto-combine after all scenes finish generating.
+              </p>
+
+              {/* Overlay Font Size */}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-500">
+                  Overlay Text Size: {overlayFontSize}px
+                </label>
+                <input
+                  type="range"
+                  min={24}
+                  max={96}
+                  step={2}
+                  value={overlayFontSize}
+                  onChange={(e) => setOverlayFontSize(Number(e.target.value))}
+                  className="w-full accent-indigo-600"
+                />
+                <div className="flex justify-between text-[10px] text-gray-400">
+                  <span>24px (kecil)</span>
+                  <span>96px (besar)</span>
+                </div>
+              </div>
+
+              {combineError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
+                  {combineError}
+                </div>
+              )}
+
+              {/* Re-combine button (only shows after queuing) */}
+              {lastJobId && (
+                <button
+                  onClick={handleCombine}
+                  disabled={combining}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-600 px-4 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:bg-gray-700 disabled:opacity-50"
+                >
+                  {combining ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Video className="h-4 w-4" />
+                  )}
+                  {combining ? "Combining..." : "Re-combine (Manual)"}
+                </button>
+              )}
+
+              {/* Combined video preview */}
+              {combinedVideoUrl && (
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-green-700">
+                    ✓ Video combined successfully!
+                  </p>
+                  <video
+                    src={combinedVideoUrl}
+                    controls
+                    className="w-full rounded-lg border border-gray-200"
+                    style={{ maxHeight: "400px" }}
+                  />
+                  <a
+                    href={combinedVideoUrl}
+                    download
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                  >
+                    Download Combined Video
+                  </a>
+                </div>
+              )}
+            </div>
         </div>
       )}
     </div>

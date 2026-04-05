@@ -1,5 +1,5 @@
 FROM node:20-alpine AS base
-RUN apk add --no-cache ffmpeg
+RUN apk add --no-cache ffmpeg font-noto fontconfig
 
 # Install dependencies
 FROM base AS deps

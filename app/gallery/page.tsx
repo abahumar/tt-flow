@@ -70,6 +70,11 @@ export default function GalleryPage() {
   const [sendingTelegram, setSendingTelegram] = useState<Set<string>>(
     new Set(),
   );
+  // Hook & Overlay for gallery video
+  const [galleryHookTitle, setGalleryHookTitle] = useState("");
+  const [galleryOverlayText, setGalleryOverlayText] = useState("");
+  const [galleryOverlayPosition, setGalleryOverlayPosition] = useState<"top" | "bottom" | "center">("bottom");
+  const [galleryFontSize, setGalleryFontSize] = useState(48);
   const router = useRouter();
 
   const fetchGallery = useCallback(async () => {
@@ -233,12 +238,25 @@ export default function GalleryPage() {
     const image = createVideoImage;
     setCreatingVideo((prev) => new Set(prev).add(image.id));
     try {
+      // Build overlayConfig for single-scene hook/overlay
+      const overlayConfig = JSON.stringify({
+        hookTitle: galleryHookTitle.trim(),
+        hookSubtitle: "",
+        overlays: [
+          galleryOverlayText.trim()
+            ? { text: galleryOverlayText.trim(), position: galleryOverlayPosition }
+            : null,
+        ],
+        overlayFontSize: galleryFontSize,
+      });
+
       const res = await fetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           galleryImageId: image.id,
           videoPrompt: videoPromptInput.trim() || undefined,
+          overlayConfig,
         }),
       });
       if (!res.ok) {
@@ -247,6 +265,10 @@ export default function GalleryPage() {
         return;
       }
       setCreateVideoImage(null);
+      setGalleryHookTitle("");
+      setGalleryOverlayText("");
+      setGalleryOverlayPosition("bottom");
+      setGalleryFontSize(48);
       router.push("/automation");
     } catch {
       alert("Failed to create video job");
@@ -746,6 +768,72 @@ export default function GalleryPage() {
                 <p className="mt-1 text-xs text-gray-400">
                   Leave empty to let the system generate a default video prompt.
                 </p>
+              </div>
+
+              {/* Hook & Overlay Settings */}
+              <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Text Overlay (Optional)
+                </p>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">
+                    Hook Title (shows first 0.5s)
+                  </label>
+                  <input
+                    type="text"
+                    value={galleryHookTitle}
+                    onChange={(e) => setGalleryHookTitle(e.target.value)}
+                    placeholder="e.g. Rahsia Kulit Glowing!"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    maxLength={100}
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">
+                    Overlay Text (shows after hook)
+                  </label>
+                  <input
+                    type="text"
+                    value={galleryOverlayText}
+                    onChange={(e) => setGalleryOverlayText(e.target.value)}
+                    placeholder="e.g. Tahan 24 Jam, Kulit Glowing!"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    maxLength={200}
+                  />
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <label className="mb-1 block text-xs font-medium text-gray-500">
+                      Position
+                    </label>
+                    <select
+                      value={galleryOverlayPosition}
+                      onChange={(e) => setGalleryOverlayPosition(e.target.value as "top" | "bottom" | "center")}
+                      className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="top">Top</option>
+                      <option value="center">Center</option>
+                      <option value="bottom">Bottom</option>
+                    </select>
+                  </div>
+                  <div className="flex-1">
+                    <label className="mb-1 block text-xs font-medium text-gray-500">
+                      Text Size: {galleryFontSize}px
+                    </label>
+                    <input
+                      type="range"
+                      min={24}
+                      max={96}
+                      step={2}
+                      value={galleryFontSize}
+                      onChange={(e) => setGalleryFontSize(Number(e.target.value))}
+                      className="w-full accent-indigo-600"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
             <div className="flex gap-3 border-t border-gray-200 bg-gray-50 px-5 py-4">
