@@ -15,6 +15,8 @@ import {
   ChevronDown,
   ChevronUp,
   Send,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -70,11 +72,19 @@ export default function GalleryPage() {
   const [sendingTelegram, setSendingTelegram] = useState<Set<string>>(
     new Set(),
   );
+  // Bulk select
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   // Hook & Overlay for gallery video
   const [galleryHookTitle, setGalleryHookTitle] = useState("");
   const [galleryOverlayText, setGalleryOverlayText] = useState("");
-  const [galleryOverlayPosition, setGalleryOverlayPosition] = useState<"top" | "bottom" | "center">("bottom");
+  const [galleryOverlayPosition, setGalleryOverlayPosition] = useState<
+    "top" | "bottom" | "center"
+  >("bottom");
   const [galleryFontSize, setGalleryFontSize] = useState(48);
+  const [galleryHookBgColor, setGalleryHookBgColor] = useState("#E91E63");
+  const [galleryHookTextColor, setGalleryHookTextColor] = useState("#FFFFFF");
   const router = useRouter();
 
   const fetchGallery = useCallback(async () => {
@@ -233,6 +243,101 @@ export default function GalleryPage() {
     setShowSavedVideoPrompts(false);
   };
 
+  const toggleSelectMode = () => {
+    setSelectMode((prev) => !prev);
+    setSelectedItems(new Set());
+  };
+
+  const toggleSelectItem = (id: string) => {
+    setSelectedItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    const items = tab === "videos" ? videos : images;
+    const allIds = items.map((i) => i.id);
+    const allSelected = allIds.every((id) => selectedItems.has(id));
+    if (allSelected) {
+      setSelectedItems(new Set());
+    } else {
+      setSelectedItems(new Set(allIds));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedItems.size === 0) return;
+    if (
+      !confirm(
+        `Delete ${selectedItems.size} ${tab === "videos" ? "video" : "image"}${selectedItems.size !== 1 ? "s" : ""}? Files will be removed from storage.`,
+      )
+    )
+      return;
+    setBulkDeleting(true);
+    try {
+      const res = await fetch("/api/gallery", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ids: Array.from(selectedItems),
+          type: tab === "videos" ? "video" : "image",
+        }),
+      });
+      if (res.ok) {
+        if (tab === "videos") {
+          setVideos((prev) => prev.filter((v) => !selectedItems.has(v.id)));
+        } else {
+          setImages((prev) => prev.filter((i) => !selectedItems.has(i.id)));
+        }
+        setSelectedItems(new Set());
+        setSelectMode(false);
+      } else {
+        alert("Failed to delete selected items");
+      }
+    } catch {
+      alert("Failed to delete selected items");
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    const items = tab === "videos" ? videos : images;
+    if (items.length === 0) return;
+    if (
+      !confirm(
+        `Delete ALL ${items.length} ${tab === "videos" ? "video" : "image"}${items.length !== 1 ? "s" : ""}? This cannot be undone.`,
+      )
+    )
+      return;
+    setBulkDeleting(true);
+    try {
+      const res = await fetch("/api/gallery", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ids: items.map((i) => i.id),
+          type: tab === "videos" ? "video" : "image",
+        }),
+      });
+      if (res.ok) {
+        if (tab === "videos") setVideos([]);
+        else setImages([]);
+        setSelectedItems(new Set());
+        setSelectMode(false);
+      } else {
+        alert("Failed to delete all items");
+      }
+    } catch {
+      alert("Failed to delete all items");
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
   const handleCreateVideo = async () => {
     if (!createVideoImage) return;
     const image = createVideoImage;
@@ -242,9 +347,14 @@ export default function GalleryPage() {
       const overlayConfig = JSON.stringify({
         hookTitle: galleryHookTitle.trim(),
         hookSubtitle: "",
+        hookBgColor: galleryHookBgColor.replace("#", ""),
+        hookTextColor: galleryHookTextColor.replace("#", ""),
         overlays: [
           galleryOverlayText.trim()
-            ? { text: galleryOverlayText.trim(), position: galleryOverlayPosition }
+            ? {
+                text: galleryOverlayText.trim(),
+                position: galleryOverlayPosition,
+              }
             : null,
         ],
         overlayFontSize: galleryFontSize,
@@ -269,6 +379,9 @@ export default function GalleryPage() {
       setGalleryOverlayText("");
       setGalleryOverlayPosition("bottom");
       setGalleryFontSize(48);
+      alert(
+        "Video job queued successfully! Go to Automation to start processing.",
+      );
       router.push("/automation");
     } catch {
       alert("Failed to create video job");
@@ -292,12 +405,80 @@ export default function GalleryPage() {
             {images.length} image{images.length !== 1 ? "s" : ""} saved
           </p>
         </div>
+        <button
+          onClick={toggleSelectMode}
+          className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+            selectMode
+              ? "bg-rose-100 text-rose-700 hover:bg-rose-200"
+              : "border border-gray-300 text-gray-700 hover:bg-gray-50"
+          }`}
+        >
+          <CheckSquare className="h-4 w-4" />
+          {selectMode ? "Cancel" : "Select"}
+        </button>
       </div>
+
+      {/* Bulk Action Bar */}
+      {selectMode && (
+        <div className="flex items-center justify-between rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={selectAll}
+              className="flex items-center gap-1.5 text-sm font-medium text-gray-700 hover:text-gray-900"
+            >
+              {(tab === "videos" ? videos : images).length > 0 &&
+              (tab === "videos" ? videos : images).every((i) =>
+                selectedItems.has(i.id),
+              ) ? (
+                <CheckSquare className="h-4 w-4 text-rose-600" />
+              ) : (
+                <Square className="h-4 w-4" />
+              )}
+              Select All
+            </button>
+            <span className="text-sm text-gray-500">
+              {selectedItems.size} selected
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleBulkDelete}
+              disabled={selectedItems.size === 0 || bulkDeleting}
+              className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+            >
+              {bulkDeleting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+              Delete ({selectedItems.size})
+            </button>
+            <button
+              onClick={handleDeleteAll}
+              disabled={
+                bulkDeleting ||
+                (tab === "videos" ? videos : images).length === 0
+              }
+              className="flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:opacity-50"
+            >
+              {bulkDeleting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+              Delete All
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 rounded-lg border border-gray-200 bg-gray-50 p-1">
         <button
-          onClick={() => setTab("videos")}
+          onClick={() => {
+            setTab("videos");
+            setSelectedItems(new Set());
+          }}
           className={`flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
             tab === "videos"
               ? "bg-white text-gray-900 shadow-sm"
@@ -308,7 +489,10 @@ export default function GalleryPage() {
           Videos ({videos.length})
         </button>
         <button
-          onClick={() => setTab("images")}
+          onClick={() => {
+            setTab("images");
+            setSelectedItems(new Set());
+          }}
           className={`flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
             tab === "images"
               ? "bg-white text-gray-900 shadow-sm"
@@ -340,8 +524,24 @@ export default function GalleryPage() {
             {videos.map((video) => (
               <div
                 key={video.id}
-                className="group relative overflow-hidden rounded-xl border border-gray-200 bg-black transition-shadow hover:shadow-lg"
+                className={`group relative overflow-hidden rounded-xl border transition-shadow hover:shadow-lg ${
+                  selectMode && selectedItems.has(video.id)
+                    ? "border-rose-400 ring-2 ring-rose-300"
+                    : "border-gray-200"
+                } bg-black`}
+                onClick={
+                  selectMode ? () => toggleSelectItem(video.id) : undefined
+                }
               >
+                {selectMode && (
+                  <div className="absolute left-2 top-2 z-10">
+                    {selectedItems.has(video.id) ? (
+                      <CheckSquare className="h-5 w-5 text-rose-500" />
+                    ) : (
+                      <Square className="h-5 w-5 text-white/80" />
+                    )}
+                  </div>
+                )}
                 <div className="relative aspect-9/16 w-full">
                   <video
                     src={`/api/gallery/${video.id}`}
@@ -429,8 +629,24 @@ export default function GalleryPage() {
           {images.map((image) => (
             <div
               key={image.id}
-              className="group relative overflow-hidden rounded-xl border border-gray-200 bg-gray-100 transition-shadow hover:shadow-lg"
+              className={`group relative overflow-hidden rounded-xl border transition-shadow hover:shadow-lg ${
+                selectMode && selectedItems.has(image.id)
+                  ? "border-rose-400 ring-2 ring-rose-300"
+                  : "border-gray-200"
+              } bg-gray-100`}
+              onClick={
+                selectMode ? () => toggleSelectItem(image.id) : undefined
+              }
             >
+              {selectMode && (
+                <div className="absolute left-2 top-2 z-10">
+                  {selectedItems.has(image.id) ? (
+                    <CheckSquare className="h-5 w-5 text-rose-500" />
+                  ) : (
+                    <Square className="h-5 w-5 text-gray-500" />
+                  )}
+                </div>
+              )}
               <div className="relative aspect-9/16 w-full">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -790,6 +1006,43 @@ export default function GalleryPage() {
                   />
                 </div>
 
+                <div className="flex items-center gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-500">
+                      Hook BG Color
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="color"
+                        value={galleryHookBgColor}
+                        onChange={(e) => setGalleryHookBgColor(e.target.value)}
+                        className="h-7 w-9 cursor-pointer rounded border border-gray-300"
+                      />
+                      <span className="text-[10px] text-gray-400">
+                        {galleryHookBgColor}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-500">
+                      Hook Text Color
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="color"
+                        value={galleryHookTextColor}
+                        onChange={(e) =>
+                          setGalleryHookTextColor(e.target.value)
+                        }
+                        className="h-7 w-9 cursor-pointer rounded border border-gray-300"
+                      />
+                      <span className="text-[10px] text-gray-400">
+                        {galleryHookTextColor}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
                 <div>
                   <label className="mb-1 block text-xs font-medium text-gray-500">
                     Overlay Text (shows after hook)
@@ -811,7 +1064,11 @@ export default function GalleryPage() {
                     </label>
                     <select
                       value={galleryOverlayPosition}
-                      onChange={(e) => setGalleryOverlayPosition(e.target.value as "top" | "bottom" | "center")}
+                      onChange={(e) =>
+                        setGalleryOverlayPosition(
+                          e.target.value as "top" | "bottom" | "center",
+                        )
+                      }
                       className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     >
                       <option value="top">Top</option>
@@ -829,7 +1086,9 @@ export default function GalleryPage() {
                       max={96}
                       step={2}
                       value={galleryFontSize}
-                      onChange={(e) => setGalleryFontSize(Number(e.target.value))}
+                      onChange={(e) =>
+                        setGalleryFontSize(Number(e.target.value))
+                      }
                       className="w-full accent-indigo-600"
                     />
                   </div>

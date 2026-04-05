@@ -79,8 +79,7 @@ export async function POST(req: NextRequest) {
         imagePrompt: galleryImage.prompt,
         videoPrompt: userVideoPromptForGallery || "",
         overlayConfig: overlayConfig || "",
-        status: "generating_video",
-        startedAt: new Date().toISOString(),
+        status: "pending",
       },
     });
 

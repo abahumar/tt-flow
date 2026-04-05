@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendVideoToTelegram } from "@/lib/telegram";
-import { combineSceneVideos, addHookOverlay, addTextOverlay, addHookAndOverlay, type TextOverlay } from "@/lib/ffmpeg";
+import {
+  combineSceneVideos,
+  addHookOverlay,
+  addTextOverlay,
+  addHookAndOverlay,
+  type TextOverlay,
+} from "@/lib/ffmpeg";
 import { writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
 import { execSync } from "child_process";
@@ -112,9 +118,15 @@ export async function POST(
                 hookDuration: 0.5,
                 overlay: {
                   text: String(overlay.text).substring(0, 200),
-                  position: ["top", "bottom", "center"].includes(overlay.position) ? overlay.position : "bottom",
+                  position: ["top", "bottom", "center"].includes(
+                    overlay.position,
+                  )
+                    ? overlay.position
+                    : "bottom",
                   fontSize,
                 },
+                hookBgColor: config.hookBgColor || "E91E63",
+                hookTextColor: config.hookTextColor || "FFFFFF",
               });
             } else if (hasHook) {
               addHookOverlay({
@@ -123,23 +135,32 @@ export async function POST(
                 title: hookTitle,
                 subtitle: config.hookSubtitle || undefined,
                 displayDuration: 0.5,
+                bgColor: config.hookBgColor || "E91E63",
+                textColor: config.hookTextColor || "FFFFFF",
               });
             } else if (hasOverlay) {
               addTextOverlay(processedPath, overlayedPath, {
                 text: String(overlay.text).substring(0, 200),
-                position: ["top", "bottom", "center"].includes(overlay.position) ? overlay.position : "bottom",
+                position: ["top", "bottom", "center"].includes(overlay.position)
+                  ? overlay.position
+                  : "bottom",
                 fontSize,
               });
             }
 
             // Replace the clean video with the overlayed version
             if (existsSync(overlayedPath)) {
-              execSync(`mv "${overlayedPath}" "${processedPath}"`, { stdio: "pipe" });
+              execSync(`mv "${overlayedPath}" "${processedPath}"`, {
+                stdio: "pipe",
+              });
               console.log(`[Video] Applied overlay to single-scene job ${id}`);
             }
           }
         } catch (overlayErr) {
-          console.warn(`[Video] Single-scene overlay failed for job ${id}:`, overlayErr);
+          console.warn(
+            `[Video] Single-scene overlay failed for job ${id}:`,
+            overlayErr,
+          );
           // Continue without overlay — video is still usable
         }
       }
@@ -211,6 +232,8 @@ export async function POST(
               hookSubtitle: config.hookSubtitle || undefined,
               overlays,
               overlayFontSize: config.overlayFontSize || 48,
+              hookBgColor: config.hookBgColor || "E91E63",
+              hookTextColor: config.hookTextColor || "FFFFFF",
             });
 
             const combinedVideoUrl = `http://localhost:3000/api/jobs/${id}/video?type=combined`;

@@ -95,11 +95,14 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Update status to generating_image, set videoType, record startedAt, and apply custom prompts
+  // If the job already has an image (e.g. created from gallery), skip to video generation
+  const nextStatus = nextJob.imageUrl ? "generating_video" : "generating_image";
+
+  // Update status, set videoType, record startedAt, and apply custom prompts
   const job = await prisma.videoJob.update({
     where: { id: nextJob.id },
     data: {
-      status: "generating_image",
+      status: nextStatus,
       videoType,
       startedAt: new Date().toISOString(),
       ...promptData,
