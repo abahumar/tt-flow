@@ -43,6 +43,7 @@ export interface CombineOptions {
   hookBgColor?: string; // hex without #, default "E91E63" (pink)
   hookTextColor?: string; // hex without #, default "FFFFFF"
   overlayFontSize?: number; // global font size for overlay text, default 48
+  hookFontSize?: number; // font size for hook title text, default 64
 }
 
 // Escape text for FFmpeg drawtext filter
@@ -80,6 +81,7 @@ export function addHookOverlay(options: {
   displayDuration?: number; // how long to show (default 0.5s)
   bgColor?: string; // hex without #, default "E91E63" (pink)
   textColor?: string; // hex without #, default "FFFFFF"
+  hookFontSize?: number; // font size for hook title, default 64
 }): void {
   const {
     inputPath,
@@ -89,19 +91,21 @@ export function addHookOverlay(options: {
     displayDuration = 0.5,
     bgColor = "E91E63",
     textColor = "FFFFFF",
+    hookFontSize = 64,
   } = options;
 
+  const subtitleSize = Math.round(hookFontSize * 0.5625); // proportional subtitle
   const fontPath = getFontPath();
   const fontOpt = fontPath ? `fontfile='${fontPath}':` : "";
   const escapedTitle = escapeDrawtext(title);
 
   // Title with colored background strip, centered, shown for displayDuration seconds
-  let filter = `drawtext=${fontOpt}text='${escapedTitle}':fontcolor=#${textColor}:fontsize=64:x=(w-text_w)/2:y=h*0.45:box=1:boxcolor=#${bgColor}@0.9:boxborderw=24:line_spacing=8:enable='lt(t,${displayDuration})'`;
+  let filter = `drawtext=${fontOpt}text='${escapedTitle}':fontcolor=#${textColor}:fontsize=${hookFontSize}:x=(w-text_w)/2:y=h*0.45:box=1:boxcolor=#${bgColor}@0.9:boxborderw=24:line_spacing=8:enable='lt(t,${displayDuration})'`;
 
   // Subtitle below title
   if (subtitle) {
     const escapedSub = escapeDrawtext(subtitle);
-    filter += `,drawtext=${fontOpt}text='${escapedSub}':fontcolor=#${textColor}:fontsize=36:x=(w-text_w)/2:y=h*0.45+90:box=1:boxcolor=#000000@0.5:boxborderw=14:enable='lt(t,${displayDuration})'`;
+    filter += `,drawtext=${fontOpt}text='${escapedSub}':fontcolor=#${textColor}:fontsize=${subtitleSize}:x=(w-text_w)/2:y=h*0.45+90:box=1:boxcolor=#000000@0.5:boxborderw=14:enable='lt(t,${displayDuration})'`;
   }
 
   const cmd = `ffmpeg -y -i "${inputPath}" -vf "${filter}" -c:v libx264 -preset fast -crf 18 -c:a copy -pix_fmt yuv420p "${outputPath}"`;
@@ -122,6 +126,7 @@ export function addHookAndOverlay(options: {
   overlay: TextOverlay;
   hookBgColor?: string;
   hookTextColor?: string;
+  hookFontSize?: number;
 }): void {
   const {
     inputPath,
@@ -132,19 +137,21 @@ export function addHookAndOverlay(options: {
     overlay,
     hookBgColor = "E91E63",
     hookTextColor = "FFFFFF",
+    hookFontSize = 64,
   } = options;
 
+  const subtitleSize = Math.round(hookFontSize * 0.5625);
   const fontPath = getFontPath();
   const fontOpt = fontPath ? `fontfile='${fontPath}':` : "";
 
   // Hook title: shows from 0 to hookDuration
   const escapedHook = escapeDrawtext(hookTitle);
-  let filter = `drawtext=${fontOpt}text='${escapedHook}':fontcolor=#${hookTextColor}:fontsize=64:x=(w-text_w)/2:y=h*0.45:box=1:boxcolor=#${hookBgColor}@0.9:boxborderw=24:line_spacing=8:enable='lt(t,${hookDuration})'`;
+  let filter = `drawtext=${fontOpt}text='${escapedHook}':fontcolor=#${hookTextColor}:fontsize=${hookFontSize}:x=(w-text_w)/2:y=h*0.45:box=1:boxcolor=#${hookBgColor}@0.9:boxborderw=24:line_spacing=8:enable='lt(t,${hookDuration})'`;
 
   // Hook subtitle
   if (hookSubtitle) {
     const escapedSub = escapeDrawtext(hookSubtitle);
-    filter += `,drawtext=${fontOpt}text='${escapedSub}':fontcolor=#${hookTextColor}:fontsize=36:x=(w-text_w)/2:y=h*0.45+90:box=1:boxcolor=#000000@0.5:boxborderw=14:enable='lt(t,${hookDuration})'`;
+    filter += `,drawtext=${fontOpt}text='${escapedSub}':fontcolor=#${hookTextColor}:fontsize=${subtitleSize}:x=(w-text_w)/2:y=h*0.45+90:box=1:boxcolor=#000000@0.5:boxborderw=14:enable='lt(t,${hookDuration})'`;
   }
 
   // Overlay text: appears after hook disappears
@@ -219,7 +226,9 @@ export function normalizeClip(inputPath: string, outputPath: string): void {
     const probe = execSync(
       `ffprobe -v error -select_streams a -show_entries stream=codec_type -of csv=p=0 "${inputPath}"`,
       { timeout: 10000, stdio: "pipe" },
-    ).toString().trim();
+    )
+      .toString()
+      .trim();
     hasAudio = probe.includes("audio");
   } catch {
     // If ffprobe fails, assume no audio
@@ -258,6 +267,7 @@ export function combineSceneVideos(options: CombineOptions): string {
     hookBgColor = "E91E63",
     hookTextColor = "FFFFFF",
     overlayFontSize = 48,
+    hookFontSize = 64,
   } = options;
 
   const tempFiles: string[] = [];
@@ -307,6 +317,7 @@ export function combineSceneVideos(options: CombineOptions): string {
           overlay: sizedOverlay,
           hookBgColor,
           hookTextColor,
+          hookFontSize,
         });
         tempFiles.push(comboPath);
         currentPath = comboPath;
@@ -321,6 +332,7 @@ export function combineSceneVideos(options: CombineOptions): string {
           displayDuration: hookDuration,
           bgColor: hookBgColor,
           textColor: hookTextColor,
+          hookFontSize,
         });
         tempFiles.push(hookPath);
         currentPath = hookPath;

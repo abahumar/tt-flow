@@ -127,6 +127,7 @@ export async function POST(
                 },
                 hookBgColor: config.hookBgColor || "E91E63",
                 hookTextColor: config.hookTextColor || "FFFFFF",
+                hookFontSize: config.hookFontSize || 64,
               });
             } else if (hasHook) {
               addHookOverlay({
@@ -137,6 +138,7 @@ export async function POST(
                 displayDuration: 0.5,
                 bgColor: config.hookBgColor || "E91E63",
                 textColor: config.hookTextColor || "FFFFFF",
+                hookFontSize: config.hookFontSize || 64,
               });
             } else if (hasOverlay) {
               addTextOverlay(processedPath, overlayedPath, {

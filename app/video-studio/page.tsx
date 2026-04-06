@@ -174,6 +174,7 @@ export default function VideoStudioPage() {
   const [enableHook, setEnableHook] = useState(false);
   const [hookBgColor, setHookBgColor] = useState("#E91E63");
   const [hookTextColor, setHookTextColor] = useState("#FFFFFF");
+  const [hookFontSize, setHookFontSize] = useState(64);
   const [overlayFontSize, setOverlayFontSize] = useState(48);
   const [combining, setCombining] = useState(false);
   const [combinedVideoUrl, setCombinedVideoUrl] = useState("");
@@ -515,6 +516,7 @@ export default function VideoStudioPage() {
         hookSubtitle: enableHook ? hookSubtitle : "",
         hookBgColor: enableHook ? hookBgColor.replace("#", "") : "E91E63",
         hookTextColor: enableHook ? hookTextColor.replace("#", "") : "FFFFFF",
+        hookFontSize: enableHook ? hookFontSize : 64,
         overlays,
         overlayFontSize,
       });
@@ -1530,6 +1532,24 @@ export default function VideoStudioPage() {
                     <span className="text-xs text-gray-400">
                       {hookTextColor}
                     </span>
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">
+                    Hook Text Size: {hookFontSize}px
+                  </label>
+                  <input
+                    type="range"
+                    min={32}
+                    max={96}
+                    step={2}
+                    value={hookFontSize}
+                    onChange={(e) => setHookFontSize(Number(e.target.value))}
+                    className="w-full accent-pink-500"
+                  />
+                  <div className="flex justify-between text-[10px] text-gray-400">
+                    <span>32px (kecil)</span>
+                    <span>96px (besar)</span>
                   </div>
                 </div>
               </div>

@@ -66,6 +66,7 @@ export async function POST(
       hookBgColor = "E91E63",
       hookTextColor = "FFFFFF",
       overlayFontSize = 48,
+      hookFontSize = 64,
     } = body as {
       hookTitle?: string;
       hookSubtitle?: string;
@@ -74,6 +75,7 @@ export async function POST(
       hookBgColor?: string;
       hookTextColor?: string;
       overlayFontSize?: number;
+      hookFontSize?: number;
     };
 
     // Sanitize overlays — ensure valid position values
@@ -112,6 +114,7 @@ export async function POST(
           .replace(/[^a-fA-F0-9]/g, "")
           .substring(0, 6) || "FFFFFF",
       overlayFontSize: Math.min(Math.max(overlayFontSize, 16), 120),
+      hookFontSize: Math.min(Math.max(hookFontSize, 16), 120),
     });
 
     // Save overlay config to DB

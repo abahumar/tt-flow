@@ -85,6 +85,7 @@ export default function GalleryPage() {
   const [galleryFontSize, setGalleryFontSize] = useState(48);
   const [galleryHookBgColor, setGalleryHookBgColor] = useState("#E91E63");
   const [galleryHookTextColor, setGalleryHookTextColor] = useState("#FFFFFF");
+  const [galleryHookFontSize, setGalleryHookFontSize] = useState(64);
   const router = useRouter();
 
   const fetchGallery = useCallback(async () => {
@@ -349,6 +350,7 @@ export default function GalleryPage() {
         hookSubtitle: "",
         hookBgColor: galleryHookBgColor.replace("#", ""),
         hookTextColor: galleryHookTextColor.replace("#", ""),
+        hookFontSize: galleryHookFontSize,
         overlays: [
           galleryOverlayText.trim()
             ? {
@@ -1040,6 +1042,27 @@ export default function GalleryPage() {
                         {galleryHookTextColor}
                       </span>
                     </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">
+                    Hook Text Size: {galleryHookFontSize}px
+                  </label>
+                  <input
+                    type="range"
+                    min={32}
+                    max={96}
+                    step={2}
+                    value={galleryHookFontSize}
+                    onChange={(e) =>
+                      setGalleryHookFontSize(Number(e.target.value))
+                    }
+                    className="w-full accent-pink-500"
+                  />
+                  <div className="flex justify-between text-[10px] text-gray-400">
+                    <span>32px (kecil)</span>
+                    <span>96px (besar)</span>
                   </div>
                 </div>
 
