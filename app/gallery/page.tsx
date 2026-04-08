@@ -82,10 +82,10 @@ export default function GalleryPage() {
   const [galleryOverlayPosition, setGalleryOverlayPosition] = useState<
     "top" | "bottom" | "center"
   >("bottom");
-  const [galleryFontSize, setGalleryFontSize] = useState(48);
+  const [galleryFontSize, setGalleryFontSize] = useState(28);
   const [galleryHookBgColor, setGalleryHookBgColor] = useState("#E91E63");
   const [galleryHookTextColor, setGalleryHookTextColor] = useState("#FFFFFF");
-  const [galleryHookFontSize, setGalleryHookFontSize] = useState(64);
+  const [galleryHookFontSize, setGalleryHookFontSize] = useState(36);
   const router = useRouter();
 
   const fetchGallery = useCallback(async () => {

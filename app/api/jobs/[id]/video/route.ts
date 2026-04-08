@@ -107,7 +107,7 @@ export async function POST(
 
           if (hasHook || hasOverlay) {
             const overlayedPath = join(VIDEO_DIR, `${id}-overlayed.mp4`);
-            const fontSize = config.overlayFontSize || 48;
+            const fontSize = config.overlayFontSize || 28;
 
             if (hasHook && hasOverlay) {
               addHookAndOverlay({
@@ -127,7 +127,7 @@ export async function POST(
                 },
                 hookBgColor: config.hookBgColor || "E91E63",
                 hookTextColor: config.hookTextColor || "FFFFFF",
-                hookFontSize: config.hookFontSize || 64,
+                hookFontSize: config.hookFontSize || 36,
               });
             } else if (hasHook) {
               addHookOverlay({
@@ -138,7 +138,7 @@ export async function POST(
                 displayDuration: 0.5,
                 bgColor: config.hookBgColor || "E91E63",
                 textColor: config.hookTextColor || "FFFFFF",
-                hookFontSize: config.hookFontSize || 64,
+                hookFontSize: config.hookFontSize || 36,
               });
             } else if (hasOverlay) {
               addTextOverlay(processedPath, overlayedPath, {
@@ -233,9 +233,10 @@ export async function POST(
               hookTitle: config.hookTitle || undefined,
               hookSubtitle: config.hookSubtitle || undefined,
               overlays,
-              overlayFontSize: config.overlayFontSize || 48,
+              overlayFontSize: config.overlayFontSize || 28,
               hookBgColor: config.hookBgColor || "E91E63",
               hookTextColor: config.hookTextColor || "FFFFFF",
+              hookFontSize: config.hookFontSize || 36,
             });
 
             const combinedVideoUrl = `http://localhost:3000/api/jobs/${id}/video?type=combined`;

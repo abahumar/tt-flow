@@ -65,8 +65,8 @@ export async function POST(
       hookDuration = 0.5,
       hookBgColor = "E91E63",
       hookTextColor = "FFFFFF",
-      overlayFontSize = 48,
-      hookFontSize = 64,
+      overlayFontSize = 28,
+      hookFontSize = 36,
     } = body as {
       hookTitle?: string;
       hookSubtitle?: string;
@@ -125,6 +125,7 @@ export async function POST(
       hookDuration,
       hookBgColor,
       hookTextColor,
+      hookFontSize,
     });
 
     const combinedVideoUrl = `http://localhost:3000/api/jobs/${id}/video?type=combined`;

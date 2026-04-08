@@ -42,17 +42,93 @@ export interface CombineOptions {
   hookDuration?: number; // seconds to show hook text, default 0.5
   hookBgColor?: string; // hex without #, default "E91E63" (pink)
   hookTextColor?: string; // hex without #, default "FFFFFF"
-  overlayFontSize?: number; // global font size for overlay text, default 48
-  hookFontSize?: number; // font size for hook title text, default 64
+  overlayFontSize?: number; // global font size for overlay text, default 28
+  hookFontSize?: number; // font size for hook title text, default 36
 }
 
-// Escape text for FFmpeg drawtext filter
-function escapeDrawtext(text: string): string {
+// Strip emojis — FFmpeg drawtext cannot render emoji glyphs
+function stripEmojis(text: string): string {
   return text
+    .replace(
+      /[\u{0080}-\u{00FF}\u{2000}-\u{209F}\u{20A0}-\u{20CF}\u{2100}-\u{214F}\u{2190}-\u{21FF}\u{2200}-\u{22FF}\u{2300}-\u{23FF}\u{2400}-\u{243F}\u{2440}-\u{245F}\u{2460}-\u{24FF}\u{2500}-\u{257F}\u{2580}-\u{259F}\u{25A0}-\u{25FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{2900}-\u{297F}\u{2B00}-\u{2BFF}\u{3000}-\u{303F}\u{3200}-\u{32FF}\u{FE00}-\u{FEFF}\u{FE0F}\u{200D}\u{20E3}\u{1F000}-\u{1FFFF}\u{E0020}-\u{E007F}]/gu,
+      "",
+    )
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+// Split text into lines that fit within maxChars per line
+function splitLines(text: string, maxChars = 30): string[] {
+  const words = stripEmojis(text).split(/\s+/);
+  const lines: string[] = [];
+  let currentLine = "";
+
+  for (const word of words) {
+    if (currentLine && (currentLine + " " + word).length > maxChars) {
+      lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = currentLine ? currentLine + " " + word : word;
+    }
+  }
+  if (currentLine) lines.push(currentLine);
+
+  return lines;
+}
+
+// Escape text for FFmpeg drawtext filter (single-line only)
+function escapeDrawtext(text: string): string {
+  return stripEmojis(text)
     .replace(/\\/g, "\\\\\\\\")
     .replace(/'/g, "'\\\\\\''")
     .replace(/:/g, "\\\\:")
     .replace(/%/g, "\\\\%");
+}
+
+/**
+ * Build stacked drawtext filters — one per line, vertically centered around a Y anchor.
+ * Each line gets its own drawtext with box background, so no newline character issues.
+ */
+function buildMultilineDrawtext(opts: {
+  text: string;
+  maxChars: number;
+  fontOpt: string;
+  fontColor: string;
+  fontSize: number;
+  yExpr: string; // center Y anchor expression (e.g. "h*0.45" or "h*0.65")
+  boxColor: string; // e.g. "#E91E63@0.9" or "black@0.6"
+  boxBorderW: number;
+  lineSpacing: number;
+  enableExpr?: string; // e.g. "lt(t,0.5)" or "gte(t,0.5)"
+}): string {
+  const {
+    text,
+    maxChars,
+    fontOpt,
+    fontColor,
+    fontSize,
+    yExpr,
+    boxColor,
+    boxBorderW,
+    lineSpacing,
+    enableExpr,
+  } = opts;
+
+  const lines = splitLines(text, maxChars);
+  // Total line height = font size + box padding (top+bottom) + spacing between lines
+  const lineHeight = fontSize + boxBorderW * 2 + lineSpacing;
+  const totalHeight = lines.length * lineHeight;
+  const enablePart = enableExpr ? `:enable='${enableExpr}'` : "";
+
+  return lines
+    .map((line, i) => {
+      const escaped = escapeDrawtext(line);
+      // Offset each line from the center anchor
+      const offsetY = Math.round(-totalHeight / 2 + i * lineHeight);
+      const sign = offsetY >= 0 ? "+" : "";
+      return `drawtext=${fontOpt}text='${escaped}':fontcolor=${fontColor}:fontsize=${fontSize}:x=(w-text_w)/2:y=${yExpr}${sign}${offsetY}:box=1:boxcolor=${boxColor}:boxborderw=${boxBorderW}${enablePart}`;
+    })
+    .join(",");
 }
 
 // Get the Y position expression for drawtext
@@ -81,7 +157,7 @@ export function addHookOverlay(options: {
   displayDuration?: number; // how long to show (default 0.5s)
   bgColor?: string; // hex without #, default "E91E63" (pink)
   textColor?: string; // hex without #, default "FFFFFF"
-  hookFontSize?: number; // font size for hook title, default 64
+  hookFontSize?: number; // font size for hook title, default 36
 }): void {
   const {
     inputPath,
@@ -91,20 +167,30 @@ export function addHookOverlay(options: {
     displayDuration = 0.5,
     bgColor = "E91E63",
     textColor = "FFFFFF",
-    hookFontSize = 64,
+    hookFontSize = 36,
   } = options;
 
   const subtitleSize = Math.round(hookFontSize * 0.5625); // proportional subtitle
   const fontPath = getFontPath();
   const fontOpt = fontPath ? `fontfile='${fontPath}':` : "";
-  const escapedTitle = escapeDrawtext(title);
 
   // Title with colored background strip, centered, shown for displayDuration seconds
-  let filter = `drawtext=${fontOpt}text='${escapedTitle}':fontcolor=#${textColor}:fontsize=${hookFontSize}:x=(w-text_w)/2:y=h*0.45:box=1:boxcolor=#${bgColor}@0.9:boxborderw=24:line_spacing=8:enable='lt(t,${displayDuration})'`;
+  let filter = buildMultilineDrawtext({
+    text: title,
+    maxChars: 25,
+    fontOpt,
+    fontColor: `#${textColor}`,
+    fontSize: hookFontSize,
+    yExpr: "h*0.45",
+    boxColor: `#${bgColor}@0.9`,
+    boxBorderW: 12,
+    lineSpacing: -4,
+    enableExpr: `lt(t,${displayDuration})`,
+  });
 
   // Subtitle below title
   if (subtitle) {
-    const escapedSub = escapeDrawtext(subtitle);
+    const escapedSub = escapeDrawtext(stripEmojis(subtitle));
     filter += `,drawtext=${fontOpt}text='${escapedSub}':fontcolor=#${textColor}:fontsize=${subtitleSize}:x=(w-text_w)/2:y=h*0.45+90:box=1:boxcolor=#000000@0.5:boxborderw=14:enable='lt(t,${displayDuration})'`;
   }
 
@@ -137,7 +223,7 @@ export function addHookAndOverlay(options: {
     overlay,
     hookBgColor = "E91E63",
     hookTextColor = "FFFFFF",
-    hookFontSize = 64,
+    hookFontSize = 36,
   } = options;
 
   const subtitleSize = Math.round(hookFontSize * 0.5625);
@@ -145,20 +231,40 @@ export function addHookAndOverlay(options: {
   const fontOpt = fontPath ? `fontfile='${fontPath}':` : "";
 
   // Hook title: shows from 0 to hookDuration
-  const escapedHook = escapeDrawtext(hookTitle);
-  let filter = `drawtext=${fontOpt}text='${escapedHook}':fontcolor=#${hookTextColor}:fontsize=${hookFontSize}:x=(w-text_w)/2:y=h*0.45:box=1:boxcolor=#${hookBgColor}@0.9:boxborderw=24:line_spacing=8:enable='lt(t,${hookDuration})'`;
+  let filter = buildMultilineDrawtext({
+    text: hookTitle,
+    maxChars: 25,
+    fontOpt,
+    fontColor: `#${hookTextColor}`,
+    fontSize: hookFontSize,
+    yExpr: "h*0.45",
+    boxColor: `#${hookBgColor}@0.9`,
+    boxBorderW: 12,
+    lineSpacing: -4,
+    enableExpr: `lt(t,${hookDuration})`,
+  });
 
   // Hook subtitle
   if (hookSubtitle) {
-    const escapedSub = escapeDrawtext(hookSubtitle);
+    const escapedSub = escapeDrawtext(stripEmojis(hookSubtitle));
     filter += `,drawtext=${fontOpt}text='${escapedSub}':fontcolor=#${hookTextColor}:fontsize=${subtitleSize}:x=(w-text_w)/2:y=h*0.45+90:box=1:boxcolor=#000000@0.5:boxborderw=14:enable='lt(t,${hookDuration})'`;
   }
 
   // Overlay text: appears after hook disappears
-  const escapedOverlay = escapeDrawtext(overlay.text);
   const yExpr = getYExpr(overlay.position);
   const overlaySize = overlay.fontSize || 48;
-  filter += `,drawtext=${fontOpt}text='${escapedOverlay}':fontcolor=white:fontsize=${overlaySize}:x=(w-text_w)/2:y=${yExpr}:box=1:boxcolor=black@0.6:boxborderw=20:line_spacing=8:enable='gte(t,${hookDuration})'`;
+  filter += `,${buildMultilineDrawtext({
+    text: overlay.text,
+    maxChars: 30,
+    fontOpt,
+    fontColor: "white",
+    fontSize: overlaySize,
+    yExpr,
+    boxColor: "black@0.6",
+    boxBorderW: 10,
+    lineSpacing: -4,
+    enableExpr: `gte(t,${hookDuration})`,
+  })}`;
 
   const cmd = `ffmpeg -y -i "${inputPath}" -vf "${filter}" -c:v libx264 -preset fast -crf 18 -c:a copy -pix_fmt yuv420p "${outputPath}"`;
 
@@ -176,12 +282,20 @@ export function addTextOverlay(
 ): void {
   const fontPath = getFontPath();
   const fontOpt = fontPath ? `fontfile='${fontPath}':` : "";
-  const escaped = escapeDrawtext(overlay.text);
   const yExpr = getYExpr(overlay.position);
-
   const size = overlay.fontSize || 48;
-  // Draw semi-transparent background box behind text, then text on top
-  const filter = `drawtext=${fontOpt}text='${escaped}':fontcolor=white:fontsize=${size}:x=(w-text_w)/2:y=${yExpr}:box=1:boxcolor=black@0.6:boxborderw=20:line_spacing=8`;
+
+  const filter = buildMultilineDrawtext({
+    text: overlay.text,
+    maxChars: 30,
+    fontOpt,
+    fontColor: "white",
+    fontSize: size,
+    yExpr,
+    boxColor: "black@0.6",
+    boxBorderW: 10,
+    lineSpacing: -4,
+  });
 
   const cmd = `ffmpeg -y -i "${inputPath}" -vf "${filter}" -c:v libx264 -preset fast -crf 18 -c:a copy "${outputPath}"`;
 
@@ -266,8 +380,8 @@ export function combineSceneVideos(options: CombineOptions): string {
     hookDuration = 0.5,
     hookBgColor = "E91E63",
     hookTextColor = "FFFFFF",
-    overlayFontSize = 48,
-    hookFontSize = 64,
+    overlayFontSize = 28,
+    hookFontSize = 36,
   } = options;
 
   const tempFiles: string[] = [];

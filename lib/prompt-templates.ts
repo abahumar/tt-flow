@@ -502,7 +502,7 @@ DIALOG TONE — GAYA BAHASA SANTAI (KUALA LUMPUR SLANG):
 - JANGAN guna bahasa skema/baku. Tulis macam budak KL bercakap.
 - WAJIB guna slang KL — contoh: "wei", "lah", "kan", "gila", "memang", "confirm", "serious ah", "best gila", "power", "fuh", "perghhh", "siot", "dah lah", "takkan", "mesti try".
 - JANGAN guna slang Indonesia — DILARANG pakai: "banget", "dong", "nih", "sih", "gue/gw", "lu", "emang", "udah", "nggak", "tuh", "deh", "yuk", "kuy", "mager", "baper", "kepo". Ini content untuk audience Malaysia, BUKAN Indonesia.
-- Use sapaan yang sesuai: "korang", "sis", "babe", "bestie", "wei", "bro" for younger audience.
+- Use sapaan yang sesuai: "korang", "sis", "babe", "bestie", "bro", "wei" — tapi JANGAN guna "Wei korang" sebagai pembukaan dialog.
 - Use emoji sparingly to add emotion: 😩 😍 🔥 ✅ 💪
 - NEVER sound like a textbook or formal announcement.
 - Seeding produk secara natural — jangan paksa atau hard sell.
@@ -510,9 +510,18 @@ DIALOG TONE — GAYA BAHASA SANTAI (KUALA LUMPUR SLANG):
 - Dialog mesti mudah di sebut untuk AI voice — ayat pendek, direct, natural flow.
 
 VARIASI PEMBUKAAN SCENE 1 (HOOK):
-- JANGAN selalu mulakan Scene 1 dengan "Aduh". Variasikan pembukaan setiap kali generate.
-- Contoh pembukaan lain yang boleh digunakan: soalan retorik ("Korang pernah tak...?"), fakta mengejutkan ("Tau tak...?"), sapaan terus ("Wei korang!"), cabaran ("Cuba teka..."), pernyataan bold ("Serious cakap..."), luahan ("Fuh gila..."), atau cerita pendek ("Hari tu aku...").
+- JANGAN mulakan Scene 1 dengan "Aduh" atau "Wei korang". DILARANG guna "Wei korang" sebagai pembukaan. Terlalu overused.
+- Pilih pembukaan dari senarai ini secara RAWAK setiap kali generate — WAJIB tukar setiap kali:
+  1. Soalan retorik: "Korang pernah tak...?", "Penat tak bila...?"
+  2. Fakta mengejutkan: "Tau tak...?", "Ramai tak sedar..."
+  3. Cabaran: "Cuba teka...", "Bet korang tak tau..."
+  4. Pernyataan bold: "Serious cakap...", "No cap..."
+  5. Luahan: "Fuh gila...", "Perghhh...", "Bro..."
+  6. Cerita pendek: "Hari tu aku...", "Dulu aku pun..."
+  7. POV: "POV: Korang baru jumpa...", "POV: Bila mak suruh..."
+  8. Confession: "Aku nak ngaku...", "Jujur cakap..."
 - Setiap kali generate, pilih pembukaan yang BERBEZA. Jangan ulang pattern yang sama.
+- SEKALI LAGI: JANGAN start dengan "Wei korang". Gunakan variasi lain.
 
 CRITICAL WORD LIMIT PER SCENE:
 - Each scene generates ONE ~8 second video clip.

@@ -174,8 +174,8 @@ export default function VideoStudioPage() {
   const [enableHook, setEnableHook] = useState(false);
   const [hookBgColor, setHookBgColor] = useState("#E91E63");
   const [hookTextColor, setHookTextColor] = useState("#FFFFFF");
-  const [hookFontSize, setHookFontSize] = useState(64);
-  const [overlayFontSize, setOverlayFontSize] = useState(48);
+  const [hookFontSize, setHookFontSize] = useState(36);
+  const [overlayFontSize, setOverlayFontSize] = useState(28);
   const [combining, setCombining] = useState(false);
   const [combinedVideoUrl, setCombinedVideoUrl] = useState("");
   const [combineError, setCombineError] = useState("");
@@ -516,7 +516,7 @@ export default function VideoStudioPage() {
         hookSubtitle: enableHook ? hookSubtitle : "",
         hookBgColor: enableHook ? hookBgColor.replace("#", "") : "E91E63",
         hookTextColor: enableHook ? hookTextColor.replace("#", "") : "FFFFFF",
-        hookFontSize: enableHook ? hookFontSize : 64,
+        hookFontSize: enableHook ? hookFontSize : 36,
         overlays,
         overlayFontSize,
       });

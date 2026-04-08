@@ -30,20 +30,43 @@ const PLATFORM_LOGICS: Record<string, (duration: number) => string> = {
     `SORA LOGIC: High fidelity physics. Rich atmosphere. Cinematic lighting.`,
 };
 
-const AVATAR_DNA: Record<string, string> = {
-  woman_malay_hijab:
+const AVATAR_DNA: Record<string, string[]> = {
+  woman_malay_hijab: [
     "A friendly 25-year-old Malay woman with a warm smile, wearing a stylish light beige chiffon hijab and a modest pastel-colored modern Baju Kurung or blouse. Natural makeup look.",
-  woman_malay_freehair:
-    "A trendy 23-year-old Malay woman wearing a stylish hijab, with a casual modern outfit like a denim jacket over a white tee. Energetic and approachable vibe.",
-  woman_malay_corporate:
+    "A cheerful 24-year-old Malay woman wearing a dusty pink cotton hijab paired with a soft cream knit cardigan over a flowy midi dress. Dewy skin with a subtle lip tint. Sweet and approachable girl-next-door energy.",
+    "A confident 27-year-old Malay woman in a sage green satin hijab, styled neatly, wearing a matching set of linen top and wide-leg pants. Minimal gold jewelry. Clean, put-together modest fashion influencer vibe.",
+  ],
+  woman_malay_freehair: [
+    "A trendy 23-year-old Malay woman with shoulder-length wavy hair, wearing a casual denim jacket over a white tee. Energetic and approachable vibe.",
+    "A stylish 25-year-old Malay woman with long straight black hair and wispy bangs, wearing an oversized graphic tee tucked into high-waisted jeans. Cool streetwear aesthetic with a playful, youthful energy.",
+    "A vibrant 22-year-old Malay woman with a messy bun and hoop earrings, wearing a cropped cardigan over a simple tank top paired with cargo pants. Effortlessly trendy Y2K-inspired look with a fun, carefree attitude.",
+  ],
+  woman_malay_corporate: [
     "A professional 30-year-old Malay woman with a confident posture, wearing a neat hijab and a dark blazer over a formal blouse. Sophisticated and authoritative look.",
-  man_malay_casual:
+    "A poised 28-year-old Malay woman in a structured navy pantsuit with a cream silk hijab. Minimal pearl stud earrings. Sharp, ambitious corporate leader energy with a warm yet commanding presence.",
+    "A polished 31-year-old Malay woman wearing a tailored charcoal pencil skirt suit with a pastel chiffon hijab neatly pinned. Reading glasses resting on her collar. Smart, trustworthy senior executive vibe.",
+  ],
+  man_malay_casual: [
     "A 26-year-old Malay man with a short, neat haircut and a slight stubble, wearing a plain oversized t-shirt or a flannel shirt. Relaxed and friendly boy-next-door vibe.",
-  man_malay_corporate:
+    "A laid-back 24-year-old Malay man with a textured middle-part hairstyle, wearing a loose linen button-up shirt with rolled sleeves over chino shorts. Clean-shaven with a warm, easygoing smile. Chill beach-town guy energy.",
+    "A cool 27-year-old Malay man with a buzz cut and thin silver chain necklace, wearing a plain black hoodie and jogger pants. Subtle streetwear vibe with a confident, mysterious edge.",
+  ],
+  man_malay_corporate: [
     "A sharp 32-year-old Malay man in a well-fitted white shirt and dark trousers, wearing a classic watch. Clean-shaven or with a very neat beard. Professional and successful appearance.",
-  product_only:
+    "A distinguished 30-year-old Malay man with neatly combed side-parted hair and a trimmed goatee, wearing a slim-fit navy blazer over a light blue Oxford shirt. No tie, top button undone. Smart-casual corporate entrepreneur look.",
+    "A polished 34-year-old Malay man with a clean fade haircut and frameless glasses, wearing a charcoal turtleneck under a tailored grey suit jacket. Minimalist luxury watch. Modern tech-CEO sophisticated vibe.",
+  ],
+  product_only: [
     "No human model. Focus entirely on the product packaging, textures, and ingredients. High-end product photography style with aesthetic props and clean backgrounds.",
+    "No human model. Showcase the product on a marble surface with soft botanical accents and warm directional lighting. Premium flatlay aesthetic with subtle shadows.",
+    "No human model. Display the product against a clean gradient background with geometric props and soft fabric draping. Minimalist editorial product photography style.",
+  ],
 };
+
+function pickAvatarDna(avatarId: string): string {
+  const variants = AVATAR_DNA[avatarId] || AVATAR_DNA.woman_malay_hijab;
+  return variants[Math.floor(Math.random() * variants.length)];
+}
 
 const GENRE_INSTRUCTIONS: Record<string, string> = {
   comedy:
@@ -171,7 +194,7 @@ export async function POST(req: NextRequest) {
     const isCustomModel = avatarId === "custom";
     const avatarDna = isCustomModel
       ? `CUSTOM MODEL — ${modelDesc || "Use the uploaded model reference image exactly as shown. Describe what you see: age, ethnicity, clothing, hijab if any, expression, vibe."}`
-      : AVATAR_DNA[avatarId] || AVATAR_DNA.woman_malay_hijab;
+      : pickAvatarDna(avatarId);
     const genreInst =
       GENRE_INSTRUCTIONS[videoType] || `GENRE: ${videoType.toUpperCase()}`;
     const dialogInst = includeDialog
@@ -265,7 +288,9 @@ Output JSON:
       ${dialogOutputFields ? dialogOutputFields + "," : ""}
       "visual_prompt_en": "Detailed visual scene description starting with 'From the image uploaded, accurate scale, no alter, no redesign.' — product must match uploaded reference exactly",
       "video_prompt": "Short single sentence motion description (max 15 words)",
-      "overlay_text": "Short punchy text (5-8 words) to display on screen during this scene, summarizing the key message. Example: 'Tahan 24 Jam, Kulit Glowing!'. Leave empty for scenes that don't need text.",
+      "overlay_text": "Short punchy text (5-8 words) to display on screen during this scene, summarizing the key message. NO EMOJIS allowed — plain text only. Example: 'Tahan 24 Jam, Kulit Glowing!'. Leave empty for scenes that don't need text.",
+      "variation_hook_title": "REQUIRED — Short punchy hook title for THIS scene (3-7 words, attention-grabbing, e.g. 'Rahsia Kulit Glowing!')",
+      "variation_video_caption": "REQUIRED — Catchy video caption in casual Malay for THIS scene (max 100 chars, e.g. 'Tengok sendiri hasilnya!')",
       "tiktok_product_name": "Clean product name (max 30 chars)",
       "tiktok_description": "Casual Malay product description with hashtags (max 200 chars)",
       "tiktok_caption": "Catchy casual Malay TikTok caption (max 150 chars)",
@@ -373,6 +398,12 @@ All string fields must be plain strings (never objects or arrays).
           tiktokCaption: String(v.tiktok_caption || "").trim(),
           tiktokHashtags: hashtags,
           overlayText: String(v.overlay_text || ""),
+          hookTitle: String(
+            v.variation_hook_title || v.hook_title || hookTitle || "",
+          ).trim(),
+          videoCaption: String(
+            v.variation_video_caption || v.video_caption || "",
+          ).trim(),
         };
       });
 
@@ -420,7 +451,7 @@ All string fields must be plain strings (never objects or arrays).
   let promptStrategy: string;
   let variantCount: number;
 
-  const avatarDna = AVATAR_DNA[avatarId] || AVATAR_DNA.woman_malay_hijab;
+  const avatarDna = pickAvatarDna(avatarId);
 
   if (mode === "storyline") {
     variantCount = consistentMode ? sceneCount : imageCount;
@@ -600,7 +631,8 @@ All string fields must be plain strings (never objects or arrays).
     Shop: ${product.shopName || "N/A"}
     ${GENRE_INSTRUCTIONS[videoType] || `GENRE: ${videoType.toUpperCase()}`}
 
-    Output JSON: { "hook_title": "Short punchy hook title for intro card (3-5 words)", "hook_subtitle": "Product name or tagline", "variations": [{ "description": "Title", "image_prompt": "...", ${outputFields}${dialogFields}, "overlay_text": "Short punchy text (5-8 words) for on-screen display, summarizing key message for this scene", "tiktok_product_name": "Clean short product name for TikTok (max 30 chars, no special characters, no SKU codes)", "tiktok_description": "Compelling casual Malay product description with hashtags (max 200 chars)", "tiktok_caption": "Catchy casual Malay TikTok post caption (max 150 chars, no hashtags)", "tiktok_hashtags": ["fyp", "tiktokshop", "relevantTag1", "relevantTag2", "relevantTag3"] }] }
+    Output JSON: { "hook_title": "Short punchy hook title for intro card (3-5 words)", "hook_subtitle": "Product name or tagline", "variations": [{ "description": "Title", "image_prompt": "...", ${outputFields}${dialogFields}, "overlay_text": "Short punchy text (5-8 words) for on-screen display, NO EMOJIS, plain text only", "variation_hook_title": "REQUIRED — Short punchy hook title for THIS specific variation (3-7 words, attention-grabbing, e.g. 'Rahsia Kulit Glowing!', 'Mesti Cuba Ni!', 'Last Stock!')", "variation_video_caption": "REQUIRED — Catchy video caption in casual Malay for THIS variation (max 100 chars, engaging & scroll-stopping, e.g. 'Tengok sendiri hasilnya lepas 3 hari guna!')", "tiktok_product_name": "Clean short product name for TikTok (max 30 chars, no special characters, no SKU codes)", "tiktok_description": "Compelling casual Malay product description with hashtags (max 200 chars)", "tiktok_caption": "Catchy casual Malay TikTok post caption (max 150 chars, no hashtags)", "tiktok_hashtags": ["fyp", "tiktokshop", "relevantTag1", "relevantTag2", "relevantTag3"] }] }
+    IMPORTANT: Every variation MUST include "variation_hook_title" and "variation_video_caption" — these are REQUIRED fields, never leave them empty.
     Generate exactly ${variantCount} variations. All string fields must be plain strings (never objects).
   `;
 
@@ -709,6 +741,12 @@ All string fields must be plain strings (never objects or arrays).
           description: String(v.description || `Variation ${i + 1}`),
           imagePrompt: stringify(v.image_prompt),
           videoPrompt: videoContent,
+          hookTitle: String(
+            v.variation_hook_title || v.hook_title || parsed.hook_title || "",
+          ).trim(),
+          videoCaption: String(
+            v.variation_video_caption || v.video_caption || "",
+          ).trim(),
           tiktokProductName: String(v.tiktok_product_name || "")
             .substring(0, 30)
             .trim(),

@@ -42,6 +42,8 @@ interface PairedOutput {
   description: string;
   imagePrompt: string;
   videoPrompt: string;
+  hookTitle: string;
+  videoCaption: string;
   tiktokProductName: string;
   tiktokDescription: string;
   tiktokCaption: string;
@@ -152,6 +154,11 @@ export default function ToolsPage() {
   const [includeDialog, setIncludeDialog] = useState(false);
   const [includeEnglishDialog, setIncludeEnglishDialog] = useState(false);
 
+  const [hookBgColor, setHookBgColor] = useState("#E91E63");
+  const [hookTextColor, setHookTextColor] = useState("#FFFFFF");
+  const [hookFontSize, setHookFontSize] = useState(36);
+  const [captionFontSize, setCaptionFontSize] = useState(28);
+
   const [apiKey, setApiKey] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
 
@@ -252,6 +259,8 @@ export default function ToolsPage() {
             description: string;
             imagePrompt?: string;
             videoPrompt?: string;
+            hookTitle?: string;
+            videoCaption?: string;
             tiktokProductName?: string;
             tiktokDescription?: string;
             tiktokCaption?: string;
@@ -260,6 +269,8 @@ export default function ToolsPage() {
             description: v.description || "",
             imagePrompt: v.imagePrompt || "",
             videoPrompt: v.videoPrompt || "",
+            hookTitle: v.hookTitle || "",
+            videoCaption: v.videoCaption || "",
             tiktokProductName: v.tiktokProductName || "",
             tiktokDescription: v.tiktokDescription || "",
             tiktokCaption: v.tiktokCaption || "",
@@ -301,6 +312,17 @@ export default function ToolsPage() {
           tiktokDescription: output.tiktokDescription || "",
           tiktokCaption: output.tiktokCaption || "",
           tiktokHashtags: output.tiktokHashtags || [],
+          overlayConfig: JSON.stringify({
+            hookTitle: output.hookTitle || "",
+            hookSubtitle: "",
+            hookBgColor: hookBgColor.replace("#", ""),
+            hookTextColor: hookTextColor.replace("#", ""),
+            hookFontSize,
+            overlayFontSize: captionFontSize,
+            overlays: output.videoCaption
+              ? [{ text: output.videoCaption, position: "bottom" }]
+              : [],
+          }),
         }),
       });
 
@@ -340,7 +362,7 @@ export default function ToolsPage() {
     const txt = outputs
       .map(
         (o) =>
-          `[${o.description.toUpperCase()}]\n🖼️ Image Prompt:\n${o.imagePrompt}\n\n🎬 Video Prompt:\n${o.videoPrompt}`,
+          `[${o.description.toUpperCase()}]${o.hookTitle ? `\n🎯 Hook Title: ${o.hookTitle}` : ""}${o.videoCaption ? `\n📝 Video Caption: ${o.videoCaption}` : ""}\n🖼️ Image Prompt:\n${o.imagePrompt}\n\n🎬 Video Prompt:\n${o.videoPrompt}`,
       )
       .join("\n\n━━━━━━━━━━━━━━━━━━━━\n\n");
     navigator.clipboard.writeText(txt);
@@ -561,6 +583,74 @@ export default function ToolsPage() {
           </button>
         </div>
 
+        {/* Hook Title Style Settings */}
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+          <h3 className="mb-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-gray-500">
+            <Clapperboard className="h-3.5 w-3.5" />
+            Hook Title Style
+          </h3>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div>
+              <label className="mb-1 block text-[10px] font-medium text-gray-500">
+                Background Color
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={hookBgColor}
+                  onChange={(e) => setHookBgColor(e.target.value)}
+                  className="h-8 w-10 cursor-pointer rounded border border-gray-300"
+                />
+                <span className="text-[10px] text-gray-400">{hookBgColor}</span>
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-[10px] font-medium text-gray-500">
+                Text Color
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={hookTextColor}
+                  onChange={(e) => setHookTextColor(e.target.value)}
+                  className="h-8 w-10 cursor-pointer rounded border border-gray-300"
+                />
+                <span className="text-[10px] text-gray-400">
+                  {hookTextColor}
+                </span>
+              </div>
+            </div>
+            <div className="col-span-2 sm:col-span-1">
+              <label className="mb-1 block text-[10px] font-medium text-gray-500">
+                Hook Font Size: {hookFontSize}px
+              </label>
+              <input
+                type="range"
+                min={24}
+                max={72}
+                step={2}
+                value={hookFontSize}
+                onChange={(e) => setHookFontSize(Number(e.target.value))}
+                className="w-full accent-pink-500"
+              />
+            </div>
+            <div className="col-span-2 sm:col-span-1">
+              <label className="mb-1 block text-[10px] font-medium text-gray-500">
+                Caption Font Size: {captionFontSize}px
+              </label>
+              <input
+                type="range"
+                min={16}
+                max={56}
+                step={2}
+                value={captionFontSize}
+                onChange={(e) => setCaptionFontSize(Number(e.target.value))}
+                className="w-full accent-violet-500"
+              />
+            </div>
+          </div>
+        </div>
+
         {/* API Key */}
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-500">
@@ -715,6 +805,88 @@ export default function ToolsPage() {
                   </button>
                 </div>
               </div>
+
+              {/* Hook Title & Video Caption Section */}
+              {(o.hookTitle || o.videoCaption) && (
+                <div className="border-b border-gray-100">
+                  <div className="bg-violet-50/50 px-5 py-2">
+                    <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-violet-700">
+                      <Clapperboard className="h-3.5 w-3.5" />
+                      Hook Title & Video Caption
+                    </span>
+                  </div>
+                  <div className="space-y-3 px-5 py-3">
+                    {o.hookTitle && (
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-gray-500">
+                            Hook Title
+                          </label>
+                          <button
+                            onClick={() => handleCopy(o.hookTitle, `hook-${i}`)}
+                            className={`text-[10px] font-bold transition-colors ${
+                              copiedKey === `hook-${i}`
+                                ? "text-green-600"
+                                : "text-gray-400 hover:text-gray-700"
+                            }`}
+                          >
+                            {copiedKey === `hook-${i}` ? "Copied!" : "Copy"}
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          value={o.hookTitle}
+                          onChange={(e) => {
+                            const next = [...outputs];
+                            next[i] = {
+                              ...next[i],
+                              hookTitle: e.target.value,
+                            };
+                            setOutputs(next);
+                          }}
+                          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-violet-700 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400"
+                          placeholder="Catchy hook title..."
+                        />
+                      </div>
+                    )}
+                    {o.videoCaption && (
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-gray-500">
+                            Video Caption
+                          </label>
+                          <button
+                            onClick={() =>
+                              handleCopy(o.videoCaption, `vcap-${i}`)
+                            }
+                            className={`text-[10px] font-bold transition-colors ${
+                              copiedKey === `vcap-${i}`
+                                ? "text-green-600"
+                                : "text-gray-400 hover:text-gray-700"
+                            }`}
+                          >
+                            {copiedKey === `vcap-${i}` ? "Copied!" : "Copy"}
+                          </button>
+                        </div>
+                        <textarea
+                          value={o.videoCaption}
+                          onChange={(e) => {
+                            const next = [...outputs];
+                            next[i] = {
+                              ...next[i],
+                              videoCaption: e.target.value,
+                            };
+                            setOutputs(next);
+                          }}
+                          rows={2}
+                          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400"
+                          placeholder="Video caption..."
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Image Prompt Section */}
               <div className="border-b border-gray-100">
