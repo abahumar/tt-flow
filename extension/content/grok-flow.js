@@ -567,7 +567,47 @@ async function downloadAndUploadVideo(videoEl, jobId) {
     }
   }
 
-  // Strategy 4: Canvas capture fallback
+  // Strategy 4: Route through background service worker (no CORS restrictions)
+  if (!videoBlob) {
+    // Collect all candidate URLs we've tried
+    const candidateUrls = [];
+    if (videoSrc && videoSrc.startsWith("http")) candidateUrls.push(videoSrc);
+    document.querySelectorAll("video source").forEach((s) => {
+      const src = s.src || s.getAttribute("src") || "";
+      if (src.startsWith("http") && !candidateUrls.includes(src)) candidateUrls.push(src);
+    });
+    document.querySelectorAll('a[download], a[href*=".mp4"], a[href*="video"]').forEach((a) => {
+      const href = a.href || a.getAttribute("href") || "";
+      if (href.startsWith("http") && !candidateUrls.includes(href)) candidateUrls.push(href);
+    });
+
+    for (const url of candidateUrls) {
+      if (videoBlob) break;
+      console.log("[Grok Flow] Trying background SW fetch:", url.substring(0, 100));
+      try {
+        const result = await new Promise((resolve, reject) => {
+          chrome.runtime.sendMessage(
+            { type: "FETCH_AND_UPLOAD_VIDEO", payload: { jobId, videoUrl: url } },
+            (response) => {
+              if (chrome.runtime.lastError) {
+                reject(new Error(chrome.runtime.lastError.message));
+              } else if (response?.error) {
+                reject(new Error(response.error));
+              } else {
+                resolve(response);
+              }
+            },
+          );
+        });
+        console.log("[Grok Flow] Video fetched & uploaded via background SW:", JSON.stringify(result).substring(0, 200));
+        return result; // Already uploaded by background, return directly
+      } catch (e) {
+        console.warn("[Grok Flow] Background SW fetch failed:", url.substring(0, 80), e.message);
+      }
+    }
+  }
+
+  // Strategy 5: Canvas capture fallback
   if (!videoBlob && videoEl.tagName === "VIDEO") {
     console.log("[Grok Flow] Trying canvas capture...");
     try {
