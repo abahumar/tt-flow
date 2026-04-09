@@ -624,13 +624,46 @@ function handleMessage(message, sender, sendResponse) {
     case "GROK_TEST_SAVE_VIDEO":
       (async () => {
         try {
+          console.log("[TikTok Flow] Grok debug command received:", message.type);
           const grokTabId = await findGrokTab();
+          console.log("[TikTok Flow] findGrokTab returned:", grokTabId);
           if (!grokTabId) {
             sendResponse({
               error: "No Grok tab found. Open grok.com/imagine first.",
             });
             return;
           }
+
+          // PING the content script first to check if it's alive
+          const pingOk = await new Promise((resolve) => {
+            chrome.tabs.sendMessage(grokTabId, { type: "PING" }, (resp) => {
+              if (chrome.runtime.lastError) {
+                console.warn("[TikTok Flow] Grok PING failed:", chrome.runtime.lastError.message);
+                resolve(false);
+              } else {
+                console.log("[TikTok Flow] Grok PING ok:", resp);
+                resolve(true);
+              }
+            });
+          });
+
+          // If PING failed, inject the content script programmatically
+          if (!pingOk) {
+            console.log("[TikTok Flow] Injecting grok-flow.js programmatically...");
+            try {
+              await chrome.scripting.executeScript({
+                target: { tabId: grokTabId },
+                files: ["content/grok-flow.js"],
+              });
+              console.log("[TikTok Flow] Programmatic injection done, waiting 500ms...");
+              await new Promise((r) => setTimeout(r, 500));
+            } catch (injectErr) {
+              console.error("[TikTok Flow] Programmatic injection failed:", injectErr);
+              sendResponse({ error: `Content script injection failed: ${injectErr.message}` });
+              return;
+            }
+          }
+
           const result = await new Promise((resolve) => {
             chrome.tabs.sendMessage(
               grokTabId,
@@ -646,6 +679,7 @@ function handleMessage(message, sender, sendResponse) {
           });
           sendResponse(result);
         } catch (err) {
+          console.error("[TikTok Flow] Grok debug handler error:", err);
           sendResponse({ error: err.message });
         }
       })();
