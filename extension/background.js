@@ -90,7 +90,8 @@ async function healthCheckGrok() {
       const t = setTimeout(() => reject(new Error("timeout")), 5000);
       chrome.tabs.sendMessage(tabId, { type: "PING" }, (r) => {
         clearTimeout(t);
-        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+        if (chrome.runtime.lastError)
+          reject(new Error(chrome.runtime.lastError.message));
         else resolve(r);
       });
     });
@@ -1849,7 +1850,8 @@ async function processVideoGenerationViaGrok(job) {
         });
         console.log(
           "[TikTok Flow] Image fetched for Grok reference (" +
-            Math.round(blob.size / 1024) + "KB)",
+            Math.round(blob.size / 1024) +
+            "KB)",
         );
       }
     } catch (e) {
@@ -1858,7 +1860,9 @@ async function processVideoGenerationViaGrok(job) {
   }
 
   if (!referenceImageDataUrl) {
-    console.warn("[TikTok Flow] No reference image available for Grok video gen");
+    console.warn(
+      "[TikTok Flow] No reference image available for Grok video gen",
+    );
   }
 
   // Ensure Grok tab is open
@@ -1875,11 +1879,7 @@ async function processVideoGenerationViaGrok(job) {
   // Wait for content script to be ready
   const csReady = await waitForContentScript(grokTabId, 15000);
   if (!csReady) {
-    await handleJobFailure(
-      job.id,
-      "Grok content script not responding",
-      job,
-    );
+    await handleJobFailure(job.id, "Grok content script not responding", job);
     return;
   }
 
@@ -1894,7 +1894,8 @@ async function processVideoGenerationViaGrok(job) {
           type: "GROK_GENERATE_VIDEO",
           payload: {
             jobId: job.id,
-            prompt: job.videoPrompt ||
+            prompt:
+              job.videoPrompt ||
               "Create a smooth cinematic video showcasing this product with gentle movement, 9:16 vertical format.",
             referenceImageDataUrl,
             duration: "10s",
@@ -1904,7 +1905,9 @@ async function processVideoGenerationViaGrok(job) {
           if (chrome.runtime.lastError) {
             resolve({ error: chrome.runtime.lastError.message });
           } else {
-            resolve(response || { error: "No response from Grok content script" });
+            resolve(
+              response || { error: "No response from Grok content script" },
+            );
           }
         },
       );
@@ -1920,13 +1923,21 @@ async function processVideoGenerationViaGrok(job) {
         const freshRes = await fetch(`${API_BASE}/jobs/${job.id}`);
         const freshJob = await freshRes.json();
         if (freshJob.status === "ready" || freshJob.status === "posted") {
-          console.log("[TikTok Flow] Grok video job completed (status:", freshJob.status, ")");
-          const { autoPostEnabled } = await chrome.storage.local.get("autoPostEnabled");
+          console.log(
+            "[TikTok Flow] Grok video job completed (status:",
+            freshJob.status,
+            ")",
+          );
+          const { autoPostEnabled } =
+            await chrome.storage.local.get("autoPostEnabled");
           if (autoPostEnabled && freshJob.status === "ready") {
             await fetch(`${API_BASE}/jobs/${job.id}`, {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ status: "posting", startedAt: new Date().toISOString() }),
+              body: JSON.stringify({
+                status: "posting",
+                startedAt: new Date().toISOString(),
+              }),
             });
             const postRes = await fetch(`${API_BASE}/jobs/${job.id}`);
             const postJob = await postRes.json();
@@ -1938,26 +1949,43 @@ async function processVideoGenerationViaGrok(job) {
           console.log("[TikTok Flow] Grok video job already failed.");
           return;
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
 
       if (isChannelClosed) {
         contentScriptActiveJobs.add(job.id);
-        console.log("[TikTok Flow] Grok video: channel closed but content script may still be working.");
+        console.log(
+          "[TikTok Flow] Grok video: channel closed but content script may still be working.",
+        );
         return;
       }
 
-      console.error("[TikTok Flow] Grok video generation failed:", result.error);
+      console.error(
+        "[TikTok Flow] Grok video generation failed:",
+        result.error,
+      );
       await handleJobFailure(job.id, result.error, job);
     } else {
-      console.log("[TikTok Flow] Grok video generation complete:", (result.videoUrl || "").substring(0, 80));
+      console.log(
+        "[TikTok Flow] Grok video generation complete:",
+        (result.videoUrl || "").substring(0, 80),
+      );
 
-      const { autoPostEnabled } = await chrome.storage.local.get("autoPostEnabled");
+      const { autoPostEnabled } =
+        await chrome.storage.local.get("autoPostEnabled");
       if (autoPostEnabled) {
-        console.log("[TikTok Flow] Auto-post enabled, starting posting for job:", job.id);
+        console.log(
+          "[TikTok Flow] Auto-post enabled, starting posting for job:",
+          job.id,
+        );
         await fetch(`${API_BASE}/jobs/${job.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "posting", startedAt: new Date().toISOString() }),
+          body: JSON.stringify({
+            status: "posting",
+            startedAt: new Date().toISOString(),
+          }),
         });
         const freshRes = await fetch(`${API_BASE}/jobs/${job.id}`);
         const freshJob = await freshRes.json();

@@ -14,10 +14,7 @@
 
 const API_BASE = "http://localhost:3000/api";
 
-console.log(
-  "[Grok Flow] Content script loaded on:",
-  window.location.href,
-);
+console.log("[Grok Flow] Content script loaded on:", window.location.href);
 
 // ---- Message listener ----
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -31,7 +28,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     case "PING":
-      sendResponse({ status: "alive", url: window.location.href, engine: "grok" });
+      sendResponse({
+        status: "alive",
+        url: window.location.href,
+        engine: "grok",
+      });
       return true;
 
     default:
@@ -63,7 +64,9 @@ async function waitForNavigation(urlPattern, timeout = 120000) {
     }
     await sleep(1000);
   }
-  throw new Error(`waitForNavigation("${urlPattern}") timed out after ${timeout}ms`);
+  throw new Error(
+    `waitForNavigation("${urlPattern}") timed out after ${timeout}ms`,
+  );
 }
 
 function simulateClick(el) {
@@ -112,40 +115,46 @@ function findRadioByText(text) {
   return null;
 }
 
-// Find the generate/submit button (the arrow SVG button)
+// Find the generate/submit button ("Make video" or "Make image" button)
 function findGenerateButton() {
-  // The generate button is within div.absolute.right-2 or similar submit area
-  // It's a button.group.flex containing an SVG
-  const candidates = document.querySelectorAll("button.group");
-  for (const btn of candidates) {
-    const svg = btn.querySelector("svg");
-    const rect = btn.getBoundingClientRect();
-    if (svg && rect.width > 0 && rect.height > 0) {
-      // Check it's in the bottom-right area (submit position)
-      if (rect.bottom > window.innerHeight * 0.5) {
+  // Strategy 1: aria-label="Make video" or "Make image" (most reliable)
+  const ariaBtn = document.querySelector('button[aria-label="Make video"]') ||
+    document.querySelector('button[aria-label="Make image"]');
+  if (ariaBtn) {
+    console.log("[Grok Flow] Found generate button via aria-label:", ariaBtn.getAttribute("aria-label"));
+    return ariaBtn;
+  }
+
+  // Strategy 2: button.group with SVG arrow icon inside div.relative.z-10
+  const wrappers = document.querySelectorAll("div.relative.z-10");
+  for (const wrapper of wrappers) {
+    const btn = wrapper.querySelector("button.group");
+    if (btn) {
+      const svg = btn.querySelector("svg");
+      const rect = btn.getBoundingClientRect();
+      if (svg && rect.width > 0 && rect.height > 0) {
+        console.log("[Grok Flow] Found generate button via div.relative.z-10 > button.group");
         return btn;
       }
     }
   }
 
-  // Fallback: look for the submit button near the prompt area
-  const promptEl = document.querySelector(".tiptap.ProseMirror");
-  if (promptEl) {
-    let container = promptEl;
-    for (let i = 0; i < 8 && container; i++) {
-      container = container.parentElement;
-      if (!container) break;
-      const btns = container.querySelectorAll("button");
-      for (const btn of btns) {
-        const svg = btn.querySelector("svg");
-        const rect = btn.getBoundingClientRect();
-        if (svg && rect.width >= 30 && rect.height >= 30) {
-          // Skip if it's a mode/radio button
-          if (btn.getAttribute("role") === "radio") continue;
-          if (btn.textContent.trim().match(/^(Image|Video|480p|720p|6s|10s)$/i)) continue;
-          return btn;
-        }
-      }
+  // Strategy 3: button.group.flex with SVG containing the arrow path
+  const candidates = document.querySelectorAll("button.group");
+  for (const btn of candidates) {
+    const path = btn.querySelector('svg path[d*="M6 11L12 5"]');
+    if (path) {
+      console.log("[Grok Flow] Found generate button via arrow SVG path");
+      return btn;
+    }
+    // Fallback: any button.group with SVG in bottom half of page
+    const svg = btn.querySelector("svg");
+    const rect = btn.getBoundingClientRect();
+    if (svg && rect.width > 0 && rect.height > 0 && rect.bottom > window.innerHeight * 0.5) {
+      // Skip radio buttons
+      if (btn.getAttribute("role") === "radio") continue;
+      if (btn.textContent.trim().match(/^(Image|Video|480p|720p|6s|10s)$/i)) continue;
+      return btn;
     }
   }
 
@@ -154,8 +163,10 @@ function findGenerateButton() {
 
 // Find the prompt input (TipTap ProseMirror editor)
 function findPromptInput() {
-  return document.querySelector(".tiptap.ProseMirror") ||
-    document.querySelector('[contenteditable="true"]');
+  return (
+    document.querySelector(".tiptap.ProseMirror") ||
+    document.querySelector('[contenteditable="true"]')
+  );
 }
 
 // Fill prompt via TipTap ProseMirror
@@ -177,7 +188,9 @@ async function fillPrompt(el, text) {
   // Verify
   const content = el.innerText || el.textContent || "";
   if (!content.includes(text.substring(0, 20))) {
-    console.warn("[Grok Flow] execCommand insertion may have failed, trying input event fallback");
+    console.warn(
+      "[Grok Flow] execCommand insertion may have failed, trying input event fallback",
+    );
     // Fallback: direct DOM manipulation + input event
     el.innerHTML = `<p>${text}</p>`;
     el.dispatchEvent(new Event("input", { bubbles: true }));
@@ -198,7 +211,9 @@ async function uploadImage(imageDataUrl) {
   // Convert data URL to File object
   const response = await fetch(imageDataUrl);
   const blob = await response.blob();
-  const file = new File([blob], "reference.jpg", { type: blob.type || "image/jpeg" });
+  const file = new File([blob], "reference.jpg", {
+    type: blob.type || "image/jpeg",
+  });
 
   // Create a DataTransfer to set files on the input
   const dt = new DataTransfer();
@@ -209,7 +224,10 @@ async function uploadImage(imageDataUrl) {
   fileInput.dispatchEvent(new Event("change", { bubbles: true }));
   fileInput.dispatchEvent(new Event("input", { bubbles: true }));
 
-  console.log("[Grok Flow] Image uploaded via file input:", Math.round(blob.size / 1024) + "KB");
+  console.log(
+    "[Grok Flow] Image uploaded via file input:",
+    Math.round(blob.size / 1024) + "KB",
+  );
   await sleep(2000); // Wait for upload to process
 }
 
@@ -228,7 +246,11 @@ async function selectOption(text) {
 
 // Wait for video result on the post page
 async function waitForVideoResult(timeout = 300000) {
-  console.log("[Grok Flow] Waiting for video result (timeout:", timeout / 1000, "s)...");
+  console.log(
+    "[Grok Flow] Waiting for video result (timeout:",
+    timeout / 1000,
+    "s)...",
+  );
   const start = Date.now();
 
   while (Date.now() - start < timeout) {
@@ -281,16 +303,43 @@ async function downloadAndUploadVideo(videoEl, jobId) {
       const resp = await fetch(videoSrc);
       if (resp.ok) {
         videoBlob = await resp.blob();
-        console.log("[Grok Flow] Downloaded via video src:", videoBlob.size, "bytes");
+        console.log(
+          "[Grok Flow] Downloaded via video src:",
+          videoBlob.size,
+          "bytes",
+        );
       }
     } catch (e) {
       console.warn("[Grok Flow] Video src fetch failed:", e.message);
     }
   }
 
-  // Strategy 2: Find download link on the page
+  // Strategy 2: Find <source> tags inside video elements
   if (!videoBlob) {
-    const links = document.querySelectorAll('a[download], a[href*=".mp4"], a[href*="video"]');
+    const sources = document.querySelectorAll("video source");
+    for (const source of sources) {
+      const src = source.src || source.getAttribute("src") || "";
+      if (src && src.startsWith("http")) {
+        console.log("[Grok Flow] Trying video <source> tag:", src.substring(0, 100));
+        try {
+          const resp = await fetch(src);
+          if (resp.ok) {
+            videoBlob = await resp.blob();
+            console.log("[Grok Flow] Downloaded via <source>:", videoBlob.size, "bytes");
+            break;
+          }
+        } catch (e) {
+          console.warn("[Grok Flow] Source fetch failed:", e.message);
+        }
+      }
+    }
+  }
+
+  // Strategy 3: Find download link on the page (fetch it, do NOT click buttons)
+  if (!videoBlob) {
+    const links = document.querySelectorAll(
+      'a[download], a[href*=".mp4"], a[href*="video"]',
+    );
     for (const link of [...links].reverse()) {
       const href = link.href || link.getAttribute("href") || "";
       if (href && href.startsWith("http")) {
@@ -304,40 +353,6 @@ async function downloadAndUploadVideo(videoEl, jobId) {
           }
         } catch (e) {
           console.warn("[Grok Flow] Link fetch failed:", e.message);
-        }
-      }
-    }
-  }
-
-  // Strategy 3: Click the download button to trigger download, then find the blob
-  if (!videoBlob) {
-    console.log("[Grok Flow] Trying to click download button...");
-    // From recording: download button is in div.flex.flex-col button with SVG
-    const actionButtons = document.querySelectorAll("button.inline-flex");
-    for (const btn of actionButtons) {
-      const svg = btn.querySelector("svg");
-      if (svg && btn.getBoundingClientRect().width > 0) {
-        // Check if this might be the download button (typically has a specific icon)
-        const title = btn.getAttribute("title") || btn.getAttribute("aria-label") || "";
-        if (title.toLowerCase().includes("download") || title.toLowerCase().includes("save")) {
-          simulateClick(btn);
-          await sleep(2000);
-          // After clicking, check for new <a> tags
-          const newLinks = document.querySelectorAll('a[download], a[href*=".mp4"]');
-          for (const link of [...newLinks].reverse()) {
-            const href = link.href || "";
-            if (href.startsWith("http")) {
-              try {
-                const resp = await fetch(href);
-                if (resp.ok) {
-                  videoBlob = await resp.blob();
-                  console.log("[Grok Flow] Downloaded after button click:", videoBlob.size, "bytes");
-                  break;
-                }
-              } catch {}
-            }
-          }
-          if (videoBlob) break;
         }
       }
     }
@@ -359,7 +374,11 @@ async function downloadAndUploadVideo(videoEl, jobId) {
   }
 
   // Upload to backend via background service worker
-  console.log("[Grok Flow] Uploading video to backend:", videoBlob.size, "bytes");
+  console.log(
+    "[Grok Flow] Uploading video to backend:",
+    videoBlob.size,
+    "bytes",
+  );
 
   const arrayBuffer = await videoBlob.arrayBuffer();
   const uint8Array = new Uint8Array(arrayBuffer);
@@ -466,7 +485,12 @@ async function updateJobStatus(jobId, data) {
 // MAIN: Generate video from uploaded image on Grok
 // =========================================================
 
-async function generateVideo({ jobId, prompt, referenceImageDataUrl, duration }) {
+async function generateVideo({
+  jobId,
+  prompt,
+  referenceImageDataUrl,
+  duration,
+}) {
   console.log("[Grok Flow] === Starting video generation for job:", jobId);
   console.log("[Grok Flow] Prompt:", (prompt || "").substring(0, 100) + "...");
   console.log("[Grok Flow] Reference image provided:", !!referenceImageDataUrl);
@@ -475,7 +499,9 @@ async function generateVideo({ jobId, prompt, referenceImageDataUrl, duration })
   try {
     // Step 1: Ensure we're on grok.com/imagine
     if (!window.location.href.includes("grok.com/imagine")) {
-      throw new Error("Not on Grok Imagine page. Navigate to https://grok.com/imagine first.");
+      throw new Error(
+        "Not on Grok Imagine page. Navigate to https://grok.com/imagine first.",
+      );
     }
 
     // If we're on a post page, navigate back to imagine home
@@ -495,12 +521,16 @@ async function generateVideo({ jobId, prompt, referenceImageDataUrl, duration })
       const uploadBtn = findButtonByText("Upload or drop images");
       if (uploadBtn) {
         // Don't click the button — directly set the file input
-        console.log("[Grok Flow] Found upload button, using file input directly");
+        console.log(
+          "[Grok Flow] Found upload button, using file input directly",
+        );
       }
 
       await uploadImage(referenceImageDataUrl);
     } else {
-      console.warn("[Grok Flow] No reference image — video will use prompt only");
+      console.warn(
+        "[Grok Flow] No reference image — video will use prompt only",
+      );
     }
 
     // Step 3: Fill the prompt
@@ -516,13 +546,19 @@ async function generateVideo({ jobId, prompt, referenceImageDataUrl, duration })
 
     simulateClick(promptEl);
     await sleep(300);
-    await fillPrompt(promptEl, prompt || "Create a smooth cinematic video with gentle movement. 9:16 vertical format.");
+    await fillPrompt(
+      promptEl,
+      prompt ||
+        "Create a smooth cinematic video with gentle movement. 9:16 vertical format.",
+    );
 
     // Step 4: Select "Video" mode
     console.log("[Grok Flow] Selecting Video mode...");
     const videoSelected = await selectOption("Video");
     if (!videoSelected) {
-      console.warn("[Grok Flow] Could not find Video button — may already be in Video mode");
+      console.warn(
+        "[Grok Flow] Could not find Video button — may already be in Video mode",
+      );
     }
     await sleep(500);
 
@@ -550,7 +586,9 @@ async function generateVideo({ jobId, prompt, referenceImageDataUrl, duration })
     }
 
     simulateClick(generateBtn);
-    console.log("[Grok Flow] Generate clicked! Waiting for redirect to post page...");
+    console.log(
+      "[Grok Flow] Generate clicked! Waiting for redirect to post page...",
+    );
 
     // Step 8: Wait for navigation to post page
     await sleep(3000);
@@ -569,7 +607,10 @@ async function generateVideo({ jobId, prompt, referenceImageDataUrl, duration })
       videoUrl = uploadResult.videoUrl;
       console.log("[Grok Flow] Video downloaded and uploaded:", videoUrl);
     } catch (downloadErr) {
-      console.warn("[Grok Flow] Download failed, trying raw URL:", downloadErr.message);
+      console.warn(
+        "[Grok Flow] Download failed, trying raw URL:",
+        downloadErr.message,
+      );
       videoUrl = videoEl.src || videoEl.querySelector?.("source")?.src;
       if (!videoUrl) {
         throw new Error("Video appeared but could not extract or download it");
@@ -577,7 +618,10 @@ async function generateVideo({ jobId, prompt, referenceImageDataUrl, duration })
     }
 
     // Step 11: Update job status
-    console.log("[Grok Flow] Video generation SUCCESS:", (videoUrl || "").substring(0, 100));
+    console.log(
+      "[Grok Flow] Video generation SUCCESS:",
+      (videoUrl || "").substring(0, 100),
+    );
     await updateJobStatus(jobId, { status: "ready", videoUrl });
 
     // Notify background service worker
