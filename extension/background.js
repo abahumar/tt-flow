@@ -748,6 +748,55 @@ function handleMessage(message, sender, sendResponse) {
       })();
       return true;
 
+    case "FETCH_AND_UPLOAD_VIDEO":
+      // Fetch video from URL (no CORS in service worker) and upload to backend
+      // Used by Grok content script when assets.grok.com blocks content script fetch
+      (async () => {
+        try {
+          const { jobId, videoUrl } = payload;
+          console.log("[TikTok Flow] FETCH_AND_UPLOAD_VIDEO:", videoUrl?.substring(0, 100), "for job:", jobId);
+
+          const resp = await fetch(videoUrl);
+          if (!resp.ok) {
+            sendResponse({ error: `Fetch failed (${resp.status}): ${resp.statusText}` });
+            return;
+          }
+
+          const blob = await resp.blob();
+          console.log("[TikTok Flow] Fetched video blob:", blob.size, "bytes, type:", blob.type);
+
+          if (blob.size < 1000) {
+            sendResponse({ error: `Video too small (${blob.size} bytes)` });
+            return;
+          }
+
+          const formData = new FormData();
+          formData.append(
+            "video",
+            new File([blob], "video.mp4", { type: blob.type || "video/mp4" }),
+          );
+
+          const uploadResp = await fetch(`${API_BASE}/jobs/${jobId}/video`, {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!uploadResp.ok) {
+            const errText = await uploadResp.text();
+            sendResponse({ error: `Upload failed (${uploadResp.status}): ${errText}` });
+            return;
+          }
+
+          const result = await uploadResp.json();
+          console.log("[TikTok Flow] Video fetched & uploaded:", JSON.stringify(result));
+          sendResponse(result);
+        } catch (err) {
+          console.error("[TikTok Flow] FETCH_AND_UPLOAD_VIDEO error:", err);
+          sendResponse({ error: err.message });
+        }
+      })();
+      return true;
+
     case "UPLOAD_IMAGE":
       // Upload generated image from content script to backend (avoids CORS)
       (async () => {

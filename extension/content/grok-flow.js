@@ -321,7 +321,10 @@ function findGenerateButton() {
     document.querySelector('button[aria-label="Make video"]') ||
     document.querySelector('button[aria-label="Make image"]');
   if (makeBtn) {
-    console.log("[Grok Flow] Found generate button via aria-label:", makeBtn.getAttribute("aria-label"));
+    console.log(
+      "[Grok Flow] Found generate button via aria-label:",
+      makeBtn.getAttribute("aria-label"),
+    );
     return makeBtn;
   }
 
@@ -344,7 +347,12 @@ function findGenerateButton() {
       if (btn.getAttribute("role") === "radio") return false;
       const svg = btn.querySelector("svg");
       const rect = btn.getBoundingClientRect();
-      return svg && rect.width > 0 && rect.height > 0 && rect.bottom > window.innerHeight * 0.5;
+      return (
+        svg &&
+        rect.width > 0 &&
+        rect.height > 0 &&
+        rect.bottom > window.innerHeight * 0.5
+      );
     })
     .sort((a, b) => b.getBoundingClientRect().x - a.getBoundingClientRect().x);
 
@@ -490,84 +498,78 @@ async function downloadAndUploadVideo(videoEl, jobId) {
 
   let videoBlob = null;
 
-  // Strategy 1: Fetch the video element's src
-  const videoSrc = videoEl.src || videoEl.querySelector?.("source")?.src;
-  if (videoSrc) {
-    console.log("[Grok Flow] Fetching video src:", videoSrc.substring(0, 100));
+  // Collect all candidate URLs
+  const videoSrc = videoEl.src || videoEl.querySelector?.("source")?.src || "";
+  const candidateUrls = [];
+  if (videoSrc && videoSrc.startsWith("http")) candidateUrls.push(videoSrc);
+
+  // Also check <source> tags
+  const sources = document.querySelectorAll("video source");
+  for (const source of sources) {
+    const src = source.src || source.getAttribute("src") || "";
+    if (src && src.startsWith("http") && !candidateUrls.includes(src)) {
+      candidateUrls.push(src);
+    }
+  }
+
+  // Also check download links
+  const links = document.querySelectorAll('a[download], a[href*=".mp4"], a[href*="video"]');
+  for (const link of [...links].reverse()) {
+    const href = link.href || link.getAttribute("href") || "";
+    if (href && href.startsWith("http") && !candidateUrls.includes(href)) {
+      candidateUrls.push(href);
+    }
+  }
+
+  console.log("[Grok Flow] Candidate video URLs:", candidateUrls.length);
+
+  // Strategy 1: Try fetching directly from content script (may fail due to CORS)
+  for (const url of candidateUrls) {
+    if (videoBlob) break;
+    console.log("[Grok Flow] Trying direct fetch:", url.substring(0, 100));
     try {
-      const resp = await fetch(videoSrc);
+      const resp = await fetch(url);
       if (resp.ok) {
         videoBlob = await resp.blob();
-        console.log(
-          "[Grok Flow] Downloaded via video src:",
-          videoBlob.size,
-          "bytes",
-        );
+        console.log("[Grok Flow] Downloaded directly:", videoBlob.size, "bytes");
       }
     } catch (e) {
-      console.warn("[Grok Flow] Video src fetch failed:", e.message);
+      console.warn("[Grok Flow] Direct fetch failed (CORS?):", e.message);
     }
   }
 
-  // Strategy 2: Find <source> tags inside video elements
-  if (!videoBlob) {
-    const sources = document.querySelectorAll("video source");
-    for (const source of sources) {
-      const src = source.src || source.getAttribute("src") || "";
-      if (src && src.startsWith("http")) {
-        console.log(
-          "[Grok Flow] Trying video <source> tag:",
-          src.substring(0, 100),
-        );
-        try {
-          const resp = await fetch(src);
-          if (resp.ok) {
-            videoBlob = await resp.blob();
-            console.log(
-              "[Grok Flow] Downloaded via <source>:",
-              videoBlob.size,
-              "bytes",
-            );
-            break;
-          }
-        } catch (e) {
-          console.warn("[Grok Flow] Source fetch failed:", e.message);
-        }
+  // Strategy 2: Route through background service worker (no CORS restrictions)
+  if (!videoBlob && candidateUrls.length > 0) {
+    console.log("[Grok Flow] Trying download via background service worker...");
+    for (const url of candidateUrls) {
+      if (videoBlob) break;
+      try {
+        const result = await new Promise((resolve, reject) => {
+          chrome.runtime.sendMessage(
+            {
+              type: "FETCH_AND_UPLOAD_VIDEO",
+              payload: { jobId, videoUrl: url },
+            },
+            (response) => {
+              if (chrome.runtime.lastError) {
+                reject(new Error(chrome.runtime.lastError.message));
+              } else if (response?.error) {
+                reject(new Error(response.error));
+              } else {
+                resolve(response);
+              }
+            },
+          );
+        });
+        console.log("[Grok Flow] Video downloaded & uploaded via background:", JSON.stringify(result).substring(0, 200));
+        return result; // Already uploaded by background, return directly
+      } catch (e) {
+        console.warn("[Grok Flow] Background fetch failed for:", url.substring(0, 80), e.message);
       }
     }
   }
 
-  // Strategy 3: Find download link on the page (fetch it, do NOT click buttons)
-  if (!videoBlob) {
-    const links = document.querySelectorAll(
-      'a[download], a[href*=".mp4"], a[href*="video"]',
-    );
-    for (const link of [...links].reverse()) {
-      const href = link.href || link.getAttribute("href") || "";
-      if (href && href.startsWith("http")) {
-        console.log(
-          "[Grok Flow] Trying download link:",
-          href.substring(0, 100),
-        );
-        try {
-          const resp = await fetch(href);
-          if (resp.ok) {
-            videoBlob = await resp.blob();
-            console.log(
-              "[Grok Flow] Downloaded via link:",
-              videoBlob.size,
-              "bytes",
-            );
-            break;
-          }
-        } catch (e) {
-          console.warn("[Grok Flow] Link fetch failed:", e.message);
-        }
-      }
-    }
-  }
-
-  // Strategy 4: Canvas capture fallback
+  // Strategy 3: Canvas capture fallback
   if (!videoBlob && videoEl.tagName === "VIDEO") {
     console.log("[Grok Flow] Trying canvas capture...");
     try {
@@ -579,7 +581,7 @@ async function downloadAndUploadVideo(videoEl, jobId) {
   }
 
   if (!videoBlob || videoBlob.size < 1000) {
-    throw new Error("Could not download video. All strategies failed.");
+    throw new Error("Could not download video. All strategies failed. URLs tried: " + candidateUrls.join(", "));
   }
 
   // Upload to backend via background service worker
