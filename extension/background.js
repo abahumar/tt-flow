@@ -615,6 +615,40 @@ function handleMessage(message, sender, sendResponse) {
       })();
       return true;
 
+    // ---- Grok Debug Commands ----
+    case "GROK_INSPECT_DOM":
+    case "GROK_TEST_CLICK_GENERATE":
+    case "GROK_TEST_FILL_PROMPT":
+    case "GROK_TEST_SELECT_VIDEO":
+    case "GROK_TEST_DOWNLOAD_VIDEO":
+    case "GROK_TEST_SAVE_VIDEO":
+      (async () => {
+        try {
+          const grokTabId = await findGrokTab();
+          if (!grokTabId) {
+            sendResponse({ error: "No Grok tab found. Open grok.com/imagine first." });
+            return;
+          }
+          const result = await new Promise((resolve) => {
+            chrome.tabs.sendMessage(
+              grokTabId,
+              { type: message.type, payload: message.payload || {} },
+              (response) => {
+                if (chrome.runtime.lastError) {
+                  resolve({ error: chrome.runtime.lastError.message });
+                } else {
+                  resolve(response || { error: "No response from Grok tab" });
+                }
+              },
+            );
+          });
+          sendResponse(result);
+        } catch (err) {
+          sendResponse({ error: err.message });
+        }
+      })();
+      return true;
+
     case "START_POSTING":
       (async () => {
         try {

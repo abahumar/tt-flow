@@ -355,6 +355,44 @@ document
   .getElementById("testInspectDomBtn")
   .addEventListener("click", () => sendTestToFlowTab("TEST_INSPECT_DOM"));
 
+// ---- Test Grok buttons ----
+function sendTestToGrokTab(testType, extraPayload = {}) {
+  const resultEl = document.getElementById("grokTestResult");
+  resultEl.innerHTML =
+    '<div style="font-size:11px;color:#6b7280">Running Grok test...</div>';
+
+  chrome.runtime.sendMessage(
+    { type: testType, payload: extraPayload },
+    (response) => {
+      if (chrome.runtime.lastError) {
+        resultEl.innerHTML = `<div style="font-size:11px;color:#dc2626">Error: ${chrome.runtime.lastError.message}</div>`;
+        return;
+      }
+      if (response?.error) {
+        // Show details if available
+        let details = "";
+        if (response.details) {
+          details = `<pre style="font-size:10px;color:#6b7280;max-height:150px;overflow:auto;margin-top:4px;white-space:pre-wrap">${escapeHtml(JSON.stringify(response.details, null, 1))}</pre>`;
+        }
+        resultEl.innerHTML = `<div style="font-size:11px;color:#dc2626">❌ ${escapeHtml(response.error)}</div>${details}`;
+      } else if (response?.generateBtnFound !== undefined) {
+        // inspectDOM response
+        resultEl.innerHTML = `<pre style="font-size:10px;color:#059669;max-height:200px;overflow:auto;white-space:pre-wrap">${escapeHtml(JSON.stringify(response, null, 1))}</pre>`;
+      } else {
+        const msg = response?.message || JSON.stringify(response).substring(0, 300);
+        resultEl.innerHTML = `<div style="font-size:11px;color:#059669">✅ ${escapeHtml(msg)}</div>`;
+      }
+    },
+  );
+}
+
+document.getElementById("grokInspectBtn").addEventListener("click", () => sendTestToGrokTab("GROK_INSPECT_DOM"));
+document.getElementById("grokTestFillBtn").addEventListener("click", () => sendTestToGrokTab("GROK_TEST_FILL_PROMPT"));
+document.getElementById("grokTestVideoModeBtn").addEventListener("click", () => sendTestToGrokTab("GROK_TEST_SELECT_VIDEO"));
+document.getElementById("grokTestClickGenBtn").addEventListener("click", () => sendTestToGrokTab("GROK_TEST_CLICK_GENERATE"));
+document.getElementById("grokTestFindVideoBtn").addEventListener("click", () => sendTestToGrokTab("GROK_TEST_DOWNLOAD_VIDEO"));
+document.getElementById("grokTestSaveVideoBtn").addEventListener("click", () => sendTestToGrokTab("GROK_TEST_SAVE_VIDEO"));
+
 // Event delegation for dynamically rendered buttons
 document.body.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-action]");

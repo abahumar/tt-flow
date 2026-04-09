@@ -27,6 +27,122 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         .catch((err) => sendResponse({ error: err.message }));
       return true;
 
+    case "GROK_INSPECT_DOM":
+      sendResponse(inspectGrokDOM());
+      return true;
+
+    case "GROK_TEST_CLICK_GENERATE":
+      (async () => {
+        try {
+          const btn = findGenerateButton();
+          if (!btn) {
+            sendResponse({ error: "Generate button NOT FOUND. See console for DOM details.", details: inspectGrokDOM() });
+            return;
+          }
+          const rect = btn.getBoundingClientRect();
+          const label = btn.getAttribute("aria-label") || btn.textContent.trim().substring(0, 50);
+          simulateClick(btn);
+          sendResponse({
+            message: `Clicked generate button: "${label}" at (${Math.round(rect.x)}, ${Math.round(rect.y)}) ${Math.round(rect.width)}x${Math.round(rect.height)}`,
+          });
+        } catch (e) {
+          sendResponse({ error: e.message });
+        }
+      })();
+      return true;
+
+    case "GROK_TEST_FILL_PROMPT":
+      (async () => {
+        try {
+          const promptEl = findPromptInput();
+          if (!promptEl) {
+            sendResponse({ error: "Prompt input NOT FOUND (.tiptap.ProseMirror)" });
+            return;
+          }
+          simulateClick(promptEl);
+          await sleep(300);
+          await fillPrompt(promptEl, payload?.text || "Test prompt from debug panel. Gentle product movement, minimal motion.");
+          sendResponse({ message: "Prompt filled successfully" });
+        } catch (e) {
+          sendResponse({ error: e.message });
+        }
+      })();
+      return true;
+
+    case "GROK_TEST_SELECT_VIDEO":
+      (async () => {
+        try {
+          const results = [];
+          const v = await selectOption("Video"); results.push(`Video: ${v}`);
+          await sleep(300);
+          const r = await selectOption("720p"); results.push(`720p: ${r}`);
+          await sleep(300);
+          const d = await selectOption("10s"); results.push(`10s: ${d}`);
+          sendResponse({ message: results.join(" | ") });
+        } catch (e) {
+          sendResponse({ error: e.message });
+        }
+      })();
+      return true;
+
+    case "GROK_TEST_DOWNLOAD_VIDEO":
+      // Test: find video on current post page and upload to backend
+      (async () => {
+        try {
+          const videos = document.querySelectorAll("video");
+          if (videos.length === 0) {
+            sendResponse({ error: "No <video> elements found on page" });
+            return;
+          }
+          let bestVideo = null;
+          for (const v of videos) {
+            const src = v.src || v.querySelector("source")?.src || "";
+            const rect = v.getBoundingClientRect();
+            if (rect.width > 50) {
+              bestVideo = v;
+              if (src) break; // prefer one with src
+            }
+          }
+          if (!bestVideo) {
+            sendResponse({ error: "No visible video element found" });
+            return;
+          }
+          const src = bestVideo.src || bestVideo.querySelector("source")?.src || "";
+          sendResponse({
+            message: `Found video: ${src.substring(0, 120)} (${Math.round(bestVideo.getBoundingClientRect().width)}x${Math.round(bestVideo.getBoundingClientRect().height)})`,
+            src,
+          });
+        } catch (e) {
+          sendResponse({ error: e.message });
+        }
+      })();
+      return true;
+
+    case "GROK_TEST_SAVE_VIDEO":
+      // Actually download the video and upload to backend
+      (async () => {
+        try {
+          const jobId = payload?.jobId || "test-" + Date.now();
+          const videos = document.querySelectorAll("video");
+          let videoEl = null;
+          for (const v of videos) {
+            if (v.getBoundingClientRect().width > 50) {
+              videoEl = v;
+              break;
+            }
+          }
+          if (!videoEl) {
+            sendResponse({ error: "No video element found" });
+            return;
+          }
+          const result = await downloadAndUploadVideo(videoEl, jobId);
+          sendResponse({ message: `Video saved to webapp! ${JSON.stringify(result).substring(0, 200)}` });
+        } catch (e) {
+          sendResponse({ error: `Save failed: ${e.message}` });
+        }
+      })();
+      return true;
+
     case "PING":
       sendResponse({
         status: "alive",
@@ -39,6 +155,57 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return false;
   }
 });
+
+// ---- DOM Inspector for debugging ----
+function inspectGrokDOM() {
+  const promptEl = document.querySelector(".tiptap.ProseMirror");
+  const fileInput = document.querySelector('input[name="files"]');
+  const generateBtn = findGenerateButton();
+
+  // Find all button.group elements for debugging
+  const groupBtns = [...document.querySelectorAll("button.group")].map((btn) => {
+    const rect = btn.getBoundingClientRect();
+    return {
+      ariaLabel: btn.getAttribute("aria-label") || "",
+      role: btn.getAttribute("role") || "",
+      text: btn.textContent.trim().substring(0, 40),
+      classes: btn.className.substring(0, 80),
+      rect: `${Math.round(rect.x)},${Math.round(rect.y)} ${Math.round(rect.width)}x${Math.round(rect.height)}`,
+      visible: rect.width > 0 && rect.height > 0,
+      hasSvg: !!btn.querySelector("svg"),
+    };
+  });
+
+  // Find all radio buttons
+  const radioBtns = [...document.querySelectorAll('button[role="radio"], button')].filter(
+    (b) => ["Image", "Video", "480p", "720p", "6s", "10s"].some(
+      (t) => b.textContent.trim() === t
+    )
+  ).map((b) => ({
+    text: b.textContent.trim(),
+    role: b.getAttribute("role"),
+    ariaChecked: b.getAttribute("aria-checked"),
+    dataState: b.getAttribute("data-state"),
+  }));
+
+  const videos = [...document.querySelectorAll("video")].map((v) => ({
+    src: (v.src || "").substring(0, 100),
+    sourceSrc: (v.querySelector("source")?.src || "").substring(0, 100),
+    width: Math.round(v.getBoundingClientRect().width),
+  }));
+
+  return {
+    url: window.location.href,
+    promptFound: !!promptEl,
+    promptContent: promptEl ? (promptEl.innerText || "").substring(0, 60) : null,
+    fileInputFound: !!fileInput,
+    generateBtnFound: !!generateBtn,
+    generateBtnLabel: generateBtn?.getAttribute("aria-label") || null,
+    groupButtons: groupBtns,
+    modeRadios: radioBtns,
+    videos,
+  };
+}
 
 // ---- Utility helpers (self-contained, no dependency on dom-helpers.js) ----
 
@@ -118,10 +285,14 @@ function findRadioByText(text) {
 // Find the generate/submit button ("Make video" or "Make image" button)
 function findGenerateButton() {
   // Strategy 1: aria-label="Make video" or "Make image" (most reliable)
-  const ariaBtn = document.querySelector('button[aria-label="Make video"]') ||
+  const ariaBtn =
+    document.querySelector('button[aria-label="Make video"]') ||
     document.querySelector('button[aria-label="Make image"]');
   if (ariaBtn) {
-    console.log("[Grok Flow] Found generate button via aria-label:", ariaBtn.getAttribute("aria-label"));
+    console.log(
+      "[Grok Flow] Found generate button via aria-label:",
+      ariaBtn.getAttribute("aria-label"),
+    );
     return ariaBtn;
   }
 
@@ -133,7 +304,9 @@ function findGenerateButton() {
       const svg = btn.querySelector("svg");
       const rect = btn.getBoundingClientRect();
       if (svg && rect.width > 0 && rect.height > 0) {
-        console.log("[Grok Flow] Found generate button via div.relative.z-10 > button.group");
+        console.log(
+          "[Grok Flow] Found generate button via div.relative.z-10 > button.group",
+        );
         return btn;
       }
     }
@@ -150,10 +323,16 @@ function findGenerateButton() {
     // Fallback: any button.group with SVG in bottom half of page
     const svg = btn.querySelector("svg");
     const rect = btn.getBoundingClientRect();
-    if (svg && rect.width > 0 && rect.height > 0 && rect.bottom > window.innerHeight * 0.5) {
+    if (
+      svg &&
+      rect.width > 0 &&
+      rect.height > 0 &&
+      rect.bottom > window.innerHeight * 0.5
+    ) {
       // Skip radio buttons
       if (btn.getAttribute("role") === "radio") continue;
-      if (btn.textContent.trim().match(/^(Image|Video|480p|720p|6s|10s)$/i)) continue;
+      if (btn.textContent.trim().match(/^(Image|Video|480p|720p|6s|10s)$/i))
+        continue;
       return btn;
     }
   }
@@ -320,12 +499,19 @@ async function downloadAndUploadVideo(videoEl, jobId) {
     for (const source of sources) {
       const src = source.src || source.getAttribute("src") || "";
       if (src && src.startsWith("http")) {
-        console.log("[Grok Flow] Trying video <source> tag:", src.substring(0, 100));
+        console.log(
+          "[Grok Flow] Trying video <source> tag:",
+          src.substring(0, 100),
+        );
         try {
           const resp = await fetch(src);
           if (resp.ok) {
             videoBlob = await resp.blob();
-            console.log("[Grok Flow] Downloaded via <source>:", videoBlob.size, "bytes");
+            console.log(
+              "[Grok Flow] Downloaded via <source>:",
+              videoBlob.size,
+              "bytes",
+            );
             break;
           }
         } catch (e) {
@@ -343,12 +529,19 @@ async function downloadAndUploadVideo(videoEl, jobId) {
     for (const link of [...links].reverse()) {
       const href = link.href || link.getAttribute("href") || "";
       if (href && href.startsWith("http")) {
-        console.log("[Grok Flow] Trying download link:", href.substring(0, 100));
+        console.log(
+          "[Grok Flow] Trying download link:",
+          href.substring(0, 100),
+        );
         try {
           const resp = await fetch(href);
           if (resp.ok) {
             videoBlob = await resp.blob();
-            console.log("[Grok Flow] Downloaded via link:", videoBlob.size, "bytes");
+            console.log(
+              "[Grok Flow] Downloaded via link:",
+              videoBlob.size,
+              "bytes",
+            );
             break;
           }
         } catch (e) {
