@@ -626,7 +626,9 @@ function handleMessage(message, sender, sendResponse) {
         try {
           const grokTabId = await findGrokTab();
           if (!grokTabId) {
-            sendResponse({ error: "No Grok tab found. Open grok.com/imagine first." });
+            sendResponse({
+              error: "No Grok tab found. Open grok.com/imagine first.",
+            });
             return;
           }
           const result = await new Promise((resolve) => {

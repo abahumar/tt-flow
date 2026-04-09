@@ -379,19 +379,36 @@ function sendTestToGrokTab(testType, extraPayload = {}) {
         // inspectDOM response
         resultEl.innerHTML = `<pre style="font-size:10px;color:#059669;max-height:200px;overflow:auto;white-space:pre-wrap">${escapeHtml(JSON.stringify(response, null, 1))}</pre>`;
       } else {
-        const msg = response?.message || JSON.stringify(response).substring(0, 300);
+        const msg =
+          response?.message || JSON.stringify(response).substring(0, 300);
         resultEl.innerHTML = `<div style="font-size:11px;color:#059669">✅ ${escapeHtml(msg)}</div>`;
       }
     },
   );
 }
 
-document.getElementById("grokInspectBtn").addEventListener("click", () => sendTestToGrokTab("GROK_INSPECT_DOM"));
-document.getElementById("grokTestFillBtn").addEventListener("click", () => sendTestToGrokTab("GROK_TEST_FILL_PROMPT"));
-document.getElementById("grokTestVideoModeBtn").addEventListener("click", () => sendTestToGrokTab("GROK_TEST_SELECT_VIDEO"));
-document.getElementById("grokTestClickGenBtn").addEventListener("click", () => sendTestToGrokTab("GROK_TEST_CLICK_GENERATE"));
-document.getElementById("grokTestFindVideoBtn").addEventListener("click", () => sendTestToGrokTab("GROK_TEST_DOWNLOAD_VIDEO"));
-document.getElementById("grokTestSaveVideoBtn").addEventListener("click", () => sendTestToGrokTab("GROK_TEST_SAVE_VIDEO"));
+document
+  .getElementById("grokInspectBtn")
+  .addEventListener("click", () => sendTestToGrokTab("GROK_INSPECT_DOM"));
+document
+  .getElementById("grokTestFillBtn")
+  .addEventListener("click", () => sendTestToGrokTab("GROK_TEST_FILL_PROMPT"));
+document
+  .getElementById("grokTestVideoModeBtn")
+  .addEventListener("click", () => sendTestToGrokTab("GROK_TEST_SELECT_VIDEO"));
+document
+  .getElementById("grokTestClickGenBtn")
+  .addEventListener("click", () =>
+    sendTestToGrokTab("GROK_TEST_CLICK_GENERATE"),
+  );
+document
+  .getElementById("grokTestFindVideoBtn")
+  .addEventListener("click", () =>
+    sendTestToGrokTab("GROK_TEST_DOWNLOAD_VIDEO"),
+  );
+document
+  .getElementById("grokTestSaveVideoBtn")
+  .addEventListener("click", () => sendTestToGrokTab("GROK_TEST_SAVE_VIDEO"));
 
 // Event delegation for dynamically rendered buttons
 document.body.addEventListener("click", (e) => {

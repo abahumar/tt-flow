@@ -36,11 +36,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         try {
           const btn = findGenerateButton();
           if (!btn) {
-            sendResponse({ error: "Generate button NOT FOUND. See console for DOM details.", details: inspectGrokDOM() });
+            sendResponse({
+              error: "Generate button NOT FOUND. See console for DOM details.",
+              details: inspectGrokDOM(),
+            });
             return;
           }
           const rect = btn.getBoundingClientRect();
-          const label = btn.getAttribute("aria-label") || btn.textContent.trim().substring(0, 50);
+          const label =
+            btn.getAttribute("aria-label") ||
+            btn.textContent.trim().substring(0, 50);
           simulateClick(btn);
           sendResponse({
             message: `Clicked generate button: "${label}" at (${Math.round(rect.x)}, ${Math.round(rect.y)}) ${Math.round(rect.width)}x${Math.round(rect.height)}`,
@@ -56,12 +61,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         try {
           const promptEl = findPromptInput();
           if (!promptEl) {
-            sendResponse({ error: "Prompt input NOT FOUND (.tiptap.ProseMirror)" });
+            sendResponse({
+              error: "Prompt input NOT FOUND (.tiptap.ProseMirror)",
+            });
             return;
           }
           simulateClick(promptEl);
           await sleep(300);
-          await fillPrompt(promptEl, payload?.text || "Test prompt from debug panel. Gentle product movement, minimal motion.");
+          await fillPrompt(
+            promptEl,
+            payload?.text ||
+              "Test prompt from debug panel. Gentle product movement, minimal motion.",
+          );
           sendResponse({ message: "Prompt filled successfully" });
         } catch (e) {
           sendResponse({ error: e.message });
@@ -73,11 +84,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       (async () => {
         try {
           const results = [];
-          const v = await selectOption("Video"); results.push(`Video: ${v}`);
+          const v = await selectOption("Video");
+          results.push(`Video: ${v}`);
           await sleep(300);
-          const r = await selectOption("720p"); results.push(`720p: ${r}`);
+          const r = await selectOption("720p");
+          results.push(`720p: ${r}`);
           await sleep(300);
-          const d = await selectOption("10s"); results.push(`10s: ${d}`);
+          const d = await selectOption("10s");
+          results.push(`10s: ${d}`);
           sendResponse({ message: results.join(" | ") });
         } catch (e) {
           sendResponse({ error: e.message });
@@ -107,7 +121,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse({ error: "No visible video element found" });
             return;
           }
-          const src = bestVideo.src || bestVideo.querySelector("source")?.src || "";
+          const src =
+            bestVideo.src || bestVideo.querySelector("source")?.src || "";
           sendResponse({
             message: `Found video: ${src.substring(0, 120)} (${Math.round(bestVideo.getBoundingClientRect().width)}x${Math.round(bestVideo.getBoundingClientRect().height)})`,
             src,
@@ -136,7 +151,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             return;
           }
           const result = await downloadAndUploadVideo(videoEl, jobId);
-          sendResponse({ message: `Video saved to webapp! ${JSON.stringify(result).substring(0, 200)}` });
+          sendResponse({
+            message: `Video saved to webapp! ${JSON.stringify(result).substring(0, 200)}`,
+          });
         } catch (e) {
           sendResponse({ error: `Save failed: ${e.message}` });
         }
@@ -163,30 +180,36 @@ function inspectGrokDOM() {
   const generateBtn = findGenerateButton();
 
   // Find all button.group elements for debugging
-  const groupBtns = [...document.querySelectorAll("button.group")].map((btn) => {
-    const rect = btn.getBoundingClientRect();
-    return {
-      ariaLabel: btn.getAttribute("aria-label") || "",
-      role: btn.getAttribute("role") || "",
-      text: btn.textContent.trim().substring(0, 40),
-      classes: btn.className.substring(0, 80),
-      rect: `${Math.round(rect.x)},${Math.round(rect.y)} ${Math.round(rect.width)}x${Math.round(rect.height)}`,
-      visible: rect.width > 0 && rect.height > 0,
-      hasSvg: !!btn.querySelector("svg"),
-    };
-  });
+  const groupBtns = [...document.querySelectorAll("button.group")].map(
+    (btn) => {
+      const rect = btn.getBoundingClientRect();
+      return {
+        ariaLabel: btn.getAttribute("aria-label") || "",
+        role: btn.getAttribute("role") || "",
+        text: btn.textContent.trim().substring(0, 40),
+        classes: btn.className.substring(0, 80),
+        rect: `${Math.round(rect.x)},${Math.round(rect.y)} ${Math.round(rect.width)}x${Math.round(rect.height)}`,
+        visible: rect.width > 0 && rect.height > 0,
+        hasSvg: !!btn.querySelector("svg"),
+      };
+    },
+  );
 
   // Find all radio buttons
-  const radioBtns = [...document.querySelectorAll('button[role="radio"], button')].filter(
-    (b) => ["Image", "Video", "480p", "720p", "6s", "10s"].some(
-      (t) => b.textContent.trim() === t
+  const radioBtns = [
+    ...document.querySelectorAll('button[role="radio"], button'),
+  ]
+    .filter((b) =>
+      ["Image", "Video", "480p", "720p", "6s", "10s"].some(
+        (t) => b.textContent.trim() === t,
+      ),
     )
-  ).map((b) => ({
-    text: b.textContent.trim(),
-    role: b.getAttribute("role"),
-    ariaChecked: b.getAttribute("aria-checked"),
-    dataState: b.getAttribute("data-state"),
-  }));
+    .map((b) => ({
+      text: b.textContent.trim(),
+      role: b.getAttribute("role"),
+      ariaChecked: b.getAttribute("aria-checked"),
+      dataState: b.getAttribute("data-state"),
+    }));
 
   const videos = [...document.querySelectorAll("video")].map((v) => ({
     src: (v.src || "").substring(0, 100),
@@ -197,7 +220,9 @@ function inspectGrokDOM() {
   return {
     url: window.location.href,
     promptFound: !!promptEl,
-    promptContent: promptEl ? (promptEl.innerText || "").substring(0, 60) : null,
+    promptContent: promptEl
+      ? (promptEl.innerText || "").substring(0, 60)
+      : null,
     fileInputFound: !!fileInput,
     generateBtnFound: !!generateBtn,
     generateBtnLabel: generateBtn?.getAttribute("aria-label") || null,
@@ -282,59 +307,50 @@ function findRadioByText(text) {
   return null;
 }
 
-// Find the generate/submit button ("Make video" or "Make image" button)
+// Find the generate/submit button (aria-label="Submit")
 function findGenerateButton() {
-  // Strategy 1: aria-label="Make video" or "Make image" (most reliable)
-  const ariaBtn =
+  // Strategy 1: aria-label="Submit" (confirmed from DOM inspection)
+  const submitBtn = document.querySelector('button[aria-label="Submit"]');
+  if (submitBtn) {
+    console.log("[Grok Flow] Found generate button via aria-label='Submit'");
+    return submitBtn;
+  }
+
+  // Strategy 2: aria-label="Make video" or "Make image" (may appear in different states)
+  const makeBtn =
     document.querySelector('button[aria-label="Make video"]') ||
     document.querySelector('button[aria-label="Make image"]');
-  if (ariaBtn) {
-    console.log(
-      "[Grok Flow] Found generate button via aria-label:",
-      ariaBtn.getAttribute("aria-label"),
-    );
-    return ariaBtn;
+  if (makeBtn) {
+    console.log("[Grok Flow] Found generate button via aria-label:", makeBtn.getAttribute("aria-label"));
+    return makeBtn;
   }
 
-  // Strategy 2: button.group with SVG arrow icon inside div.relative.z-10
-  const wrappers = document.querySelectorAll("div.relative.z-10");
-  for (const wrapper of wrappers) {
-    const btn = wrapper.querySelector("button.group");
-    if (btn) {
-      const svg = btn.querySelector("svg");
-      const rect = btn.getBoundingClientRect();
-      if (svg && rect.width > 0 && rect.height > 0) {
-        console.log(
-          "[Grok Flow] Found generate button via div.relative.z-10 > button.group",
-        );
-        return btn;
-      }
-    }
-  }
-
-  // Strategy 3: button.group.flex with SVG containing the arrow path
+  // Strategy 3: button.group with SVG containing the up-arrow path
   const candidates = document.querySelectorAll("button.group");
   for (const btn of candidates) {
+    // Skip the Upload button explicitly
+    if (btn.getAttribute("aria-label") === "Upload") continue;
     const path = btn.querySelector('svg path[d*="M6 11L12 5"]');
     if (path) {
       console.log("[Grok Flow] Found generate button via arrow SVG path");
       return btn;
     }
-    // Fallback: any button.group with SVG in bottom half of page
-    const svg = btn.querySelector("svg");
-    const rect = btn.getBoundingClientRect();
-    if (
-      svg &&
-      rect.width > 0 &&
-      rect.height > 0 &&
-      rect.bottom > window.innerHeight * 0.5
-    ) {
-      // Skip radio buttons
-      if (btn.getAttribute("role") === "radio") continue;
-      if (btn.textContent.trim().match(/^(Image|Video|480p|720p|6s|10s)$/i))
-        continue;
-      return btn;
-    }
+  }
+
+  // Strategy 4: rightmost button.group with SVG in the bottom area (Submit is further right than Upload)
+  const svgBtns = [...document.querySelectorAll("button.group")]
+    .filter((btn) => {
+      if (btn.getAttribute("aria-label") === "Upload") return false;
+      if (btn.getAttribute("role") === "radio") return false;
+      const svg = btn.querySelector("svg");
+      const rect = btn.getBoundingClientRect();
+      return svg && rect.width > 0 && rect.height > 0 && rect.bottom > window.innerHeight * 0.5;
+    })
+    .sort((a, b) => b.getBoundingClientRect().x - a.getBoundingClientRect().x);
+
+  if (svgBtns.length > 0) {
+    console.log("[Grok Flow] Found generate button via rightmost SVG button");
+    return svgBtns[0];
   }
 
   return null;
