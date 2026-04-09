@@ -797,6 +797,37 @@ function handleMessage(message, sender, sendResponse) {
       })();
       return true;
 
+    case "FETCH_VIDEO_TEST":
+      // Test-only: fetch video and return size/type without uploading
+      (async () => {
+        try {
+          const { videoUrl } = payload;
+          console.log(
+            "[TikTok Flow] FETCH_VIDEO_TEST:",
+            videoUrl?.substring(0, 100),
+          );
+          const resp = await fetch(videoUrl);
+          if (!resp.ok) {
+            sendResponse({
+              error: `Fetch failed (${resp.status}): ${resp.statusText}`,
+            });
+            return;
+          }
+          const blob = await resp.blob();
+          console.log(
+            "[TikTok Flow] Test fetch OK:",
+            blob.size,
+            "bytes,",
+            blob.type,
+          );
+          sendResponse({ size: blob.size, type: blob.type || "video/mp4" });
+        } catch (err) {
+          console.error("[TikTok Flow] FETCH_VIDEO_TEST error:", err);
+          sendResponse({ error: err.message });
+        }
+      })();
+      return true;
+
     case "FETCH_AND_UPLOAD_VIDEO":
       // Fetch video from URL (no CORS in service worker) and upload to backend
       // Used by Grok content script when assets.grok.com blocks content script fetch

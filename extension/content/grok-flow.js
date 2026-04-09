@@ -134,10 +134,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     case "GROK_TEST_SAVE_VIDEO":
-      // Actually download the video and upload to backend
+      // Test: verify video can be fetched via background SW (no real upload)
       (async () => {
         try {
-          const jobId = payload?.jobId || "test-" + Date.now();
           const videos = document.querySelectorAll("video");
           let videoEl = null;
           for (const v of videos) {
@@ -150,12 +149,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse({ error: "No video element found" });
             return;
           }
-          const result = await downloadAndUploadVideo(videoEl, jobId);
+          const videoSrc =
+            videoEl.src || videoEl.querySelector("source")?.src || "";
+          if (!videoSrc) {
+            sendResponse({ error: "Video element has no src URL" });
+            return;
+          }
+          // Test fetch via background SW (CORS bypass)
+          const result = await new Promise((resolve, reject) => {
+            chrome.runtime.sendMessage(
+              { type: "FETCH_VIDEO_TEST", payload: { videoUrl: videoSrc } },
+              (response) => {
+                if (chrome.runtime.lastError) {
+                  reject(new Error(chrome.runtime.lastError.message));
+                } else if (response?.error) {
+                  reject(new Error(response.error));
+                } else {
+                  resolve(response);
+                }
+              },
+            );
+          });
           sendResponse({
-            message: `Video saved to webapp! ${JSON.stringify(result).substring(0, 200)}`,
+            message: `Video download OK! ${result.size} bytes (${result.type}). Ready for real pipeline.`,
           });
         } catch (e) {
-          sendResponse({ error: `Save failed: ${e.message}` });
+          sendResponse({ error: `Save test failed: ${e.message}` });
         }
       })();
       return true;
