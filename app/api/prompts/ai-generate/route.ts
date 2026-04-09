@@ -682,13 +682,54 @@ All string fields must be plain strings (never objects or arrays).
           : "First [0-3s] [Start] -> Second [3-6s] [Next] -> Third [6-10s] [Final]";
       promptStrategy = `GENERATE 5 PAIRED VARIATIONS. SINGLE CONTINUOUS SCENE (No cuts). Fill action field with: ${timeStruct}`;
     } else if (platform === "grok") {
-      variantCount = 5;
-      promptStrategy = `5 PAIRED VARIANTS: Candid & Quick (6s loops).`;
+      // Grok 6s: Structured 2-scene story using Short format
+      variantCount = 2;
+      const shortElements = VIDEO_FORMATS.short.elements;
+      const hookEl = shortElements.find((e) => e.code === "HOOK")!;
+      const introEl = shortElements.find((e) => e.code === "IN")!;
+      const uspEl = shortElements.find((e) => e.code === "USP")!;
+      const ctaEl = shortElements.find((e) => e.code === "AC")!;
+      const hookStyle = GENRE_HOOK_STYLE[videoType] || "curiosity";
+      const hookExamples = HOOK_TEMPLATES[hookStyle]
+        .slice(0, 3)
+        .join("\n        ");
+
+      promptStrategy = `GROK 6s STRUCTURED STORY — 2 SCENES (each scene = one 6s Grok video):
+        Generate EXACTLY 2 variations/scenes that tell a CONNECTED story.
+
+        SCENE 1: "${hookEl.name}" + "${introEl.name}"
+          PURPOSE: ${hookEl.purpose} Then: ${introEl.purpose}
+          VISUAL: ${hookEl.visualDirection} Then: ${introEl.visualDirection}
+          DIALOG: ${hookEl.dialogDirection} Then: ${introEl.dialogDirection}
+          TIME: 6s — [0-3s] Hook problem/pain → [3-6s] Product reveal/intro.
+
+        SCENE 2: "${uspEl.name}" + "${ctaEl.name}"
+          PURPOSE: ${uspEl.purpose} Then: ${ctaEl.purpose}
+          VISUAL: ${uspEl.visualDirection} Then: ${ctaEl.visualDirection}
+          DIALOG: ${uspEl.dialogDirection} Then: ${ctaEl.dialogDirection}
+          TIME: 6s — [0-3s] USP highlight → [3-6s] CTA with urgency.
+
+        HOOK TEMPLATES (for Scene 1 dialog, fill blanks with product context — style: ${hookStyle}):
+        ${hookExamples}
+
+        IMAGE CONSISTENCY RULES (CRITICAL — both scenes must look like the SAME video):
+        - Output a "visual_dna" field: detailed model appearance description (age, ethnicity, expression, clothing, hijab if applicable).
+        - Both image_prompts MUST describe the EXACT SAME model using this visual_dna.
+        - Both image_prompts MUST start with: "From the image uploaded, accurate scale, no alter, no redesign."
+        - ONLY vary across scenes: pose, product interaction, camera angle, expression, and background setting.
+        - The MODEL must be IDENTICAL in both scenes.
+
+        VIDEO PROMPT RULES (Grok 6s style):
+        - Each video_prompt: single SHORT sentence, MAX 15 words.
+        - Describe ONE gentle action + camera framing. "minimal movement" always included.
+        - Example: "Model gently lifts product toward camera, slight smile, minimal movement, static chest-up framing."`;
     } else {
       variantCount = 5;
       promptStrategy = `5 PAIRED VARIANTS (UGC/Social Style): Aesthetic, Unboxing, POV, Demo, Lifestyle.`;
     }
   }
+
+  const isGrokStory = platform === "grok" && duration !== 10 && !consistentMode;
 
   const avatarInstruction =
     avatarId === "product_only"
@@ -696,9 +737,10 @@ All string fields must be plain strings (never objects or arrays).
       : `MODEL/AVATAR (MUST USE IN ALL PROMPTS): The subject/model in every scene is — ${avatarDna}
     CRITICAL: ALWAYS describe this exact model in both image_prompt and scene. NEVER change the model's appearance across variations.`;
 
-  const outputFields = consistentMode
-    ? `"video_prompt": "Short single sentence video motion"`
-    : `"scene": "...", "camera": "...", "action": "..."`;
+  const outputFields =
+    consistentMode || isGrokStory
+      ? `"video_prompt": "Short single sentence video motion"`
+      : `"scene": "...", "camera": "...", "action": "..."`;
 
   const systemPrompt = `
     You are an Expert AI Video Director for ${platform.toUpperCase()}.
@@ -730,7 +772,7 @@ All string fields must be plain strings (never objects or arrays).
        - Must start with: "From the image uploaded, accurate scale, no alter, no redesign."
        - This image will be used as the reference/starting frame for the AI video generator.
 
-    2. ${consistentMode ? '"video_prompt": A single SHORT sentence describing the subtle motion from the first frame.' : '"scene" + "camera" + "action": The VIDEO prompt that animates from that first frame.\n       - Describes the motion, camera movement, and actions that happen AFTER the first frame.\n       - Must be consistent with the image_prompt (same scene, same setup).'}
+    2. ${consistentMode || isGrokStory ? '"video_prompt": A single SHORT sentence describing the subtle motion from the first frame.' : '"scene" + "camera" + "action": The VIDEO prompt that animates from that first frame.\n       - Describes the motion, camera movement, and actions that happen AFTER the first frame.\n       - Must be consistent with the image_prompt (same scene, same setup).'}
 
     Product: ${product.title}
     Description: ${product.description || "N/A"}
@@ -738,7 +780,7 @@ All string fields must be plain strings (never objects or arrays).
     Shop: ${product.shopName || "N/A"}
     ${GENRE_INSTRUCTIONS[videoType] || `GENRE: ${videoType.toUpperCase()}`}
 
-    Output JSON: { "hook_title": "Short punchy hook title for intro card (3-5 words)", "hook_subtitle": "Product name or tagline", "variations": [{ "description": "Title", "image_prompt": "...", ${outputFields}${dialogFields}, "overlay_text": "Short punchy text (5-8 words) for on-screen display, NO EMOJIS, plain text only", "variation_hook_title": "REQUIRED — Short punchy hook title for THIS specific variation (3-7 words, attention-grabbing, e.g. 'Rahsia Kulit Glowing!', 'Mesti Cuba Ni!', 'Last Stock!')", "variation_video_caption": "REQUIRED — Catchy video caption in casual Malay for THIS variation (max 100 chars, engaging & scroll-stopping, e.g. 'Tengok sendiri hasilnya lepas 3 hari guna!')", "tiktok_product_name": "Clean short product name for TikTok (max 30 chars, no special characters, no SKU codes)", "tiktok_description": "Compelling casual Malay product description with hashtags (max 200 chars)", "tiktok_caption": "Catchy casual Malay TikTok post caption (max 150 chars, no hashtags)", "tiktok_hashtags": ["fyp", "tiktokshop", "relevantTag1", "relevantTag2", "relevantTag3"] }] }
+    Output JSON: { ${isGrokStory ? '"visual_dna": "Detailed consistent model appearance for both scenes",' : ""} "hook_title": "Short punchy hook title for intro card (3-5 words)", "hook_subtitle": "Product name or tagline", "variations": [{ "description": "Title", "image_prompt": "...", ${outputFields}${dialogFields}, "overlay_text": "Short punchy text (5-8 words) for on-screen display, NO EMOJIS, plain text only", "variation_hook_title": "REQUIRED — Short punchy hook title for THIS specific variation (3-7 words, attention-grabbing, e.g. 'Rahsia Kulit Glowing!', 'Mesti Cuba Ni!', 'Last Stock!')", "variation_video_caption": "REQUIRED — Catchy video caption in casual Malay for THIS variation (max 100 chars, engaging & scroll-stopping, e.g. 'Tengok sendiri hasilnya lepas 3 hari guna!')", "tiktok_product_name": "Clean short product name for TikTok (max 30 chars, no special characters, no SKU codes)", "tiktok_description": "Compelling casual Malay product description with hashtags (max 200 chars)", "tiktok_caption": "Catchy casual Malay TikTok post caption (max 150 chars, no hashtags)", "tiktok_hashtags": ["fyp", "tiktokshop", "relevantTag1", "relevantTag2", "relevantTag3"] }] }
     IMPORTANT: Every variation MUST include "variation_hook_title" and "variation_video_caption" — these are REQUIRED fields, never leave them empty.
     Generate exactly ${variantCount} variations. All string fields must be plain strings (never objects).
   `;
@@ -883,10 +925,17 @@ All string fields must be plain strings (never objects or arrays).
     );
 
     return NextResponse.json({
-      type: "paired",
+      type: isGrokStory ? "grok_story" : "paired",
       platform,
       hookTitle: String(parsed.hook_title || ""),
       hookSubtitle: String(parsed.hook_subtitle || ""),
+      ...(isGrokStory
+        ? {
+            visualDna: String(
+              (parsed as Record<string, unknown>).visual_dna || "",
+            ),
+          }
+        : {}),
       variations,
     });
   } catch (e: unknown) {

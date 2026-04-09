@@ -2611,34 +2611,82 @@ async function uploadReferenceImageForImageMode(imageUrl) {
 
   // Step 1: Find and click the "Start" / reference image area
   let startArea = null;
-  const divs = document.querySelectorAll("div");
+
+  // Strategy A: Look for div/button containing exact text "Start", "Reference", "Add image"
+  const divs = document.querySelectorAll("div, button, span");
   for (const div of divs) {
     const text = div.textContent.trim().toLowerCase();
     const rect = div.getBoundingClientRect();
     if (
-      (text === "start" || text === "reference" || text === "add image") &&
+      (text === "start" ||
+        text === "reference" ||
+        text === "add image" ||
+        text === "add_photo_alternate" ||
+        text === "add_photo_alternate start") &&
       rect.width > 40 &&
       rect.height > 40
     ) {
       startArea = div;
+      console.log(
+        "[TikTok Flow] Found Start area via text:",
+        text,
+        `${Math.round(rect.width)}x${Math.round(rect.height)}`,
+      );
       break;
     }
   }
-  // Also try labels/buttons
+
+  // Strategy B: Look for a material icon "add_photo_alternate" which indicates the upload zone
+  if (!startArea) {
+    const icons = document.querySelectorAll(
+      "i, span.material-icons, span.material-symbols-outlined, [class*='icon']",
+    );
+    for (const icon of icons) {
+      const text = icon.textContent.trim();
+      if (
+        text === "add_photo_alternate" ||
+        text === "add_a_photo" ||
+        text === "image"
+      ) {
+        // Walk up to find a clickable container
+        let parent = icon.parentElement;
+        for (let i = 0; i < 5 && parent; i++) {
+          const rect = parent.getBoundingClientRect();
+          if (rect.width > 40 && rect.height > 40 && rect.width < 500) {
+            startArea = parent;
+            console.log(
+              "[TikTok Flow] Found Start area via material icon:",
+              text,
+              parent.tagName,
+              `${Math.round(rect.width)}x${Math.round(rect.height)}`,
+            );
+            break;
+          }
+          parent = parent.parentElement;
+        }
+        if (startArea) break;
+      }
+    }
+  }
+
+  // Strategy C: Also try labels/buttons
   if (!startArea) {
     startArea =
       findButtonByText("Start") ||
       findButtonByText("Add image") ||
       findButtonByText("Reference");
+    if (startArea)
+      console.log("[TikTok Flow] Found Start area via button text");
   }
-  // Strategy: look for a clickable area with an upload/image icon near the prompt
+
+  // Strategy D: look for a clickable area with an upload/image icon near the prompt
   if (!startArea) {
     const promptEl = findPromptInput();
     if (promptEl) {
       let container = promptEl.parentElement;
       for (let i = 0; i < 8 && container; i++) {
         const candidates = container.querySelectorAll(
-          'div[role="button"], button, div[tabindex]',
+          'div[role="button"], button, div[tabindex], [data-radix-collection-item]',
         );
         for (const c of candidates) {
           const text = c.textContent.trim().toLowerCase();
@@ -2652,6 +2700,46 @@ async function uploadReferenceImageForImageMode(imageUrl) {
               text.includes("add_photo"))
           ) {
             startArea = c;
+            console.log(
+              "[TikTok Flow] Found Start area via prompt-area search:",
+              text.substring(0, 30),
+            );
+            break;
+          }
+        }
+        if (startArea) break;
+        container = container.parentElement;
+      }
+    }
+  }
+
+  // Strategy E: Look for a large empty placeholder area near the prompt (the upload drop zone)
+  if (!startArea) {
+    const promptEl = findPromptInput();
+    if (promptEl) {
+      let container = promptEl.parentElement;
+      for (let i = 0; i < 8 && container; i++) {
+        // Look for a sibling/child div that's roughly square and empty-ish (upload zone)
+        const zones = container.querySelectorAll("div");
+        for (const z of zones) {
+          const rect = z.getBoundingClientRect();
+          const text = z.textContent.trim().toLowerCase();
+          // Upload zone: ~100-500px, roughly square, with minimal text
+          if (
+            rect.width > 80 &&
+            rect.width < 500 &&
+            rect.height > 80 &&
+            rect.height < 500 &&
+            Math.abs(rect.width - rect.height) < 100 &&
+            text.length < 50 &&
+            !z.querySelector("textarea, [contenteditable]")
+          ) {
+            startArea = z;
+            console.log(
+              "[TikTok Flow] Found Start area via upload zone shape:",
+              `${Math.round(rect.width)}x${Math.round(rect.height)}`,
+              text.substring(0, 30),
+            );
             break;
           }
         }
@@ -2829,9 +2917,32 @@ async function verifyReferenceImageUploaded() {
 // an <a> element (class sc-3ab8616e-0) ~400x400 containing the reference image,
 // or an <img> with blob:/googleusercontent/data: src.
 function findUploadedReferenceImage() {
-  // Strategy 1: <a> element ~400x400 containing an img (the Radix ContextMenuTrigger container)
-  // From recording: a.sc-3ab8616e-0, rect 400x400. The context menu trigger is on the <a>,
-  // NOT on the <img> inside. So we MUST prefer this container.
+  // Strategy 1: <a> or <div> element ~100-500px containing an img (the Radix ContextMenuTrigger container)
+  // The context menu trigger is on the container, NOT on the <img> inside.
+  // Check both <a> and <div> — Google Flow may use either.
+  const containers = document.querySelectorAll(
+    "a, div[data-radix-collection-item], div[data-state]",
+  );
+  for (const el of containers) {
+    const rect = el.getBoundingClientRect();
+    if (
+      rect.width > 100 &&
+      rect.width < 500 &&
+      rect.height > 100 &&
+      rect.height < 500 &&
+      el.querySelector("img")
+    ) {
+      console.log(
+        "[TikTok Flow] Found reference image via container with img:",
+        el.tagName,
+        `${Math.round(rect.width)}x${Math.round(rect.height)} at (${Math.round(rect.x)},${Math.round(rect.y)})`,
+        el.className?.substring(0, 30),
+      );
+      return el;
+    }
+  }
+
+  // Strategy 1b: <a> element (generic) containing an img
   const links = document.querySelectorAll("a");
   for (const a of links) {
     const rect = a.getBoundingClientRect();
@@ -2852,19 +2963,20 @@ function findUploadedReferenceImage() {
   }
 
   // Strategy 2: img with alt containing "reference", "uploaded", "start", or "Generated image"
-  // Note: Google Flow sets alt="Generated image" on BOTH uploaded reference images and generated outputs.
   const altImgs = document.querySelectorAll(
     'img[alt*="reference" i], img[alt*="uploaded" i], img[alt*="start" i], img[alt*="Reference" i], img[alt="Generated image"]',
   );
   for (const img of altImgs) {
     const rect = img.getBoundingClientRect();
-    // Filter: reference images are medium-sized (30-500px), not the large generated output (>500px)
     if (
       rect.width > 20 &&
       rect.height > 20 &&
       rect.width < 500 &&
       rect.height < 500
     ) {
+      // Try to return the closest Radix trigger container instead of bare img
+      const radixParent = findRadixTriggerParent(img);
+      if (radixParent) return radixParent;
       console.log(
         "[TikTok Flow] Found reference image via alt attribute:",
         img.alt,
@@ -2888,11 +3000,47 @@ function findUploadedReferenceImage() {
         src.includes("googleusercontent") ||
         src.startsWith("data:"))
     ) {
+      // Try to return the closest Radix trigger container instead of bare img
+      const radixParent = findRadixTriggerParent(img);
+      if (radixParent) return radixParent;
       console.log("[TikTok Flow] Found reference image via thumbnail URL");
       return img;
     }
   }
 
+  return null;
+}
+
+// Walk up from an img to find the nearest Radix context menu trigger container
+function findRadixTriggerParent(img) {
+  let parent = img.parentElement;
+  for (let i = 0; i < 6 && parent; i++) {
+    const rect = parent.getBoundingClientRect();
+    // Look for <a> or a div with Radix attributes that's a reasonable size
+    if (
+      rect.width > 50 &&
+      rect.height > 50 &&
+      rect.width < 600 &&
+      rect.height < 600
+    ) {
+      if (
+        parent.tagName === "A" ||
+        parent.hasAttribute("data-radix-collection-item") ||
+        parent.hasAttribute("data-state") ||
+        (parent.getAttribute("role") === "button" &&
+          parent.querySelector("img"))
+      ) {
+        console.log(
+          "[TikTok Flow] Found Radix trigger parent:",
+          parent.tagName,
+          parent.className?.substring(0, 40),
+          `${Math.round(rect.width)}x${Math.round(rect.height)}`,
+        );
+        return parent;
+      }
+    }
+    parent = parent.parentElement;
+  }
   return null;
 }
 
@@ -3013,7 +3161,7 @@ async function clickAddToPromptOnReferenceImage() {
     }
     if (addToPromptItem) break;
 
-    // Strategy C: If refImg is an <img>, find its closest <a> ancestor and right-click that
+    // Strategy C: If refImg is an <img>, find its closest <a> or Radix trigger ancestor
     if (refImg.tagName === "IMG") {
       const closestLink = refImg.closest("a");
       if (closestLink) {
@@ -3022,6 +3170,19 @@ async function clickAddToPromptOnReferenceImage() {
           closestLink.className?.substring(0, 30),
         );
         simulateRightClick(closestLink);
+        await sleep(1500);
+        addToPromptItem = findAddToPromptMenuItem();
+        if (addToPromptItem) break;
+      }
+      // Also try Radix trigger parent
+      const radixTrigger = findRadixTriggerParent(refImg);
+      if (radixTrigger && radixTrigger !== closestLink) {
+        console.log(
+          "[TikTok Flow] Strategy C2: right-click Radix trigger parent...",
+          radixTrigger.tagName,
+          radixTrigger.className?.substring(0, 30),
+        );
+        simulateRightClick(radixTrigger);
         await sleep(1500);
         addToPromptItem = findAddToPromptMenuItem();
         if (addToPromptItem) break;
@@ -3208,8 +3369,36 @@ async function uploadAndAddReferenceToPrompt(imageUrl) {
   // Step 2: Wait for upload to fully process
   await sleep(2000);
 
-  // Step 3: Right-click the uploaded image → click "Add to Prompt" in context menu
-  await clickAddToPromptOnReferenceImage();
+  // Step 3: Try right-click → "Add to Prompt". If this fails, the image was already
+  // uploaded via the Start area which auto-attaches it as reference — proceed anyway.
+  try {
+    await clickAddToPromptOnReferenceImage();
+  } catch (addErr) {
+    console.warn(
+      "[TikTok Flow] ⚠️ 'Add to Prompt' right-click failed:",
+      addErr.message,
+    );
+    console.log(
+      "[TikTok Flow] Image was uploaded via Start area — it should already be attached as reference. Proceeding...",
+    );
+
+    // Dismiss any stale context menu
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    );
+    await sleep(500);
+
+    // As a last resort, try clicking the reference image thumbnail directly
+    // (clicking it in some Google Flow versions toggles it as prompt reference)
+    const refImg = findUploadedReferenceImage();
+    if (refImg) {
+      console.log(
+        "[TikTok Flow] Fallback: clicking reference image thumbnail directly...",
+      );
+      simulateClick(refImg);
+      await sleep(1500);
+    }
+  }
   return true;
 }
 
@@ -3713,70 +3902,165 @@ async function generateMultiScene({
 
       // === VIDEO GENERATION ===
 
-      // Animate the generated image (right-click → Animate)
-      await withRetry(() => clickAnimateAndWaitForVideoMode(), {
-        maxAttempts: 3,
-        delayMs: 2000,
-        label: `Scene ${si + 1}: Animate for video`,
-      });
-      await sleep(2000);
-
-      // Set 9:16 for video and select model
-      await openSettingsDropdown();
-      await sleep(500);
-      await selectTriggerOption("PORTRAIT", "9:16");
-      await sleep(500);
-      if (videoModel) {
-        await trySelectModel(videoModel);
-        await sleep(500);
-      }
-      await closeSettingsDropdown();
-      await sleep(500);
-
-      // Fill video prompt
-      let videoPromptEl = findPromptInput();
-      if (!videoPromptEl) {
-        await sleep(3000);
-        videoPromptEl = findPromptInput();
-      }
-      if (!videoPromptEl)
-        throw new Error(`Scene ${si + 1}: Video prompt input not found`);
-
-      simulateClick(videoPromptEl);
-      await sleep(300);
-      await fillPrompt(videoPromptEl, scene.videoPrompt);
-
-      // Click Create for video
-      await sleep(500);
-      const videoCreateBtn = findGenerateButton();
-      if (!videoCreateBtn)
-        throw new Error(`Scene ${si + 1}: Video Create button not found`);
-      simulateClick(videoCreateBtn);
-      console.log(`[TikTok Flow] Scene ${si + 1}: Video Create clicked`);
-
-      // Wait for UI to transition before polling for result
-      await sleep(3000);
-
-      // Wait for video result
-      const videoResultEl = await waitForVideoResult(360000);
-
-      // Download and upload video with sceneIndex
-      let videoUrl;
+      // Check if video should be routed to Grok
+      let useGrok = false;
       try {
-        const videoUploadResult = await downloadAndUploadVideo(
-          videoResultEl,
-          jobId,
-          si,
-        );
-        videoUrl = videoUploadResult.videoUrl;
-        console.log(`[TikTok Flow] Scene ${si + 1}: Video uploaded:`, videoUrl);
-      } catch (dlErr) {
-        console.warn(
-          `[TikTok Flow] Scene ${si + 1}: Video download failed:`,
-          dlErr.message,
-        );
-        videoUrl = extractMediaUrl(videoResultEl);
+        const result = await new Promise((resolve) => {
+          chrome.runtime.sendMessage(
+            { type: "GET_VIDEO_ENGINE" },
+            (response) => {
+              if (chrome.runtime.lastError) resolve("google-flow");
+              else resolve(response || "google-flow");
+            },
+          );
+        });
+        useGrok = result === "grok";
+      } catch {
+        useGrok = false;
       }
+
+      if (useGrok) {
+        // Route video generation to Grok via background.js
+        console.log(`[TikTok Flow] Scene ${si + 1}: Routing video to GROK...`);
+
+        // Capture the scene image as data URL directly from the DOM (avoids CORS)
+        let sceneImageDataUrl = null;
+        try {
+          const imgEl =
+            imgResultEl.tagName === "IMG"
+              ? imgResultEl
+              : imgResultEl.querySelector("img");
+          if (imgEl) {
+            const canvas = document.createElement("canvas");
+            canvas.width = imgEl.naturalWidth || imgEl.width || 720;
+            canvas.height = imgEl.naturalHeight || imgEl.height || 1280;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(imgEl, 0, 0);
+            sceneImageDataUrl = canvas.toDataURL("image/png");
+            console.log(
+              `[TikTok Flow] Scene ${si + 1}: Captured image as data URL (${(sceneImageDataUrl.length / 1024).toFixed(0)}KB)`,
+            );
+          }
+        } catch (e) {
+          console.warn(
+            `[TikTok Flow] Scene ${si + 1}: Could not capture image for Grok:`,
+            e.message,
+          );
+        }
+
+        const grokResult = await new Promise((resolve) => {
+          chrome.runtime.sendMessage(
+            {
+              type: "ROUTE_VIDEO_TO_GROK",
+              payload: {
+                jobId,
+                sceneIndex: si,
+                prompt: scene.videoPrompt,
+                referenceImageDataUrl: sceneImageDataUrl,
+                duration: "6s",
+              },
+            },
+            (response) => {
+              if (chrome.runtime.lastError) {
+                resolve({ error: chrome.runtime.lastError.message });
+              } else {
+                resolve(response || { error: "No response" });
+              }
+            },
+          );
+        });
+
+        if (grokResult.error) {
+          // "message channel closed" can happen if Grok tab navigated —
+          // but video may still have been uploaded. Check before failing.
+          const isChannelClosed =
+            grokResult.error.includes("message channel closed") ||
+            grokResult.error.includes(
+              "listener indicated an asynchronous response",
+            );
+          if (isChannelClosed) {
+            console.log(
+              `[TikTok Flow] Scene ${si + 1}: Grok channel closed (may still be processing). Waiting 30s for video upload...`,
+            );
+            // Give Grok time to finish uploading the video even though the channel closed
+            await sleep(30000);
+          } else {
+            throw new Error(
+              `Scene ${si + 1}: Grok video failed: ${grokResult.error}`,
+            );
+          }
+        }
+
+        console.log(`[TikTok Flow] Scene ${si + 1}: Grok video routing done`);
+      } else {
+        // Animate the generated image (right-click → Animate)
+        await withRetry(() => clickAnimateAndWaitForVideoMode(), {
+          maxAttempts: 3,
+          delayMs: 2000,
+          label: `Scene ${si + 1}: Animate for video`,
+        });
+        await sleep(2000);
+
+        // Set 9:16 for video and select model
+        await openSettingsDropdown();
+        await sleep(500);
+        await selectTriggerOption("PORTRAIT", "9:16");
+        await sleep(500);
+        if (videoModel) {
+          await trySelectModel(videoModel);
+          await sleep(500);
+        }
+        await closeSettingsDropdown();
+        await sleep(500);
+
+        // Fill video prompt
+        let videoPromptEl = findPromptInput();
+        if (!videoPromptEl) {
+          await sleep(3000);
+          videoPromptEl = findPromptInput();
+        }
+        if (!videoPromptEl)
+          throw new Error(`Scene ${si + 1}: Video prompt input not found`);
+
+        simulateClick(videoPromptEl);
+        await sleep(300);
+        await fillPrompt(videoPromptEl, scene.videoPrompt);
+
+        // Click Create for video
+        await sleep(500);
+        const videoCreateBtn = findGenerateButton();
+        if (!videoCreateBtn)
+          throw new Error(`Scene ${si + 1}: Video Create button not found`);
+        simulateClick(videoCreateBtn);
+        console.log(`[TikTok Flow] Scene ${si + 1}: Video Create clicked`);
+
+        // Wait for UI to transition before polling for result
+        await sleep(3000);
+
+        // Wait for video result
+        const videoResultEl = await waitForVideoResult(360000);
+
+        // Download and upload video with sceneIndex
+        let videoUrl;
+        try {
+          const videoUploadResult = await downloadAndUploadVideo(
+            videoResultEl,
+            jobId,
+            si,
+          );
+          videoUrl = videoUploadResult.videoUrl;
+          console.log(
+            `[TikTok Flow] Scene ${si + 1}: Video uploaded:`,
+            videoUrl,
+          );
+        } catch (dlErr) {
+          console.warn(
+            `[TikTok Flow] Scene ${si + 1}: Video download failed:`,
+            dlErr.message,
+          );
+          videoUrl = extractMediaUrl(videoResultEl);
+        }
+      } // end else (Google Flow video)
 
       scenesCompleted++;
       console.log(`[TikTok Flow] Scene ${si + 1}/${scenes.length} COMPLETE`);

@@ -27,6 +27,8 @@ import {
   Info,
   User,
   Package,
+  Upload,
+  X,
 } from "lucide-react";
 
 interface Product {
@@ -185,6 +187,24 @@ export default function ToolsPage() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [copyAllStatus, setCopyAllStatus] = useState(false);
 
+  // Grok 6s story mode state
+  const [isGrokStory, setIsGrokStory] = useState(false);
+  const [storyJobId, setStoryJobId] = useState<string | null>(null);
+  const [storyQueued, setStoryQueued] = useState(false);
+  const [combineStatus, setCombineStatus] = useState<
+    "idle" | "combining" | "done" | "error"
+  >("idle");
+  const [combinedVideoUrl, setCombinedVideoUrl] = useState<string | null>(null);
+
+  const [customProductImage, setCustomProductImage] = useState<string | null>(
+    null,
+  ); // uploaded filename
+  const [customProductImagePreview, setCustomProductImagePreview] = useState<
+    string | null
+  >(null); // local preview URL
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const productImageInputRef = useRef<HTMLInputElement>(null);
+
   const imgRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
   const vidRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
 
@@ -216,6 +236,38 @@ export default function ToolsPage() {
     if (savedKey) setApiKey(savedKey);
   }, [fetchProducts]);
 
+  const handleUploadProductImage = async (file: File) => {
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCustomProductImage(data.filename);
+        setCustomProductImagePreview(URL.createObjectURL(file));
+      } else {
+        setError("Failed to upload image");
+      }
+    } catch {
+      setError("Upload failed");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const clearCustomProductImage = () => {
+    setCustomProductImage(null);
+    if (customProductImagePreview) {
+      URL.revokeObjectURL(customProductImagePreview);
+      setCustomProductImagePreview(null);
+    }
+    if (productImageInputRef.current) productImageInputRef.current.value = "";
+  };
+
   const selectedProduct = products.find((p) => p.id === selectedProductId);
   const selectedImages: string[] = selectedProduct
     ? JSON.parse(selectedProduct.images || "[]")
@@ -238,6 +290,11 @@ export default function ToolsPage() {
     setError("");
     setHasGenerated(false);
     setSentKeys(new Set());
+    setIsGrokStory(false);
+    setStoryJobId(null);
+    setStoryQueued(false);
+    setCombineStatus("idle");
+    setCombinedVideoUrl(null);
     localStorage.setItem("gemini_api_key", apiKey);
 
     try {
@@ -256,6 +313,7 @@ export default function ToolsPage() {
           avatarId,
           imageCount: Math.max(selectedImages.length, 1),
           isClothing,
+          ...(customProductImage ? { productImage: customProductImage } : {}),
         }),
       });
 
@@ -263,6 +321,11 @@ export default function ToolsPage() {
       if (!res.ok) {
         setError(data.error || "Generation failed");
         return;
+      }
+
+      // Detect Grok 6s story mode from API response
+      if (data.type === "grok_story") {
+        setIsGrokStory(true);
       }
 
       setOutputs(
@@ -324,6 +387,9 @@ export default function ToolsPage() {
           tiktokDescription: output.tiktokDescription || "",
           tiktokCaption: output.tiktokCaption || "",
           tiktokHashtags: output.tiktokHashtags || [],
+          ...(customProductImage
+            ? { referenceImages: [customProductImage] }
+            : {}),
           overlayConfig: JSON.stringify({
             hookTitle: output.hookTitle || "",
             hookSubtitle: "",
@@ -361,6 +427,116 @@ export default function ToolsPage() {
       if (!sentKeys.has(`both-${i}`)) {
         await sendToQueue(i, "both");
       }
+    }
+  };
+
+  // Queue Grok 6s story as a single grouped job with scenePrompts
+  const sendStoryToQueue = async () => {
+    if (!selectedProductId || outputs.length < 2) return;
+    setSendingKey("story");
+    try {
+      const scenePrompts = outputs.slice(0, 2).map((o, i) => ({
+        imagePrompt: o.imagePrompt,
+        videoPrompt: o.videoPrompt,
+        hookTitle: i === 0 ? o.hookTitle || "" : "",
+        videoCaption: o.videoCaption || "",
+      }));
+      const o = outputs[0];
+      const res = await fetch("/api/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId: selectedProductId,
+          videoType,
+          userImagePrompt: o.imagePrompt,
+          userVideoPrompt: o.videoPrompt,
+          tiktokProductName: o.tiktokProductName || "",
+          tiktokDescription: o.tiktokDescription || "",
+          tiktokCaption: o.tiktokCaption || "",
+          tiktokHashtags: o.tiktokHashtags || [],
+          ...(customProductImage
+            ? { referenceImages: [customProductImage] }
+            : {}),
+          scenePrompts: JSON.stringify(scenePrompts),
+          overlayConfig: JSON.stringify({
+            hookTitle: o.hookTitle || "",
+            hookSubtitle: "",
+            hookBgColor: hookBgColor.replace("#", ""),
+            hookTextColor: hookTextColor.replace("#", ""),
+            hookFontSize,
+            overlayFontSize: captionFontSize,
+            overlays: scenePrompts.map((s) =>
+              s.videoCaption
+                ? { text: s.videoCaption, position: "bottom" }
+                : null,
+            ),
+          }),
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setStoryJobId(data.id);
+        setStoryQueued(true);
+        setSentKeys(
+          new Set([
+            "story",
+            "both-0",
+            "both-1",
+            "image-0",
+            "image-1",
+            "video-0",
+            "video-1",
+          ]),
+        );
+      } else {
+        setError("Failed to queue story");
+      }
+    } catch {
+      setError("Failed to queue story");
+    } finally {
+      setSendingKey(null);
+    }
+  };
+
+  // Combine Grok 6s story — auto-combine is triggered by video upload endpoint,
+  // but this allows manual re-combine if needed
+  const handleCombine = async () => {
+    if (!storyJobId) return;
+    setCombineStatus("combining");
+    try {
+      const overlays = outputs
+        .slice(0, 2)
+        .map((o) =>
+          o.videoCaption
+            ? { text: o.videoCaption, position: "bottom" as const }
+            : null,
+        );
+      const res = await fetch("/api/jobs/combine-story", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jobIds: [storyJobId],
+          hookTitle: outputs[0]?.hookTitle || undefined,
+          hookSubtitle: "",
+          overlays,
+          hookBgColor: hookBgColor.replace("#", ""),
+          hookTextColor: hookTextColor.replace("#", ""),
+          hookFontSize,
+          overlayFontSize: captionFontSize,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCombineStatus("done");
+        setCombinedVideoUrl(data.combinedVideoUrl || null);
+      } else {
+        const data = await res.json();
+        setError(data.error || "Combine failed");
+        setCombineStatus("error");
+      }
+    } catch {
+      setError("Combine request failed");
+      setCombineStatus("error");
     }
   };
 
@@ -481,36 +657,112 @@ export default function ToolsPage() {
 
             {/* Product preview */}
             {selectedProduct && (
-              <div className="flex items-start gap-4 rounded-lg bg-gray-50 p-3">
-                <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-gray-200">
-                  {selectedImages[0] ? (
-                    <img
-                      src={selectedImages[0]}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-xs text-gray-400">
-                      N/A
-                    </div>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">{selectedProduct.title}</p>
-                  <p className="mt-0.5 text-xs text-gray-500">
-                    {selectedProduct.shopName && (
-                      <span>{selectedProduct.shopName} · </span>
+              <div className="space-y-3">
+                <div className="flex items-start gap-4 rounded-lg bg-gray-50 p-3">
+                  <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-gray-200">
+                    {customProductImagePreview ? (
+                      <>
+                        <img
+                          src={customProductImagePreview}
+                          alt="Custom"
+                          className="h-full w-full object-cover"
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center bg-green-500/20">
+                          <span className="rounded bg-green-600 px-1 text-[8px] font-bold text-white">
+                            CUSTOM
+                          </span>
+                        </div>
+                      </>
+                    ) : selectedImages[0] ? (
+                      <img
+                        src={selectedImages[0]}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-xs text-gray-400">
+                        N/A
+                      </div>
                     )}
-                    {selectedProduct.price}
-                    {selectedImages.length > 0 && (
-                      <span> · {selectedImages.length} image(s)</span>
-                    )}
-                  </p>
-                  {selectedProduct.description && (
-                    <p className="mt-1 line-clamp-2 text-xs text-gray-400">
-                      {selectedProduct.description}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">
+                      {selectedProduct.title}
                     </p>
-                  )}
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      {selectedProduct.shopName && (
+                        <span>{selectedProduct.shopName} · </span>
+                      )}
+                      {selectedProduct.price}
+                      {selectedImages.length > 0 && (
+                        <span> · {selectedImages.length} image(s)</span>
+                      )}
+                    </p>
+                    {selectedProduct.description && (
+                      <p className="mt-1 line-clamp-2 text-xs text-gray-400">
+                        {selectedProduct.description}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Custom Product Image Upload */}
+                <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50/50 p-3">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-gray-500">
+                      <Upload size={12} />
+                      Custom Product Image
+                    </label>
+                    {customProductImage && (
+                      <button
+                        onClick={clearCustomProductImage}
+                        className="flex items-center gap-1 text-[10px] font-bold text-red-500 hover:text-red-600"
+                      >
+                        <X size={12} /> Remove
+                      </button>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-[10px] text-gray-400">
+                    Upload your own clean product photo if catalog image has
+                    marketing text
+                  </p>
+                  <input
+                    ref={productImageInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleUploadProductImage(file);
+                    }}
+                  />
+                  <div className="mt-2 flex items-center gap-2">
+                    {customProductImagePreview ? (
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={customProductImagePreview}
+                          alt="Custom product"
+                          className="h-14 w-14 rounded-lg border border-green-300 object-cover shadow-sm"
+                        />
+                        <span className="text-xs font-medium text-green-600">
+                          Custom image will be used for AI generation
+                        </span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => productImageInputRef.current?.click()}
+                        disabled={uploadingImage}
+                        className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-600 transition-all hover:border-gray-400 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        {uploadingImage ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Upload className="h-3.5 w-3.5" />
+                        )}
+                        {uploadingImage ? "Uploading..." : "Upload Image"}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -712,9 +964,20 @@ export default function ToolsPage() {
         >
           <Info size={14} className="mt-0.5 shrink-0" />
           <span>
-            Each variation generates a <strong>paired</strong> Image + Video
-            prompt sharing the same scene. The image = first frame, the video =
-            the motion. Queue them together or separately.
+            {platform === "grok" && duration !== 10 ? (
+              <>
+                Generates a <strong>2-scene story</strong>: Scene 1 (Hook +
+                Intro) → Scene 2 (USP + CTA). Each scene = one 6s Grok video
+                with consistent model. Queue as story then combine into one ~12s
+                video.
+              </>
+            ) : (
+              <>
+                Each variation generates a <strong>paired</strong> Image + Video
+                prompt sharing the same scene. The image = first frame, the
+                video = the motion. Queue them together or separately.
+              </>
+            )}
           </span>
         </div>
 
@@ -763,16 +1026,20 @@ export default function ToolsPage() {
             <h2
               className={`flex items-center gap-2 text-xs font-bold uppercase tracking-widest ${p.text}`}
             >
-              {genMode === "storyline" ? (
+              {isGrokStory ? (
+                <Film size={16} />
+              ) : genMode === "storyline" ? (
                 <Clapperboard size={16} />
               ) : (
                 <Sparkles size={16} />
               )}
-              {genMode === "storyline"
-                ? "UGC Storyline"
-                : `${p.label} Paired Prompts`}
+              {isGrokStory
+                ? "Grok 6s Story (2 Scenes)"
+                : genMode === "storyline"
+                  ? "UGC Storyline"
+                  : `${p.label} Paired Prompts`}
               <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500">
-                {outputs.length} variations
+                {isGrokStory ? "2 scenes" : `${outputs.length} variations`}
               </span>
             </h2>
             <div className="flex items-center gap-2">
@@ -787,15 +1054,85 @@ export default function ToolsPage() {
                 {copyAllStatus ? <Check size={14} /> : <Copy size={14} />}
                 {copyAllStatus ? "Copied!" : "Copy All"}
               </button>
-              <button
-                onClick={handleQueueAll}
-                className="flex items-center gap-2 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-bold text-white transition-all hover:bg-orange-600"
-              >
-                <Send className="h-3.5 w-3.5" />
-                Queue All
-              </button>
+              {isGrokStory ? (
+                <>
+                  <button
+                    onClick={sendStoryToQueue}
+                    disabled={sendingKey === "story" || storyQueued}
+                    className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
+                      storyQueued
+                        ? "bg-green-50 text-green-600 border border-green-200"
+                        : "bg-emerald-600 text-white hover:bg-emerald-700"
+                    } disabled:opacity-60`}
+                  >
+                    {sendingKey === "story" ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : storyQueued ? (
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                    ) : (
+                      <Send className="h-3.5 w-3.5" />
+                    )}
+                    {storyQueued ? "Story Queued!" : "Queue Story"}
+                  </button>
+                  {storyQueued && (
+                    <button
+                      onClick={handleCombine}
+                      disabled={
+                        combineStatus === "combining" ||
+                        combineStatus === "done"
+                      }
+                      className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
+                        combineStatus === "done"
+                          ? "bg-green-50 text-green-600 border border-green-200"
+                          : combineStatus === "combining"
+                            ? "bg-gray-100 text-gray-500"
+                            : "bg-gray-900 text-white hover:bg-black"
+                      } disabled:opacity-60`}
+                    >
+                      {combineStatus === "combining" ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : combineStatus === "done" ? (
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      ) : (
+                        <Film className="h-3.5 w-3.5" />
+                      )}
+                      {combineStatus === "done"
+                        ? "Combined!"
+                        : combineStatus === "combining"
+                          ? "Combining..."
+                          : "Combine Video"}
+                    </button>
+                  )}
+                </>
+              ) : (
+                <button
+                  onClick={handleQueueAll}
+                  className="flex items-center gap-2 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-bold text-white transition-all hover:bg-orange-600"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  Queue All
+                </button>
+              )}
             </div>
           </div>
+
+          {/* Combined video link */}
+          {combinedVideoUrl && (
+            <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2.5">
+              <Film className="h-4 w-4 text-green-600" />
+              <span className="text-xs font-semibold text-green-700">
+                Combined video ready!
+              </span>
+              <a
+                href={combinedVideoUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-auto text-xs font-bold text-green-600 underline hover:text-green-700"
+              >
+                Watch Video
+              </a>
+            </div>
+          )}
 
           {outputs.map((o, i) => (
             <div
@@ -805,30 +1142,36 @@ export default function ToolsPage() {
               {/* Header */}
               <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-5 py-3">
                 <span className="text-[11px] font-bold uppercase tracking-widest text-gray-500">
-                  {o.description}
+                  {isGrokStory
+                    ? i === 0
+                      ? "Scene 1 — Hook + Intro Product"
+                      : "Scene 2 — USP + Action"
+                    : o.description}
                 </span>
                 <div className="flex items-center gap-2">
-                  {/* Queue Both */}
-                  <button
-                    onClick={() => sendToQueue(i, "both")}
-                    disabled={
-                      sendingKey === `both-${i}` || sentKeys.has(`both-${i}`)
-                    }
-                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[10px] font-bold transition-all ${
-                      sentKeys.has(`both-${i}`)
-                        ? "bg-green-50 text-green-600"
-                        : "bg-orange-500 text-white hover:bg-orange-600"
-                    } disabled:opacity-60`}
-                  >
-                    {sendingKey === `both-${i}` ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : sentKeys.has(`both-${i}`) ? (
-                      <CheckCircle2 className="h-3 w-3" />
-                    ) : (
-                      <Send className="h-3 w-3" />
-                    )}
-                    {sentKeys.has(`both-${i}`) ? "Queued!" : "Queue Both"}
-                  </button>
+                  {/* Queue Both — hidden for Grok story (use Queue Story instead) */}
+                  {!isGrokStory && (
+                    <button
+                      onClick={() => sendToQueue(i, "both")}
+                      disabled={
+                        sendingKey === `both-${i}` || sentKeys.has(`both-${i}`)
+                      }
+                      className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[10px] font-bold transition-all ${
+                        sentKeys.has(`both-${i}`)
+                          ? "bg-green-50 text-green-600"
+                          : "bg-orange-500 text-white hover:bg-orange-600"
+                      } disabled:opacity-60`}
+                    >
+                      {sendingKey === `both-${i}` ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : sentKeys.has(`both-${i}`) ? (
+                        <CheckCircle2 className="h-3 w-3" />
+                      ) : (
+                        <Send className="h-3 w-3" />
+                      )}
+                      {sentKeys.has(`both-${i}`) ? "Queued!" : "Queue Both"}
+                    </button>
+                  )}
                 </div>
               </div>
 

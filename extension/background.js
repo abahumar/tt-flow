@@ -753,6 +753,122 @@ function handleMessage(message, sender, sendResponse) {
       })();
       return true;
 
+    case "GET_VIDEO_ENGINE":
+      // Return current video engine setting to content scripts
+      (async () => {
+        try {
+          const engine = await getVideoEngine();
+          sendResponse(engine);
+        } catch {
+          sendResponse("google-flow");
+        }
+      })();
+      return true;
+
+    case "ROUTE_VIDEO_TO_GROK":
+      // Route video generation from multi-scene (google-flow.js) to Grok tab
+      (async () => {
+        try {
+          const { jobId, sceneIndex, prompt, referenceImageDataUrl, duration } =
+            payload;
+          console.log(
+            `[TikTok Flow] Routing scene ${sceneIndex} video to Grok for job:`,
+            jobId,
+          );
+
+          let grokTabId = await findGrokTab();
+
+          if (grokTabId) {
+            // Check if Grok tab is on a post page — navigate back to /imagine first
+            try {
+              const tab = await chrome.tabs.get(grokTabId);
+              if (tab.url && tab.url.includes("/imagine/post/")) {
+                console.log(
+                  "[TikTok Flow] Grok on post page, navigating to /imagine...",
+                );
+                await chrome.tabs.update(grokTabId, {
+                  url: "https://grok.com/imagine",
+                  active: true,
+                });
+                // Wait for page load
+                await new Promise((resolve) => {
+                  const listener = (updatedTabId, changeInfo) => {
+                    if (
+                      updatedTabId === grokTabId &&
+                      changeInfo.status === "complete"
+                    ) {
+                      chrome.tabs.onUpdated.removeListener(listener);
+                      resolve();
+                    }
+                  };
+                  chrome.tabs.onUpdated.addListener(listener);
+                  setTimeout(() => {
+                    chrome.tabs.onUpdated.removeListener(listener);
+                    resolve();
+                  }, 20000);
+                });
+                // Wait for content script to re-inject
+                await new Promise((r) => setTimeout(r, 3000));
+              }
+            } catch (navErr) {
+              console.warn(
+                "[TikTok Flow] Grok tab nav check failed:",
+                navErr.message,
+              );
+            }
+          }
+
+          if (!grokTabId) {
+            grokTabId = await ensureGrokTab();
+          }
+          if (!grokTabId) {
+            sendResponse({ error: "Could not open Grok tab" });
+            return;
+          }
+
+          const csReady = await waitForContentScript(grokTabId, 15000);
+          if (!csReady) {
+            sendResponse({ error: "Grok content script not responding" });
+            return;
+          }
+
+          chrome.tabs.update(grokTabId, { active: true });
+
+          const result = await new Promise((resolve) => {
+            chrome.tabs.sendMessage(
+              grokTabId,
+              {
+                type: "GROK_GENERATE_VIDEO",
+                payload: {
+                  jobId,
+                  prompt: prompt || "Create a smooth cinematic video.",
+                  referenceImageDataUrl,
+                  duration: duration || "6s",
+                  sceneIndex,
+                },
+              },
+              (response) => {
+                if (chrome.runtime.lastError) {
+                  resolve({ error: chrome.runtime.lastError.message });
+                } else {
+                  resolve(
+                    response || {
+                      error: "No response from Grok content script",
+                    },
+                  );
+                }
+              },
+            );
+          });
+
+          sendResponse(result);
+        } catch (err) {
+          console.error("[TikTok Flow] ROUTE_VIDEO_TO_GROK error:", err);
+          sendResponse({ error: err.message });
+        }
+      })();
+      return true;
+
     case "UPLOAD_VIDEO":
       // Upload video from content script to backend (avoids CORS)
       (async () => {
@@ -833,7 +949,7 @@ function handleMessage(message, sender, sendResponse) {
       // Used by Grok content script when assets.grok.com blocks content script fetch
       (async () => {
         try {
-          const { jobId, videoUrl } = payload;
+          const { jobId, videoUrl, sceneIndex } = payload;
           console.log(
             "[TikTok Flow] FETCH_AND_UPLOAD_VIDEO:",
             videoUrl?.substring(0, 100),
@@ -867,6 +983,9 @@ function handleMessage(message, sender, sendResponse) {
             "video",
             new File([blob], "video.mp4", { type: blob.type || "video/mp4" }),
           );
+          if (typeof sceneIndex === "number") {
+            formData.append("sceneIndex", String(sceneIndex));
+          }
 
           const uploadResp = await fetch(`${API_BASE}/jobs/${jobId}/video`, {
             method: "POST",
@@ -2523,23 +2642,16 @@ async function processImageGeneration(job) {
   // Focus the tab
   chrome.tabs.update(flowTabId, { active: true });
 
-  // Extract product images to use as reference in Google Flow
-  let productImages = [];
-  try {
-    productImages = JSON.parse(job.product?.images || "[]");
-  } catch {
-    productImages = [];
-  }
-
-  // Pre-fetch Video Studio reference images (background, model) from /api/upload/
-  let studioReferenceImages = [];
+  // Pre-fetch custom product reference images from /api/upload/
+  // These replace catalog productImages so they follow the same upload path
+  let customRefImages = [];
   try {
     const refArr = JSON.parse(job.referenceImages || "[]");
     if (refArr.length > 0) {
       console.log(
         "[TikTok Flow] Fetching",
         refArr.length,
-        "Video Studio reference image(s)...",
+        "custom reference image(s)...",
       );
       for (const filename of refArr) {
         try {
@@ -2552,7 +2664,7 @@ async function processImageGeneration(job) {
               reader.onloadend = () => resolve(reader.result);
               reader.readAsDataURL(blob);
             });
-            studioReferenceImages.push(dataUrl);
+            customRefImages.push(dataUrl);
             console.log(
               "[TikTok Flow] ✅ Fetched reference:",
               filename,
@@ -2570,6 +2682,25 @@ async function processImageGeneration(job) {
     }
   } catch {
     // no reference images
+  }
+
+  // Extract product images to use as reference in Google Flow
+  // Custom uploaded images replace catalog images (same upload path in google-flow.js)
+  let productImages = [];
+  let studioReferenceImages = [];
+  if (customRefImages.length > 0) {
+    productImages = customRefImages;
+    console.log(
+      "[TikTok Flow] Using",
+      customRefImages.length,
+      "custom reference image(s) as product images — skipping catalog",
+    );
+  } else {
+    try {
+      productImages = JSON.parse(job.product?.images || "[]");
+    } catch {
+      productImages = [];
+    }
   }
 
   // For scenes 2+ in a group, fetch the master scene's generated image as reference
@@ -2796,16 +2927,8 @@ async function processMultiSceneJob(job, scenePrompts) {
     );
   }
 
-  // Extract product images
-  let productImages = [];
-  try {
-    productImages = JSON.parse(job.product?.images || "[]");
-  } catch {
-    productImages = [];
-  }
-
-  // Pre-fetch studio reference images (background, model)
-  let studioReferenceImages = [];
+  // Pre-fetch custom product reference images from /api/upload/
+  let customRefImages = [];
   try {
     const refArr = JSON.parse(job.referenceImages || "[]");
     for (const filename of refArr) {
@@ -2818,7 +2941,7 @@ async function processMultiSceneJob(job, scenePrompts) {
             reader.onloadend = () => resolve(reader.result);
             reader.readAsDataURL(blob);
           });
-          studioReferenceImages.push(dataUrl);
+          customRefImages.push(dataUrl);
         }
       } catch (e) {
         console.warn("[TikTok Flow] Could not fetch ref:", filename, e.message);
@@ -2826,6 +2949,24 @@ async function processMultiSceneJob(job, scenePrompts) {
     }
   } catch {
     /* no refs */
+  }
+
+  // Custom uploaded images replace catalog images (same upload path in google-flow.js)
+  let productImages = [];
+  let studioReferenceImages = [];
+  if (customRefImages.length > 0) {
+    productImages = customRefImages;
+    console.log(
+      "[TikTok Flow] Using",
+      customRefImages.length,
+      "custom reference image(s) as product images — skipping catalog (multi-scene)",
+    );
+  } else {
+    try {
+      productImages = JSON.parse(job.product?.images || "[]");
+    } catch {
+      productImages = [];
+    }
   }
 
   // Mark job as multi_scene_processing so the polling loop won't pick it up

@@ -512,8 +512,12 @@ async function waitForVideoResult(timeout = 300000) {
 }
 
 // Download video and upload to backend
-async function downloadAndUploadVideo(videoEl, jobId) {
-  console.log("[Grok Flow] Downloading video for job:", jobId);
+async function downloadAndUploadVideo(videoEl, jobId, sceneIndex) {
+  console.log(
+    "[Grok Flow] Downloading video for job:",
+    jobId,
+    typeof sceneIndex === "number" ? `scene ${sceneIndex}` : "",
+  );
 
   let videoBlob = null;
 
@@ -623,7 +627,12 @@ async function downloadAndUploadVideo(videoEl, jobId) {
           chrome.runtime.sendMessage(
             {
               type: "FETCH_AND_UPLOAD_VIDEO",
-              payload: { jobId, videoUrl: url },
+              payload: {
+                jobId,
+                videoUrl: url,
+                sceneIndex:
+                  typeof sceneIndex === "number" ? sceneIndex : undefined,
+              },
             },
             (response) => {
               if (chrome.runtime.lastError) {
@@ -693,6 +702,7 @@ async function downloadAndUploadVideo(videoEl, jobId) {
           jobId,
           videoBase64: base64Video,
           mimeType: videoBlob.type || "video/mp4",
+          sceneIndex: typeof sceneIndex === "number" ? sceneIndex : undefined,
         },
       },
       (response) => {
@@ -778,16 +788,31 @@ async function updateJobStatus(jobId, data) {
 // MAIN: Generate video from uploaded image on Grok
 // =========================================================
 
+let _grokGenerating = false; // Guard against concurrent/duplicate calls
+
 async function generateVideo({
   jobId,
   prompt,
   referenceImageDataUrl,
   duration,
+  sceneIndex,
 }) {
   console.log("[Grok Flow] === Starting video generation for job:", jobId);
   console.log("[Grok Flow] Prompt:", (prompt || "").substring(0, 100) + "...");
   console.log("[Grok Flow] Reference image provided:", !!referenceImageDataUrl);
   console.log("[Grok Flow] Duration:", duration || "10s");
+  if (typeof sceneIndex === "number")
+    console.log("[Grok Flow] Scene index:", sceneIndex);
+
+  // Guard: prevent concurrent duplicate calls
+  if (_grokGenerating) {
+    console.warn(
+      "[Grok Flow] Already generating — ignoring duplicate call for job:",
+      jobId,
+    );
+    return { error: "Already generating a video" };
+  }
+  _grokGenerating = true;
 
   try {
     // Step 1: Ensure we're on grok.com/imagine
@@ -838,12 +863,38 @@ async function generateVideo({
     }
 
     simulateClick(promptEl);
-    await sleep(300);
-    await fillPrompt(
-      promptEl,
+    await sleep(500);
+    const promptText =
       prompt ||
-        "Create a smooth cinematic video with gentle movement. 9:16 vertical format.",
-    );
+      "Create a smooth cinematic video with gentle movement. 9:16 vertical format.";
+    await fillPrompt(promptEl, promptText);
+
+    // Verify prompt was actually filled — retry up to 3 times
+    for (let verify = 0; verify < 3; verify++) {
+      await sleep(500);
+      const currentContent = (
+        promptEl.innerText ||
+        promptEl.textContent ||
+        ""
+      ).trim();
+      if (currentContent.includes(promptText.substring(0, 30))) {
+        console.log(
+          "[Grok Flow] Prompt verified in field (",
+          currentContent.length,
+          "chars)",
+        );
+        break;
+      }
+      console.warn(
+        `[Grok Flow] Prompt verify attempt ${verify + 1}: field content doesn't match. Retrying...`,
+      );
+      simulateClick(promptEl);
+      await sleep(300);
+      await fillPrompt(promptEl, promptText);
+    }
+
+    // Extra settle time so Grok registers the prompt before we interact with options
+    await sleep(800);
 
     // Step 4: Select "Video" mode
     console.log("[Grok Flow] Selecting Video mode...");
@@ -864,9 +915,26 @@ async function generateVideo({
     const durationText = duration === 6 || duration === "6s" ? "6s" : "10s";
     console.log(`[Grok Flow] Selecting ${durationText} duration...`);
     await selectOption(durationText);
-    await sleep(300);
+    await sleep(1000); // Wait for all options to settle before generating
 
-    // Step 7: Click Generate
+    // Final prompt verification before clicking Generate
+    const finalContent = (
+      promptEl.innerText ||
+      promptEl.textContent ||
+      ""
+    ).trim();
+    if (!finalContent || finalContent.length < 10) {
+      throw new Error(
+        `Prompt field appears empty before Generate ("${finalContent.substring(0, 50)}"). Aborting to prevent blank video.`,
+      );
+    }
+    console.log(
+      "[Grok Flow] Pre-generate prompt check OK:",
+      finalContent.substring(0, 60) + "...",
+    );
+
+    // Step 7: Click Generate (exactly once — use el.click() ONLY, not simulateClick
+    // which dispatches mousedown+click and can double-trigger React handlers)
     console.log("[Grok Flow] Looking for generate button...");
     let generateBtn = null;
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -878,9 +946,13 @@ async function generateVideo({
       throw new Error("Could not find the generate/submit button");
     }
 
-    simulateClick(generateBtn);
+    // Single native click only — do NOT use simulateClick (multi-event dispatch)
+    generateBtn.click();
+    // Immediately disable to prevent any secondary trigger
+    generateBtn.disabled = true;
+    generateBtn.style.pointerEvents = "none";
     console.log(
-      "[Grok Flow] Generate clicked! Waiting for redirect to post page...",
+      "[Grok Flow] Generate clicked ONCE (native .click()). Waiting for redirect to post page...",
     );
 
     // Step 8: Wait for navigation to post page
@@ -896,7 +968,11 @@ async function generateVideo({
     // Step 10: Download and upload video to backend
     let videoUrl;
     try {
-      const uploadResult = await downloadAndUploadVideo(videoEl, jobId);
+      const uploadResult = await downloadAndUploadVideo(
+        videoEl,
+        jobId,
+        sceneIndex,
+      );
       videoUrl = uploadResult.videoUrl;
       console.log("[Grok Flow] Video downloaded and uploaded:", videoUrl);
     } catch (downloadErr) {
@@ -910,21 +986,31 @@ async function generateVideo({
       }
     }
 
-    // Step 11: Update job status
+    // Step 11: Update job status (skip for multi-scene — controller manages status)
     console.log(
       "[Grok Flow] Video generation SUCCESS:",
       (videoUrl || "").substring(0, 100),
     );
-    await updateJobStatus(jobId, { status: "ready", videoUrl });
 
-    // Notify background service worker
-    chrome.runtime.sendMessage({
-      type: "JOB_PHASE_COMPLETE",
-      payload: { jobId, phase: "video", nextStatus: "ready" },
-    });
+    if (typeof sceneIndex === "number") {
+      // Multi-scene routing: google-flow.js manages job status
+      console.log(
+        `[Grok Flow] Scene ${sceneIndex} done — skipping status update (multi-scene)`,
+      );
+    } else {
+      await updateJobStatus(jobId, { status: "ready", videoUrl });
 
+      // Notify background service worker
+      chrome.runtime.sendMessage({
+        type: "JOB_PHASE_COMPLETE",
+        payload: { jobId, phase: "video", nextStatus: "ready" },
+      });
+    }
+
+    _grokGenerating = false;
     return { success: true, videoUrl };
   } catch (err) {
+    _grokGenerating = false;
     console.error("[Grok Flow] Video generation FAILED:", err.message);
     await updateJobStatus(jobId, {
       status: "failed",
