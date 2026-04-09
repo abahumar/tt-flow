@@ -17,6 +17,9 @@ import {
   AlertCircle,
   Check,
   X,
+  CheckSquare,
+  Square,
+  MinusSquare,
 } from "lucide-react";
 
 interface Product {
@@ -58,6 +61,9 @@ export default function ProductsPage() {
     skippedInvalid: number;
     details: { url: string; status: string; reason?: string }[];
   } | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [manual, setManual] = useState({
     url: "",
     title: "",
@@ -273,6 +279,48 @@ export default function ProductsPage() {
     fetchProducts();
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === products.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(products.map((p) => p.id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (
+      !confirm(
+        `Delete ${selectedIds.size} product(s) and all their video jobs?`,
+      )
+    )
+      return;
+    setBulkDeleting(true);
+    await fetch("/api/products", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: Array.from(selectedIds) }),
+    });
+    setSelectedIds(new Set());
+    setSelectMode(false);
+    fetchProducts();
+    setBulkDeleting(false);
+  };
+
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  };
+
   const handleCreateJob = async (productId: string) => {
     setCreatingJobId(productId);
     const res = await fetch(`/api/products/${productId}`, {
@@ -291,12 +339,67 @@ export default function ProductsPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Katalog Produk</h1>
-        <p className="text-sm text-gray-500">
-          Add TikTok Shop products via Chrome extension or manually
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Katalog Produk</h1>
+          <p className="text-sm text-gray-500">
+            Add TikTok Shop products via Chrome extension or manually
+          </p>
+        </div>
+        {products.length > 0 && (
+          <button
+            onClick={() =>
+              selectMode ? exitSelectMode() : setSelectMode(true)
+            }
+            className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+              selectMode
+                ? "border-rose-300 bg-rose-50 text-rose-600 hover:bg-rose-100"
+                : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            <CheckSquare className="h-4 w-4" />
+            {selectMode ? "Cancel" : "Select"}
+          </button>
+        )}
       </div>
+
+      {/* Bulk select toolbar */}
+      {selectMode && (
+        <div className="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50/50 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={toggleSelectAll}
+              className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+            >
+              {selectedIds.size === products.length ? (
+                <CheckSquare className="h-4 w-4 text-rose-500" />
+              ) : selectedIds.size > 0 ? (
+                <MinusSquare className="h-4 w-4 text-rose-400" />
+              ) : (
+                <Square className="h-4 w-4 text-gray-400" />
+              )}
+              {selectedIds.size === products.length
+                ? "Deselect All"
+                : "Select All"}
+            </button>
+            <span className="text-sm text-gray-500">
+              {selectedIds.size} of {products.length} selected
+            </span>
+          </div>
+          <button
+            onClick={handleBulkDelete}
+            disabled={selectedIds.size === 0 || bulkDeleting}
+            className="flex items-center gap-2 rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-600 disabled:opacity-50"
+          >
+            {bulkDeleting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4" />
+            )}
+            {bulkDeleting ? "Deleting..." : `Delete (${selectedIds.size})`}
+          </button>
+        </div>
+      )}
 
       {/* Scrape via URL form */}
       <form
@@ -572,10 +675,24 @@ export default function ProductsPage() {
             return (
               <div
                 key={p.id}
-                className="flex flex-col rounded-xl border border-gray-200 bg-white overflow-hidden hover:shadow-md transition-shadow"
+                onClick={() => selectMode && toggleSelect(p.id)}
+                className={`flex flex-col rounded-xl border bg-white overflow-hidden transition-shadow ${selectMode ? "cursor-pointer" : ""} ${
+                  selectedIds.has(p.id)
+                    ? "border-rose-400 ring-2 ring-rose-200"
+                    : "border-gray-200 hover:shadow-md"
+                }`}
               >
                 {/* Thumbnail */}
-                <div className="aspect-square w-full overflow-hidden bg-gray-100">
+                <div className="relative aspect-square w-full overflow-hidden bg-gray-100">
+                  {selectMode && (
+                    <div className="absolute top-2 left-2 z-10">
+                      {selectedIds.has(p.id) ? (
+                        <CheckSquare className="h-5 w-5 text-rose-500 drop-shadow" />
+                      ) : (
+                        <Square className="h-5 w-5 text-white drop-shadow" />
+                      )}
+                    </div>
+                  )}
                   {images[0] ? (
                     <img
                       src={images[0]}

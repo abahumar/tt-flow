@@ -8,7 +8,7 @@ import {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { productId, videoType = "fungsi_produk" } = body;
+  const { productId, videoType = "fungsi_produk", isClothing = false } = body;
 
   if (!productId) {
     return NextResponse.json(
@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
     description: product.description,
     price: product.price,
     videoType: videoType as VideoType,
+    isClothing,
   });
 
   const videoPrompt = generateVideoPrompt({

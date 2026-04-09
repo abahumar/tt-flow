@@ -141,6 +141,7 @@ export async function POST(req: NextRequest) {
     customTargetAudience = "",
     videoFormat = null, // "super_short" | "short" | "complete" | null
     varyBackground = false,
+    isClothing = false,
   } = body;
 
   if (!productId && !customProduct)
@@ -252,6 +253,18 @@ IMPORTANT — REFERENCE IMAGES:
 
 ${dialogInst}
 ${englishDialogInst}
+
+${
+  isClothing
+    ? `CLOTHING/WEARABLE PRODUCT RULES (CRITICAL — this product is clothing/fashion):
+1. The product MUST be shown WORN by the model — NEVER displayed flat-lay or floating alone.
+2. The clothing item must match the reference image EXACTLY — same color, pattern, fabric, design, branding.
+3. Model should have natural, confident poses that showcase the clothing fit and silhouette.
+4. Show how the clothing drapes and fits on a real body. Vary poses: standing, walking, seated, three-quarter turn.
+5. DO NOT alter the clothing design — keep all prints, logos, stitching, buttons exactly as shown.
+6. The model WEARS the product in EVERY scene.`
+    : ""
+}
 
 RULES FOR visual_prompt_en (CRITICAL — this goes to Google Flow image generator):
 - Each visual_prompt_en must be a SELF-CONTAINED, detailed description for AI image generation.
@@ -611,6 +624,17 @@ All string fields must be plain strings (never objects or arrays).
     ${avatarInstruction}
     ${platformLogic}
     ${ANTI_HALLUCINATION}
+    ${
+      isClothing
+        ? `CLOTHING/WEARABLE PRODUCT RULES (CRITICAL — this product is clothing/fashion):
+    1. The product MUST be shown WORN by the model — NEVER displayed flat-lay or floating alone.
+    2. The clothing item must match the reference image EXACTLY — same color, pattern, fabric, design, branding.
+    3. Model should have natural, confident poses that showcase the clothing fit and silhouette.
+    4. Show how the clothing drapes and fits on a real body. Vary poses across variations: standing, walking, seated, three-quarter turn.
+    5. DO NOT alter the clothing design — keep all prints, logos, stitching, buttons exactly as shown.
+    6. The model WEARS the product in EVERY variation/scene.`
+        : ""
+    }
     ${dialogLogic}
     Task: ${promptStrategy}
 

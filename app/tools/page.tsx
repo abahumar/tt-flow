@@ -153,6 +153,7 @@ export default function ToolsPage() {
 
   const [includeDialog, setIncludeDialog] = useState(false);
   const [includeEnglishDialog, setIncludeEnglishDialog] = useState(false);
+  const [isClothing, setIsClothing] = useState(false);
 
   const [hookBgColor, setHookBgColor] = useState("#E91E63");
   const [hookTextColor, setHookTextColor] = useState("#FFFFFF");
@@ -244,6 +245,7 @@ export default function ToolsPage() {
           apiKey,
           avatarId,
           imageCount: Math.max(selectedImages.length, 1),
+          isClothing,
         }),
       });
 
@@ -580,6 +582,20 @@ export default function ToolsPage() {
             }`}
           >
             Dialog English: {includeEnglishDialog ? "On" : "Off"}
+          </button>
+        </div>
+
+        {/* Clothing toggle */}
+        <div>
+          <button
+            onClick={() => setIsClothing(!isClothing)}
+            className={`w-full rounded-xl border py-2.5 text-xs font-bold transition-all ${
+              isClothing
+                ? "border-pink-500 bg-pink-500 text-white shadow-md"
+                : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
+            }`}
+          >
+            👗 Clothing / Wearable: {isClothing ? "On" : "Off"}
           </button>
         </div>
 

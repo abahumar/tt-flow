@@ -34,6 +34,33 @@ const IMAGE_TEMPLATES: Record<VideoType, string> = {
     "Product: {title}. {description}",
 };
 
+const CLOTHING_IMAGE_TEMPLATES: Record<VideoType, string> = {
+  fungsi_produk:
+    "From the image uploaded, accurate scale, no alter, no redesign. " +
+    "Create a professional fashion showcase photo with a model WEARING the clothing item. " +
+    "Keep the clothing EXACTLY as shown — same color, pattern, fabric, design, and branding. " +
+    "Model in a confident standing pose on a clean white/light background with studio lighting, showing how the clothing fits and drapes on the body. " +
+    "Product: {title}. {description}",
+  review:
+    "From the image uploaded, accurate scale, no alter, no redesign. " +
+    "Create a realistic fashion review style photo with a model WEARING the clothing item. " +
+    "Keep the clothing EXACTLY as shown — same color, pattern, fabric, design, and branding. " +
+    "Model in a natural lifestyle setting with warm lighting, showing the clothing in everyday context with a relaxed pose. " +
+    "Product: {title}. {description}",
+  unboxing:
+    "From the image uploaded, accurate scale, no alter, no redesign. " +
+    "Create an exciting clothing reveal scene with a model WEARING the clothing item. " +
+    "Keep the clothing EXACTLY as shown — same color, pattern, fabric, design, and branding. " +
+    "Model doing a casual try-on pose with packaging visible nearby, clean background, showing the first impression of the outfit. " +
+    "Product: {title}. {description}",
+  problem_solution:
+    "From the image uploaded, accurate scale, no alter, no redesign. " +
+    "Create a before-and-after style image. " +
+    "Keep the clothing EXACTLY as shown — same color, pattern, fabric, design, and branding. " +
+    "Left side shows a plain/unstylish outfit, right side shows a model WEARING the product looking stylish and confident. " +
+    "Product: {title}. {description}",
+};
+
 const VIDEO_TEMPLATES: Record<VideoType, string> = {
   fungsi_produk:
     "Create a short 15-second product demonstration video of {title}. " +
@@ -60,13 +87,16 @@ interface PromptInput {
   videoType: VideoType;
   customImagePrompt?: string;
   customVideoPrompt?: string;
+  isClothing?: boolean;
 }
 
 export function generateImagePrompt(input: PromptInput): string {
   if (input.customImagePrompt) return input.customImagePrompt;
 
-  const template =
-    IMAGE_TEMPLATES[input.videoType] || IMAGE_TEMPLATES.fungsi_produk;
+  const templates = input.isClothing
+    ? CLOTHING_IMAGE_TEMPLATES
+    : IMAGE_TEMPLATES;
+  const template = templates[input.videoType] || templates.fungsi_produk;
   return template
     .replace(/{title}/g, input.title)
     .replace(/{description}/g, input.description || input.title)

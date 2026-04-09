@@ -71,6 +71,7 @@ export default function ImageToolsPage() {
   const [manualPrompt, setManualPrompt] = useState("");
   const [aiDescription, setAiDescription] = useState("");
   const [imageStyle, setImageStyle] = useState("product_showcase");
+  const [isClothing, setIsClothing] = useState(false);
 
   // AI generation
   const [apiKey, setApiKey] = useState("");
@@ -240,6 +241,7 @@ export default function ImageToolsPage() {
           description: aiDescription,
           style: imageStyle,
           apiKey,
+          isClothing,
         }),
       });
 
@@ -718,6 +720,22 @@ export default function ImageToolsPage() {
                 ))}
               </select>
             </div>
+
+            {/* Clothing toggle */}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isClothing}
+                onChange={(e) => setIsClothing(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+              />
+              <span className="text-sm font-medium text-gray-700">
+                👗 Clothing / Wearable Product
+              </span>
+              <span className="text-[11px] text-gray-400">
+                Model will wear the product in generated images
+              </span>
+            </label>
 
             {/* API Key */}
             <div>

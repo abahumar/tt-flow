@@ -15,6 +15,7 @@ export async function POST(req: NextRequest) {
     style = "product_showcase",
     apiKey,
     referenceImageDescription,
+    isClothing = false,
   } = body;
 
   if (!description) {
@@ -34,6 +35,19 @@ export async function POST(req: NextRequest) {
     IMAGE_STYLES[style as keyof typeof IMAGE_STYLES] ||
     IMAGE_STYLES.product_showcase;
 
+  const clothingRules = isClothing
+    ? `
+    CLOTHING/WEARABLE PRODUCT RULES (CRITICAL — this product is clothing):
+    1. The product MUST be shown WORN by a model — NEVER flat-lay or floating alone
+    2. Generate a realistic human model (Malay/Southeast Asian appearance) wearing the product
+    3. The clothing item must match the reference image EXACTLY — same color, pattern, design, fabric texture
+    4. Model should have natural, confident poses that showcase the clothing fit and silhouette
+    5. Show how the clothing drapes and fits on a real body
+    6. Vary model poses across variations: standing, walking, seated, three-quarter turn, etc.
+    7. DO NOT alter the clothing design — keep all prints, logos, stitching, buttons exactly as shown
+    `
+    : "";
+
   const systemPrompt = `
     You are an Expert AI Image Prompt Generator for Google Flow (Google's AI image generation tool).
     
@@ -41,6 +55,7 @@ export async function POST(req: NextRequest) {
     
     User Description: "${description}"
     Style: ${styleName}
+    Product Type: ${isClothing ? "Clothing / Wearable (model must WEAR it)" : "General Product"}
     ${referenceImageDescription ? `Reference Image Context: ${referenceImageDescription}` : ""}
     
     CRITICAL RULES:
@@ -51,7 +66,7 @@ export async function POST(req: NextRequest) {
     4. Keep prompts concise but descriptive (2-4 sentences max)
     5. DO NOT use the word "flow" in any prompt (causes issues with Google Flow)
     6. DO NOT describe opening, unsealing, or unboxing (AI hallucinates interiors)
-    
+    ${clothingRules}
     VARIATION STYLES:
     1. Clean & Minimal — White/light background, studio lighting
     2. Warm & Lifestyle — Natural setting, warm tones, in-use context

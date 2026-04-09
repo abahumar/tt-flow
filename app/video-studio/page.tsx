@@ -159,6 +159,7 @@ export default function VideoStudioPage() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [includeDialog, setIncludeDialog] = useState(false);
   const [includeEnglishDialog, setIncludeEnglishDialog] = useState(false);
+  const [isClothing, setIsClothing] = useState(false);
   const [videoFormat, setVideoFormat] = useState<VideoFormatId | "">("");
   const [generating, setGenerating] = useState(false);
   const [scenes, setScenes] = useState<SceneOutput[]>([]);
@@ -394,6 +395,7 @@ export default function VideoStudioPage() {
           sceneCount,
           includeDialog,
           includeEnglishDialog,
+          isClothing,
           videoFormat: videoFormat || null,
           backgroundDesc:
             bgDesc ||
@@ -1192,28 +1194,42 @@ export default function VideoStudioPage() {
 
         {/* Dialog toggles */}
         {!useManualPrompts && (
-          <div className="flex gap-3">
-            <button
-              onClick={() => setIncludeDialog(!includeDialog)}
-              className={`flex-1 rounded-xl border py-2.5 text-xs font-bold transition-all ${
-                includeDialog
-                  ? "border-black bg-black text-white shadow-md"
-                  : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
-              }`}
-            >
-              Dialog Melayu: {includeDialog ? "On" : "Off"}
-            </button>
-            <button
-              onClick={() => setIncludeEnglishDialog(!includeEnglishDialog)}
-              className={`flex-1 rounded-xl border py-2.5 text-xs font-bold transition-all ${
-                includeEnglishDialog
-                  ? "border-black bg-black text-white shadow-md"
-                  : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
-              }`}
-            >
-              Dialog English: {includeEnglishDialog ? "On" : "Off"}
-            </button>
-          </div>
+          <>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setIncludeDialog(!includeDialog)}
+                className={`flex-1 rounded-xl border py-2.5 text-xs font-bold transition-all ${
+                  includeDialog
+                    ? "border-black bg-black text-white shadow-md"
+                    : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
+                }`}
+              >
+                Dialog Melayu: {includeDialog ? "On" : "Off"}
+              </button>
+              <button
+                onClick={() => setIncludeEnglishDialog(!includeEnglishDialog)}
+                className={`flex-1 rounded-xl border py-2.5 text-xs font-bold transition-all ${
+                  includeEnglishDialog
+                    ? "border-black bg-black text-white shadow-md"
+                    : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
+                }`}
+              >
+                Dialog English: {includeEnglishDialog ? "On" : "Off"}
+              </button>
+            </div>
+            <div>
+              <button
+                onClick={() => setIsClothing(!isClothing)}
+                className={`w-full rounded-xl border py-2.5 text-xs font-bold transition-all ${
+                  isClothing
+                    ? "border-pink-500 bg-pink-500 text-white shadow-md"
+                    : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
+                }`}
+              >
+                👗 Clothing / Wearable: {isClothing ? "On" : "Off"}
+              </button>
+            </div>
+          </>
         )}
 
         {/* API Key */}
