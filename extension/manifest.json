@@ -15,6 +15,7 @@
   "host_permissions": [
     "https://labs.google/*",
     "https://grok.com/*",
+    "https://assets.grok.com/*",
     "https://*.tiktok.com/*",
     "http://localhost:3000/*"
   ],

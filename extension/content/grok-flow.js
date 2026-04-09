@@ -321,7 +321,10 @@ function findGenerateButton() {
     document.querySelector('button[aria-label="Make video"]') ||
     document.querySelector('button[aria-label="Make image"]');
   if (makeBtn) {
-    console.log("[Grok Flow] Found generate button via aria-label:", makeBtn.getAttribute("aria-label"));
+    console.log(
+      "[Grok Flow] Found generate button via aria-label:",
+      makeBtn.getAttribute("aria-label"),
+    );
     return makeBtn;
   }
 
@@ -344,7 +347,12 @@ function findGenerateButton() {
       if (btn.getAttribute("role") === "radio") return false;
       const svg = btn.querySelector("svg");
       const rect = btn.getBoundingClientRect();
-      return svg && rect.width > 0 && rect.height > 0 && rect.bottom > window.innerHeight * 0.5;
+      return (
+        svg &&
+        rect.width > 0 &&
+        rect.height > 0 &&
+        rect.bottom > window.innerHeight * 0.5
+      );
     })
     .sort((a, b) => b.getBoundingClientRect().x - a.getBoundingClientRect().x);
 
@@ -574,20 +582,30 @@ async function downloadAndUploadVideo(videoEl, jobId) {
     if (videoSrc && videoSrc.startsWith("http")) candidateUrls.push(videoSrc);
     document.querySelectorAll("video source").forEach((s) => {
       const src = s.src || s.getAttribute("src") || "";
-      if (src.startsWith("http") && !candidateUrls.includes(src)) candidateUrls.push(src);
+      if (src.startsWith("http") && !candidateUrls.includes(src))
+        candidateUrls.push(src);
     });
-    document.querySelectorAll('a[download], a[href*=".mp4"], a[href*="video"]').forEach((a) => {
-      const href = a.href || a.getAttribute("href") || "";
-      if (href.startsWith("http") && !candidateUrls.includes(href)) candidateUrls.push(href);
-    });
+    document
+      .querySelectorAll('a[download], a[href*=".mp4"], a[href*="video"]')
+      .forEach((a) => {
+        const href = a.href || a.getAttribute("href") || "";
+        if (href.startsWith("http") && !candidateUrls.includes(href))
+          candidateUrls.push(href);
+      });
 
     for (const url of candidateUrls) {
       if (videoBlob) break;
-      console.log("[Grok Flow] Trying background SW fetch:", url.substring(0, 100));
+      console.log(
+        "[Grok Flow] Trying background SW fetch:",
+        url.substring(0, 100),
+      );
       try {
         const result = await new Promise((resolve, reject) => {
           chrome.runtime.sendMessage(
-            { type: "FETCH_AND_UPLOAD_VIDEO", payload: { jobId, videoUrl: url } },
+            {
+              type: "FETCH_AND_UPLOAD_VIDEO",
+              payload: { jobId, videoUrl: url },
+            },
             (response) => {
               if (chrome.runtime.lastError) {
                 reject(new Error(chrome.runtime.lastError.message));
@@ -599,10 +617,17 @@ async function downloadAndUploadVideo(videoEl, jobId) {
             },
           );
         });
-        console.log("[Grok Flow] Video fetched & uploaded via background SW:", JSON.stringify(result).substring(0, 200));
+        console.log(
+          "[Grok Flow] Video fetched & uploaded via background SW:",
+          JSON.stringify(result).substring(0, 200),
+        );
         return result; // Already uploaded by background, return directly
       } catch (e) {
-        console.warn("[Grok Flow] Background SW fetch failed:", url.substring(0, 80), e.message);
+        console.warn(
+          "[Grok Flow] Background SW fetch failed:",
+          url.substring(0, 80),
+          e.message,
+        );
       }
     }
   }
