@@ -754,16 +754,28 @@ function handleMessage(message, sender, sendResponse) {
       (async () => {
         try {
           const { jobId, videoUrl } = payload;
-          console.log("[TikTok Flow] FETCH_AND_UPLOAD_VIDEO:", videoUrl?.substring(0, 100), "for job:", jobId);
+          console.log(
+            "[TikTok Flow] FETCH_AND_UPLOAD_VIDEO:",
+            videoUrl?.substring(0, 100),
+            "for job:",
+            jobId,
+          );
 
           const resp = await fetch(videoUrl);
           if (!resp.ok) {
-            sendResponse({ error: `Fetch failed (${resp.status}): ${resp.statusText}` });
+            sendResponse({
+              error: `Fetch failed (${resp.status}): ${resp.statusText}`,
+            });
             return;
           }
 
           const blob = await resp.blob();
-          console.log("[TikTok Flow] Fetched video blob:", blob.size, "bytes, type:", blob.type);
+          console.log(
+            "[TikTok Flow] Fetched video blob:",
+            blob.size,
+            "bytes, type:",
+            blob.type,
+          );
 
           if (blob.size < 1000) {
             sendResponse({ error: `Video too small (${blob.size} bytes)` });
@@ -783,12 +795,17 @@ function handleMessage(message, sender, sendResponse) {
 
           if (!uploadResp.ok) {
             const errText = await uploadResp.text();
-            sendResponse({ error: `Upload failed (${uploadResp.status}): ${errText}` });
+            sendResponse({
+              error: `Upload failed (${uploadResp.status}): ${errText}`,
+            });
             return;
           }
 
           const result = await uploadResp.json();
-          console.log("[TikTok Flow] Video fetched & uploaded:", JSON.stringify(result));
+          console.log(
+            "[TikTok Flow] Video fetched & uploaded:",
+            JSON.stringify(result),
+          );
           sendResponse(result);
         } catch (err) {
           console.error("[TikTok Flow] FETCH_AND_UPLOAD_VIDEO error:", err);

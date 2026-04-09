@@ -513,7 +513,9 @@ async function downloadAndUploadVideo(videoEl, jobId) {
   }
 
   // Also check download links
-  const links = document.querySelectorAll('a[download], a[href*=".mp4"], a[href*="video"]');
+  const links = document.querySelectorAll(
+    'a[download], a[href*=".mp4"], a[href*="video"]',
+  );
   for (const link of [...links].reverse()) {
     const href = link.href || link.getAttribute("href") || "";
     if (href && href.startsWith("http") && !candidateUrls.includes(href)) {
@@ -531,7 +533,11 @@ async function downloadAndUploadVideo(videoEl, jobId) {
       const resp = await fetch(url);
       if (resp.ok) {
         videoBlob = await resp.blob();
-        console.log("[Grok Flow] Downloaded directly:", videoBlob.size, "bytes");
+        console.log(
+          "[Grok Flow] Downloaded directly:",
+          videoBlob.size,
+          "bytes",
+        );
       }
     } catch (e) {
       console.warn("[Grok Flow] Direct fetch failed (CORS?):", e.message);
@@ -561,10 +567,17 @@ async function downloadAndUploadVideo(videoEl, jobId) {
             },
           );
         });
-        console.log("[Grok Flow] Video downloaded & uploaded via background:", JSON.stringify(result).substring(0, 200));
+        console.log(
+          "[Grok Flow] Video downloaded & uploaded via background:",
+          JSON.stringify(result).substring(0, 200),
+        );
         return result; // Already uploaded by background, return directly
       } catch (e) {
-        console.warn("[Grok Flow] Background fetch failed for:", url.substring(0, 80), e.message);
+        console.warn(
+          "[Grok Flow] Background fetch failed for:",
+          url.substring(0, 80),
+          e.message,
+        );
       }
     }
   }
@@ -581,7 +594,10 @@ async function downloadAndUploadVideo(videoEl, jobId) {
   }
 
   if (!videoBlob || videoBlob.size < 1000) {
-    throw new Error("Could not download video. All strategies failed. URLs tried: " + candidateUrls.join(", "));
+    throw new Error(
+      "Could not download video. All strategies failed. URLs tried: " +
+        candidateUrls.join(", "),
+    );
   }
 
   // Upload to backend via background service worker

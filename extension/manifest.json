@@ -32,7 +32,7 @@
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://grok.com/imagine/*", "https://grok.com/imagine"],
+      "matches": ["https://grok.com/*"],
       "js": ["content/grok-flow.js"],
       "run_at": "document_idle"
     },
