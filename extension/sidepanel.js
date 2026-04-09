@@ -299,6 +299,17 @@ document.getElementById("videoModelSelect").addEventListener("change", (e) => {
   chrome.storage.local.set({ videoModel: e.target.value });
 });
 
+// Video engine selector (Google Flow / Grok)
+chrome.storage.local.get("videoEngine", ({ videoEngine }) => {
+  const select = document.getElementById("videoEngineSelect");
+  if (select && videoEngine) select.value = videoEngine;
+});
+
+document.getElementById("videoEngineSelect").addEventListener("change", (e) => {
+  chrome.storage.local.set({ videoEngine: e.target.value });
+  console.log("[SidePanel] Video engine set to:", e.target.value);
+});
+
 // ---- Attach event listeners ----
 document
   .getElementById("autoModeBtn")

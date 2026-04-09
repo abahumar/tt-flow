@@ -14,6 +14,7 @@
   ],
   "host_permissions": [
     "https://labs.google/*",
+    "https://grok.com/*",
     "https://*.tiktok.com/*",
     "http://localhost:3000/*"
   ],
@@ -28,6 +29,11 @@
     {
       "matches": ["https://labs.google/fx/*", "https://labs.google/flow/*"],
       "js": ["content/dom-helpers.js", "content/google-flow.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://grok.com/imagine/*", "https://grok.com/imagine"],
+      "js": ["content/grok-flow.js"],
       "run_at": "document_idle"
     },
     {
