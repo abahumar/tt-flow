@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { readFile } from "fs/promises";
+import { existsSync } from "fs";
+import { join } from "path";
 import {
   VIDEO_FORMATS,
   type VideoFormatId,
@@ -8,6 +11,8 @@ import {
   GENRE_HOOK_STYLE,
   DIALOG_TONE_SANTAI,
 } from "@/lib/prompt-templates";
+
+const REFERENCES_DIR = "/data/images/references";
 
 const PLATFORM_LOGICS: Record<string, (duration: number) => string> = {
   flow: () => `
@@ -32,29 +37,29 @@ const PLATFORM_LOGICS: Record<string, (duration: number) => string> = {
 
 const AVATAR_DNA: Record<string, string[]> = {
   woman_malay_hijab: [
-    "A friendly 25-year-old Malay woman with a warm smile, wearing a stylish light beige chiffon hijab and a modest pastel-colored modern Baju Kurung or blouse. Natural makeup look.",
-    "A cheerful 24-year-old Malay woman wearing a dusty pink cotton hijab paired with a soft cream knit cardigan over a flowy midi dress. Dewy skin with a subtle lip tint. Sweet and approachable girl-next-door energy.",
-    "A confident 27-year-old Malay woman in a sage green satin hijab, styled neatly, wearing a matching set of linen top and wide-leg pants. Minimal gold jewelry. Clean, put-together modest fashion influencer vibe.",
+    "A friendly 25-year-old Malay woman with a warm smile. Natural makeup look. Hijabi.",
+    "A cheerful 24-year-old Malay woman with dewy skin and subtle lip tint. Sweet and approachable girl-next-door energy. Hijabi.",
+    "A confident 27-year-old Malay woman with minimal gold jewelry. Clean, put-together modest fashion influencer vibe. Hijabi.",
   ],
   woman_malay_freehair: [
-    "A trendy 23-year-old Malay woman with shoulder-length wavy hair, wearing a casual denim jacket over a white tee. Energetic and approachable vibe.",
-    "A stylish 25-year-old Malay woman with long straight black hair and wispy bangs, wearing an oversized graphic tee tucked into high-waisted jeans. Cool streetwear aesthetic with a playful, youthful energy.",
-    "A vibrant 22-year-old Malay woman with a messy bun and hoop earrings, wearing a cropped cardigan over a simple tank top paired with cargo pants. Effortlessly trendy Y2K-inspired look with a fun, carefree attitude.",
+    "A trendy 23-year-old Malay woman with shoulder-length wavy hair. Energetic and approachable vibe.",
+    "A stylish 25-year-old Malay woman with long straight black hair and wispy bangs. Cool streetwear aesthetic with a playful, youthful energy.",
+    "A vibrant 22-year-old Malay woman with a messy bun and hoop earrings. Effortlessly trendy Y2K-inspired look with a fun, carefree attitude.",
   ],
   woman_malay_corporate: [
-    "A professional 30-year-old Malay woman with a confident posture, wearing a neat hijab and a dark blazer over a formal blouse. Sophisticated and authoritative look.",
-    "A poised 28-year-old Malay woman in a structured navy pantsuit with a cream silk hijab. Minimal pearl stud earrings. Sharp, ambitious corporate leader energy with a warm yet commanding presence.",
-    "A polished 31-year-old Malay woman wearing a tailored charcoal pencil skirt suit with a pastel chiffon hijab neatly pinned. Reading glasses resting on her collar. Smart, trustworthy senior executive vibe.",
+    "A professional 30-year-old Malay woman with a confident posture. Sophisticated and authoritative look. Hijabi.",
+    "A poised 28-year-old Malay woman with minimal pearl stud earrings. Sharp, ambitious corporate leader energy with a warm yet commanding presence. Hijabi.",
+    "A polished 31-year-old Malay woman with reading glasses resting on her collar. Smart, trustworthy senior executive vibe. Hijabi.",
   ],
   man_malay_casual: [
-    "A 26-year-old Malay man with a short, neat haircut and a slight stubble, wearing a plain oversized t-shirt or a flannel shirt. Relaxed and friendly boy-next-door vibe.",
-    "A laid-back 24-year-old Malay man with a textured middle-part hairstyle, wearing a loose linen button-up shirt with rolled sleeves over chino shorts. Clean-shaven with a warm, easygoing smile. Chill beach-town guy energy.",
-    "A cool 27-year-old Malay man with a buzz cut and thin silver chain necklace, wearing a plain black hoodie and jogger pants. Subtle streetwear vibe with a confident, mysterious edge.",
+    "A 26-year-old Malay man with a short, neat haircut and a slight stubble. Relaxed and friendly boy-next-door vibe.",
+    "A laid-back 24-year-old Malay man with a textured middle-part hairstyle. Clean-shaven with a warm, easygoing smile. Chill beach-town guy energy.",
+    "A cool 27-year-old Malay man with a buzz cut and thin silver chain necklace. Subtle streetwear vibe with a confident, mysterious edge.",
   ],
   man_malay_corporate: [
-    "A sharp 32-year-old Malay man in a well-fitted white shirt and dark trousers, wearing a classic watch. Clean-shaven or with a very neat beard. Professional and successful appearance.",
-    "A distinguished 30-year-old Malay man with neatly combed side-parted hair and a trimmed goatee, wearing a slim-fit navy blazer over a light blue Oxford shirt. No tie, top button undone. Smart-casual corporate entrepreneur look.",
-    "A polished 34-year-old Malay man with a clean fade haircut and frameless glasses, wearing a charcoal turtleneck under a tailored grey suit jacket. Minimalist luxury watch. Modern tech-CEO sophisticated vibe.",
+    "A sharp 32-year-old Malay man with a clean-shaven face or very neat beard. Professional and successful appearance.",
+    "A distinguished 30-year-old Malay man with neatly combed side-parted hair and a trimmed goatee. Smart-casual corporate entrepreneur look.",
+    "A polished 34-year-old Malay man with a clean fade haircut and frameless glasses. Modern tech-CEO sophisticated vibe.",
   ],
   product_only: [
     "No human model. Focus entirely on the product packaging, textures, and ingredients. High-end product photography style with aesthetic props and clean backgrounds.",
@@ -141,7 +146,7 @@ export async function POST(req: NextRequest) {
     customTargetAudience = "",
     videoFormat = null, // "super_short" | "short" | "complete" | null
     varyBackground = false,
-    isClothing = false,
+    productImage = null, // filename from /api/upload (for sending product image to Gemini)
   } = body;
 
   if (!productId && !customProduct)
@@ -163,6 +168,7 @@ export async function POST(req: NextRequest) {
     shopName: string | null;
     usp: string | null;
     targetAudience: string | null;
+    images?: string;
   };
   if (customProduct) {
     product = {
@@ -188,6 +194,53 @@ export async function POST(req: NextRequest) {
       usp: customUsp || dbProduct.usp || null,
       targetAudience: customTargetAudience || dbProduct.targetAudience || null,
     };
+  }
+
+  // ─── Fetch product image as base64 for Gemini vision ───
+  let productImageBase64: string | null = null;
+  let productImageMime = "image/jpeg";
+
+  // Priority 1: Uploaded product image (from V2 Studio)
+  if (productImage) {
+    try {
+      const imgPath = join(REFERENCES_DIR, String(productImage));
+      if (existsSync(imgPath)) {
+        const buf = await readFile(imgPath);
+        productImageBase64 = buf.toString("base64");
+        const ext = String(productImage).split(".").pop()?.toLowerCase();
+        productImageMime =
+          ext === "png"
+            ? "image/png"
+            : ext === "webp"
+              ? "image/webp"
+              : "image/jpeg";
+        console.log(
+          `[ai-generate] Loaded product image from upload: ${productImage} (${Math.round(buf.length / 1024)}KB)`,
+        );
+      }
+    } catch (e) {
+      console.warn("[ai-generate] Could not read uploaded product image:", e);
+    }
+  }
+
+  // Priority 2: Catalog product images (TikTok Shop URLs)
+  if (!productImageBase64 && product.images) {
+    try {
+      const imgs = JSON.parse(product.images || "[]") as string[];
+      if (imgs[0]) {
+        const imgRes = await fetch(imgs[0]);
+        if (imgRes.ok) {
+          const buf = Buffer.from(await imgRes.arrayBuffer());
+          productImageBase64 = buf.toString("base64");
+          productImageMime = imgRes.headers.get("content-type") || "image/jpeg";
+          console.log(
+            `[ai-generate] Fetched catalog product image (${Math.round(buf.length / 1024)}KB)`,
+          );
+        }
+      }
+    } catch (e) {
+      console.warn("[ai-generate] Could not fetch catalog product image:", e);
+    }
   }
 
   // ─── GEMPAK MODE (Video Studio v2) ───
@@ -244,27 +297,29 @@ ${
     : ""
 }
 
-IMPORTANT — REFERENCE IMAGES:
+IMPORTANT — PRODUCT IMAGE ANALYSIS:
+${productImageBase64 ? "- A product image has been provided inline. ANALYZE it carefully to understand the product's exact appearance, color, shape, material, branding, and category." : "- No product image available. Rely on the text description above."}
 - The PRODUCT IMAGE has been uploaded as a reference image in Google Flow.
 - ${isCustomModel ? "The MODEL FACE has also been uploaded as a reference image." : ""}
 - The AI image generator (Google Flow) will have access to these uploaded reference images.
 - Your visual_prompt_en MUST instruct Google Flow to use these uploaded reference images exactly as they are.
 - DO NOT invent or describe a different product. The product in the reference image IS the product.
 
+PRODUCT-AWARE MODEL RULES (CRITICAL — analyze the product image):
+- If the product is WEARABLE (hijab, headscarf, clothing, dress, blouse, shoes, accessories, bag):
+  1. The model MUST WEAR/USE the exact product from the image — NEVER hold it flat or display it alone.
+  2. The product must match the reference image EXACTLY — same color, pattern, fabric, design, branding.
+  3. DO NOT describe competing garments in visual_dna that conflict with the product. E.g., if product is a hijab, do NOT describe a different hijab in the model DNA.
+  4. Model should have natural, confident poses that showcase the product fit and silhouette.
+  5. Vary poses across scenes: standing, walking, seated, three-quarter turn.
+  6. The model WEARS the product in EVERY scene.
+- If the product is NOT wearable (skincare, gadget, food, supplement, etc.):
+  1. The model HOLDS, USES, or INTERACTS with the product naturally.
+  2. Keep the full model outfit description from the avatar DNA above.
+  3. Focus on product interaction: holding, applying, demonstrating.
+
 ${dialogInst}
 ${englishDialogInst}
-
-${
-  isClothing
-    ? `CLOTHING/WEARABLE PRODUCT RULES (CRITICAL — this product is clothing/fashion):
-1. The product MUST be shown WORN by the model — NEVER displayed flat-lay or floating alone.
-2. The clothing item must match the reference image EXACTLY — same color, pattern, fabric, design, branding.
-3. Model should have natural, confident poses that showcase the clothing fit and silhouette.
-4. Show how the clothing drapes and fits on a real body. Vary poses: standing, walking, seated, three-quarter turn.
-5. DO NOT alter the clothing design — keep all prints, logos, stitching, buttons exactly as shown.
-6. The model WEARS the product in EVERY scene.`
-    : ""
-}
 
 RULES FOR visual_prompt_en (CRITICAL — this goes to Google Flow image generator):
 - Each visual_prompt_en must be a SELF-CONTAINED, detailed description for AI image generation.
@@ -291,7 +346,7 @@ Output JSON:
   "script_title": "Catchy viral title in casual Malay",
   "hook_title": "Short punchy hook title for intro card (3-5 words, catchy, e.g. 'Rahsia Kulit Glowing!')",
   "hook_subtitle": "Product name or tagline for intro subtitle",
-  "visual_dna": "Detailed, consistent model appearance description based on avatar DNA. Include: age, ethnicity, clothing style, hijab if applicable, expression, vibe.",
+  "visual_dna": "Detailed, consistent model appearance. Include: age, ethnicity, expression, vibe. If product is WEARABLE: describe the model wearing the EXACT product from the image (color, material, design). Do NOT add conflicting clothing. If product is NOT wearable: describe a suitable outfit that complements the product.",
   "genre_style": "Genre name",
   "variations": [
     {
@@ -317,13 +372,30 @@ All string fields must be plain strings (never objects or arrays).
 `;
 
     try {
+      // Build parts array — text prompt + optional product image
+      const gempakParts: Array<
+        { text: string } | { inlineData: { mimeType: string; data: string } }
+      > = [{ text: gempakPrompt }];
+
+      if (productImageBase64) {
+        gempakParts.push({
+          inlineData: {
+            mimeType: productImageMime,
+            data: productImageBase64,
+          },
+        });
+        console.log(
+          "[ai-generate/gempak] Sending product image inline to Gemini for analysis",
+        );
+      }
+
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: gempakPrompt }] }],
+            contents: [{ parts: gempakParts }],
             generationConfig: { responseMimeType: "application/json" },
           }),
           cache: "no-store" as RequestCache,
@@ -624,17 +696,18 @@ All string fields must be plain strings (never objects or arrays).
     ${avatarInstruction}
     ${platformLogic}
     ${ANTI_HALLUCINATION}
-    ${
-      isClothing
-        ? `CLOTHING/WEARABLE PRODUCT RULES (CRITICAL — this product is clothing/fashion):
-    1. The product MUST be shown WORN by the model — NEVER displayed flat-lay or floating alone.
-    2. The clothing item must match the reference image EXACTLY — same color, pattern, fabric, design, branding.
-    3. Model should have natural, confident poses that showcase the clothing fit and silhouette.
-    4. Show how the clothing drapes and fits on a real body. Vary poses across variations: standing, walking, seated, three-quarter turn.
-    5. DO NOT alter the clothing design — keep all prints, logos, stitching, buttons exactly as shown.
-    6. The model WEARS the product in EVERY variation/scene.`
-        : ""
-    }
+    PRODUCT-AWARE MODEL RULES (CRITICAL — analyze the product from the reference image):
+    - If the product is WEARABLE (hijab, headscarf, clothing, dress, blouse, shoes, accessories, bag):
+      1. The model MUST WEAR/USE the exact product — NEVER hold it flat or display it alone.
+      2. The product must match the reference image EXACTLY — same color, pattern, fabric, design, branding.
+      3. Model should have natural, confident poses that showcase the product fit and silhouette.
+      4. Vary poses across variations: standing, walking, seated, three-quarter turn.
+      5. DO NOT alter the clothing design — keep all prints, logos, stitching, buttons exactly as shown.
+      6. The model WEARS the product in EVERY variation/scene.
+    - If the product is NOT wearable (skincare, gadget, food, supplement, etc.):
+      1. The model HOLDS, USES, or INTERACTS with the product naturally.
+      2. Keep the full model outfit description.
+      3. Focus on product interaction: holding, applying, demonstrating.
     ${dialogLogic}
     Task: ${promptStrategy}
 
@@ -661,13 +734,31 @@ All string fields must be plain strings (never objects or arrays).
   `;
 
   try {
+    // Build parts array — text prompt + optional product image
+    const promptParts: Array<
+      | { text: string }
+      | { inlineData: { mimeType: string; data: string } }
+    > = [{ text: systemPrompt }];
+
+    if (productImageBase64) {
+      promptParts.push({
+        inlineData: {
+          mimeType: productImageMime,
+          data: productImageBase64,
+        },
+      });
+      console.log(
+        "[ai-generate/paired] Sending product image inline to Gemini for analysis",
+      );
+    }
+
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: systemPrompt }] }],
+          contents: [{ parts: promptParts }],
           generationConfig: { responseMimeType: "application/json" },
         }),
         cache: "no-store" as RequestCache,
