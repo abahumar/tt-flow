@@ -37,19 +37,24 @@ const PLATFORM_LOGICS: Record<string, (duration: number) => string> = {
 
 const AVATAR_DNA: Record<string, string[]> = {
   woman_malay_hijab: [
-    "A friendly 25-year-old Malay woman with a warm smile. Natural makeup look. Hijabi.",
-    "A cheerful 24-year-old Malay woman with dewy skin and subtle lip tint. Sweet and approachable girl-next-door energy. Hijabi.",
-    "A confident 27-year-old Malay woman with minimal gold jewelry. Clean, put-together modest fashion influencer vibe. Hijabi.",
+    "A friendly 25-year-old Malay woman with a warm smile. Natural makeup look. Hijabi, wearing handsocks and socks. Fully covered aurat (tutup aurat).",
+    "A cheerful 24-year-old Malay woman with dewy skin and subtle lip tint. Sweet and approachable girl-next-door energy. Hijabi, wearing handsocks and socks. Fully covered aurat (tutup aurat).",
+    "A confident 27-year-old Malay woman with minimal gold jewelry. Clean, put-together modest fashion influencer vibe. Hijabi, wearing handsocks and socks. Fully covered aurat (tutup aurat).",
   ],
   woman_malay_freehair: [
-    "A trendy 23-year-old Malay woman with shoulder-length wavy hair. Energetic and approachable vibe.",
-    "A stylish 25-year-old Malay woman with long straight black hair and wispy bangs. Cool streetwear aesthetic with a playful, youthful energy.",
-    "A vibrant 22-year-old Malay woman with a messy bun and hoop earrings. Effortlessly trendy Y2K-inspired look with a fun, carefree attitude.",
+    "A trendy 23-year-old Malay woman with shoulder-length wavy hair. Energetic and approachable vibe. Wearing handsocks and socks. Fully covered aurat (tutup aurat).",
+    "A stylish 25-year-old Malay woman with long straight black hair and wispy bangs. Cool streetwear aesthetic with a playful, youthful energy. Wearing handsocks and socks. Fully covered aurat (tutup aurat).",
+    "A vibrant 22-year-old Malay woman with a messy bun and hoop earrings. Effortlessly trendy Y2K-inspired look with a fun, carefree attitude. Wearing handsocks and socks. Fully covered aurat (tutup aurat).",
   ],
   woman_malay_corporate: [
-    "A professional 30-year-old Malay woman with a confident posture. Sophisticated and authoritative look. Hijabi.",
-    "A poised 28-year-old Malay woman with minimal pearl stud earrings. Sharp, ambitious corporate leader energy with a warm yet commanding presence. Hijabi.",
-    "A polished 31-year-old Malay woman with reading glasses resting on her collar. Smart, trustworthy senior executive vibe. Hijabi.",
+    "A professional 30-year-old Malay woman with a confident posture. Sophisticated and authoritative look. Hijabi, wearing handsocks and socks. Fully covered aurat (tutup aurat).",
+    "A poised 28-year-old Malay woman with minimal pearl stud earrings. Sharp, ambitious corporate leader energy with a warm yet commanding presence. Hijabi, wearing handsocks and socks. Fully covered aurat (tutup aurat).",
+    "A polished 31-year-old Malay woman with reading glasses resting on her collar. Smart, trustworthy senior executive vibe. Hijabi, wearing handsocks and socks. Fully covered aurat (tutup aurat).",
+  ],
+  woman_malay_elder: [
+    "A warm 50-year-old Malay makcik with a gentle motherly smile and laugh lines. Hijabi, wearing handsocks and socks. Fully covered aurat (tutup aurat). Kind and trustworthy auntie energy.",
+    "A cheerful 55-year-old Malay woman with a round friendly face and reading glasses. Hijabi, wearing handsocks and socks. Fully covered aurat (tutup aurat). Experienced, wise, and approachable.",
+    "A graceful 48-year-old Malay woman with a calm, elegant demeanor. Hijabi, wearing handsocks and socks. Fully covered aurat (tutup aurat). Mature beauty with a confident, nurturing presence.",
   ],
   man_malay_casual: [
     "A 26-year-old Malay man with a short, neat haircut and a slight stubble. Relaxed and friendly boy-next-door vibe.",
@@ -60,6 +65,11 @@ const AVATAR_DNA: Record<string, string[]> = {
     "A sharp 32-year-old Malay man with a clean-shaven face or very neat beard. Professional and successful appearance.",
     "A distinguished 30-year-old Malay man with neatly combed side-parted hair and a trimmed goatee. Smart-casual corporate entrepreneur look.",
     "A polished 34-year-old Malay man with a clean fade haircut and frameless glasses. Modern tech-CEO sophisticated vibe.",
+  ],
+  man_malay_elder: [
+    "A wise 55-year-old Malay pakcik with a neatly trimmed grey beard and warm eyes. Wearing a kopiah. Calm, fatherly, and trustworthy uncle energy.",
+    "A dignified 52-year-old Malay man with salt-and-pepper hair and a kind smile. Wearing neat songkok. Experienced, respected community leader vibe.",
+    "A gentle 58-year-old Malay man with reading glasses and a soft-spoken demeanor. Clean and well-groomed. Wise grandfather energy with warmth and authority.",
   ],
   product_only: [
     "No human model. Focus entirely on the product packaging, textures, and ingredients. High-end product photography style with aesthetic props and clean backgrounds.",
@@ -736,8 +746,7 @@ All string fields must be plain strings (never objects or arrays).
   try {
     // Build parts array — text prompt + optional product image
     const promptParts: Array<
-      | { text: string }
-      | { inlineData: { mimeType: string; data: string } }
+      { text: string } | { inlineData: { mimeType: string; data: string } }
     > = [{ text: systemPrompt }];
 
     if (productImageBase64) {

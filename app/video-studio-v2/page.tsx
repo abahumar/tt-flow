@@ -140,9 +140,11 @@ const PERSONAS = [
     label: "Wanita Melayu (Korporat)",
     icon: User,
   },
+  { id: "woman_malay_elder", label: "Makcik Melayu (50+)", icon: User },
   { id: "product_only", label: "Produk Sahaja", icon: Box },
   { id: "man_malay_casual", label: "Lelaki Melayu (Casual)", icon: User },
   { id: "man_malay_corporate", label: "Lelaki Melayu (Korporat)", icon: User },
+  { id: "man_malay_elder", label: "Pakcik Melayu (50+)", icon: User },
 ] as const;
 
 // ─── Component ───

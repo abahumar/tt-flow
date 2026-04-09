@@ -97,6 +97,11 @@ const AVATARS = [
     emoji: "👩‍💼",
   },
   {
+    id: "woman_malay_elder",
+    label: "Makcik Melayu (50+)",
+    emoji: "👵",
+  },
+  {
     id: "man_malay_casual",
     label: "Lelaki Melayu (Casual)",
     emoji: "👨",
@@ -105,6 +110,11 @@ const AVATARS = [
     id: "man_malay_corporate",
     label: "Lelaki Melayu (Korporat)",
     emoji: "👨‍💼",
+  },
+  {
+    id: "man_malay_elder",
+    label: "Pakcik Melayu (50+)",
+    emoji: "👴",
   },
   {
     id: "product_only",
