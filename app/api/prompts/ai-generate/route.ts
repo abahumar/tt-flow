@@ -37,24 +37,24 @@ const PLATFORM_LOGICS: Record<string, (duration: number) => string> = {
 
 const AVATAR_DNA: Record<string, string[]> = {
   woman_malay_hijab: [
-    "A friendly 25-year-old Malay woman with a warm smile. Natural makeup look. Hijabi, wearing wrist-length handsocks (fingers exposed) and socks. Fully covered aurat (tutup aurat).",
-    "A cheerful 24-year-old Malay woman with dewy skin and subtle lip tint. Sweet and approachable girl-next-door energy. Hijabi, wearing wrist-length handsocks (fingers exposed) and socks. Fully covered aurat (tutup aurat).",
-    "A confident 27-year-old Malay woman with minimal gold jewelry. Clean, put-together modest fashion influencer vibe. Hijabi, wearing wrist-length handsocks (fingers exposed) and socks. Fully covered aurat (tutup aurat).",
+    "A friendly 25-year-old Malay woman with a warm smile. Natural makeup look. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers).",
+    "A cheerful 24-year-old Malay woman with dewy skin and subtle lip tint. Sweet and approachable girl-next-door energy. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers).",
+    "A confident 27-year-old Malay woman with minimal gold jewelry. Clean, put-together modest fashion influencer vibe. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers).",
   ],
   woman_malay_freehair: [
-    "A trendy 23-year-old Malay woman with shoulder-length wavy hair. Energetic and approachable vibe. Wearing wrist-length handsocks (fingers exposed) and socks. Fully covered aurat (tutup aurat).",
-    "A stylish 25-year-old Malay woman with long straight black hair and wispy bangs. Cool streetwear aesthetic with a playful, youthful energy. Wearing wrist-length handsocks (fingers exposed) and socks. Fully covered aurat (tutup aurat).",
-    "A vibrant 22-year-old Malay woman with a messy bun and hoop earrings. Effortlessly trendy Y2K-inspired look with a fun, carefree attitude. Wearing wrist-length handsocks (fingers exposed) and socks. Fully covered aurat (tutup aurat).",
+    "A trendy 20-year-old Malay woman with shoulder-length wavy hair. Energetic and approachable vibe. Hijabi with modern fashion-forward styling, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers).",
+    "A stylish 21-year-old Malay woman with long straight black hair and wispy bangs. Cool streetwear aesthetic with a playful, youthful energy. Hijabi with trendy modern look, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers).",
+    "A vibrant 19-year-old Malay woman with a messy bun and hoop earrings. Effortlessly trendy Y2K-inspired look with a fun, carefree attitude. Hijabi with edgy modern styling, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers).",
   ],
   woman_malay_corporate: [
-    "A professional 30-year-old Malay woman with a confident posture. Sophisticated and authoritative look. Hijabi, wearing wrist-length handsocks (fingers exposed) and socks. Fully covered aurat (tutup aurat).",
-    "A poised 28-year-old Malay woman with minimal pearl stud earrings. Sharp, ambitious corporate leader energy with a warm yet commanding presence. Hijabi, wearing wrist-length handsocks (fingers exposed) and socks. Fully covered aurat (tutup aurat).",
-    "A polished 31-year-old Malay woman with reading glasses resting on her collar. Smart, trustworthy senior executive vibe. Hijabi, wearing wrist-length handsocks (fingers exposed) and socks. Fully covered aurat (tutup aurat).",
+    "A professional 30-year-old Malay woman with a confident posture. Sophisticated and authoritative look. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers).",
+    "A poised 28-year-old Malay woman with minimal pearl stud earrings. Sharp, ambitious corporate leader energy with a warm yet commanding presence. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers).",
+    "A polished 31-year-old Malay woman with reading glasses resting on her collar. Smart, trustworthy senior executive vibe. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers).",
   ],
   woman_malay_elder: [
-    "A warm 50-year-old Malay makcik with a gentle motherly smile and laugh lines. Hijabi, wearing wrist-length handsocks (fingers exposed) and socks. Fully covered aurat (tutup aurat). Kind and trustworthy auntie energy.",
-    "A cheerful 55-year-old Malay woman with a round friendly face and reading glasses. Hijabi, wearing wrist-length handsocks (fingers exposed) and socks. Fully covered aurat (tutup aurat). Experienced, wise, and approachable.",
-    "A graceful 48-year-old Malay woman with a calm, elegant demeanor. Hijabi, wearing wrist-length handsocks (fingers exposed) and socks. Fully covered aurat (tutup aurat). Mature beauty with a confident, nurturing presence.",
+    "A warm 50-year-old Malay makcik with a gentle motherly smile and laugh lines. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Kind and trustworthy auntie energy.",
+    "A cheerful 55-year-old Malay woman with a round friendly face and reading glasses. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Experienced, wise, and approachable.",
+    "A graceful 48-year-old Malay woman with a calm, elegant demeanor. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Mature beauty with a confident, nurturing presence.",
   ],
   man_malay_casual: [
     "A 26-year-old Malay man with a short, neat haircut and a slight stubble. Relaxed and friendly boy-next-door vibe.",
