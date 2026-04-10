@@ -170,6 +170,7 @@ export default function VideoStudioPage() {
   const [includeDialog, setIncludeDialog] = useState(false);
   const [includeEnglishDialog, setIncludeEnglishDialog] = useState(false);
   const [isClothing, setIsClothing] = useState(false);
+  const [specialInstruction, setSpecialInstruction] = useState("");
   const [videoFormat, setVideoFormat] = useState<VideoFormatId | "">("");
   const [generating, setGenerating] = useState(false);
   const [scenes, setScenes] = useState<SceneOutput[]>([]);
@@ -417,6 +418,9 @@ export default function VideoStudioPage() {
             (useTemplate && (modelFilename || modelFile)
               ? "Use the uploaded model reference image exactly as shown"
               : ""),
+          ...(specialInstruction.trim()
+            ? { specialInstruction: specialInstruction.trim() }
+            : {}),
         }),
       });
 
@@ -1238,6 +1242,20 @@ export default function VideoStudioPage() {
               >
                 👗 Clothing / Wearable: {isClothing ? "On" : "Off"}
               </button>
+            </div>
+
+            {/* Special Instruction */}
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">
+                Special Instruction (Optional)
+              </label>
+              <textarea
+                value={specialInstruction}
+                onChange={(e) => setSpecialInstruction(e.target.value)}
+                placeholder="E.g. Model mesti pakai tudung pink, background outdoor garden..."
+                rows={2}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
             </div>
           </>
         )}

@@ -37,29 +37,29 @@ const PLATFORM_LOGICS: Record<string, (duration: number) => string> = {
 
 const AVATAR_DNA: Record<string, string[]> = {
   woman_malay_hijab: [
-    "A friendly 25-year-old Malay woman with a warm smile. Natural makeup look. Hijabi, wearing handsocks and socks. Fully covered aurat (tutup aurat).",
-    "A cheerful 24-year-old Malay woman with dewy skin and subtle lip tint. Sweet and approachable girl-next-door energy. Hijabi, wearing handsocks and socks. Fully covered aurat (tutup aurat).",
-    "A confident 27-year-old Malay woman with minimal gold jewelry. Clean, put-together modest fashion influencer vibe. Hijabi, wearing handsocks and socks. Fully covered aurat (tutup aurat).",
+    "A friendly 25-year-old Malay woman with a warm smile. Natural makeup look. Hijabi, wearing wrist-length handsocks (fingers exposed) and socks. Fully covered aurat (tutup aurat).",
+    "A cheerful 24-year-old Malay woman with dewy skin and subtle lip tint. Sweet and approachable girl-next-door energy. Hijabi, wearing wrist-length handsocks (fingers exposed) and socks. Fully covered aurat (tutup aurat).",
+    "A confident 27-year-old Malay woman with minimal gold jewelry. Clean, put-together modest fashion influencer vibe. Hijabi, wearing wrist-length handsocks (fingers exposed) and socks. Fully covered aurat (tutup aurat).",
   ],
   woman_malay_freehair: [
-    "A trendy 23-year-old Malay woman with shoulder-length wavy hair. Energetic and approachable vibe. Wearing handsocks and socks. Fully covered aurat (tutup aurat).",
-    "A stylish 25-year-old Malay woman with long straight black hair and wispy bangs. Cool streetwear aesthetic with a playful, youthful energy. Wearing handsocks and socks. Fully covered aurat (tutup aurat).",
-    "A vibrant 22-year-old Malay woman with a messy bun and hoop earrings. Effortlessly trendy Y2K-inspired look with a fun, carefree attitude. Wearing handsocks and socks. Fully covered aurat (tutup aurat).",
+    "A trendy 23-year-old Malay woman with shoulder-length wavy hair. Energetic and approachable vibe. Wearing wrist-length handsocks (fingers exposed) and socks. Fully covered aurat (tutup aurat).",
+    "A stylish 25-year-old Malay woman with long straight black hair and wispy bangs. Cool streetwear aesthetic with a playful, youthful energy. Wearing wrist-length handsocks (fingers exposed) and socks. Fully covered aurat (tutup aurat).",
+    "A vibrant 22-year-old Malay woman with a messy bun and hoop earrings. Effortlessly trendy Y2K-inspired look with a fun, carefree attitude. Wearing wrist-length handsocks (fingers exposed) and socks. Fully covered aurat (tutup aurat).",
   ],
   woman_malay_corporate: [
-    "A professional 30-year-old Malay woman with a confident posture. Sophisticated and authoritative look. Hijabi, wearing handsocks and socks. Fully covered aurat (tutup aurat).",
-    "A poised 28-year-old Malay woman with minimal pearl stud earrings. Sharp, ambitious corporate leader energy with a warm yet commanding presence. Hijabi, wearing handsocks and socks. Fully covered aurat (tutup aurat).",
-    "A polished 31-year-old Malay woman with reading glasses resting on her collar. Smart, trustworthy senior executive vibe. Hijabi, wearing handsocks and socks. Fully covered aurat (tutup aurat).",
+    "A professional 30-year-old Malay woman with a confident posture. Sophisticated and authoritative look. Hijabi, wearing wrist-length handsocks (fingers exposed) and socks. Fully covered aurat (tutup aurat).",
+    "A poised 28-year-old Malay woman with minimal pearl stud earrings. Sharp, ambitious corporate leader energy with a warm yet commanding presence. Hijabi, wearing wrist-length handsocks (fingers exposed) and socks. Fully covered aurat (tutup aurat).",
+    "A polished 31-year-old Malay woman with reading glasses resting on her collar. Smart, trustworthy senior executive vibe. Hijabi, wearing wrist-length handsocks (fingers exposed) and socks. Fully covered aurat (tutup aurat).",
   ],
   woman_malay_elder: [
-    "A warm 50-year-old Malay makcik with a gentle motherly smile and laugh lines. Hijabi, wearing handsocks and socks. Fully covered aurat (tutup aurat). Kind and trustworthy auntie energy.",
-    "A cheerful 55-year-old Malay woman with a round friendly face and reading glasses. Hijabi, wearing handsocks and socks. Fully covered aurat (tutup aurat). Experienced, wise, and approachable.",
-    "A graceful 48-year-old Malay woman with a calm, elegant demeanor. Hijabi, wearing handsocks and socks. Fully covered aurat (tutup aurat). Mature beauty with a confident, nurturing presence.",
+    "A warm 50-year-old Malay makcik with a gentle motherly smile and laugh lines. Hijabi, wearing wrist-length handsocks (fingers exposed) and socks. Fully covered aurat (tutup aurat). Kind and trustworthy auntie energy.",
+    "A cheerful 55-year-old Malay woman with a round friendly face and reading glasses. Hijabi, wearing wrist-length handsocks (fingers exposed) and socks. Fully covered aurat (tutup aurat). Experienced, wise, and approachable.",
+    "A graceful 48-year-old Malay woman with a calm, elegant demeanor. Hijabi, wearing wrist-length handsocks (fingers exposed) and socks. Fully covered aurat (tutup aurat). Mature beauty with a confident, nurturing presence.",
   ],
   man_malay_casual: [
     "A 26-year-old Malay man with a short, neat haircut and a slight stubble. Relaxed and friendly boy-next-door vibe.",
     "A laid-back 24-year-old Malay man with a textured middle-part hairstyle. Clean-shaven with a warm, easygoing smile. Chill beach-town guy energy.",
-    "A cool 27-year-old Malay man with a buzz cut and thin silver chain necklace. Subtle streetwear vibe with a confident, mysterious edge.",
+    "A cool 27-year-old Malay man with a buzz cut. Subtle streetwear vibe with a confident, mysterious edge. No chains or necklaces.",
   ],
   man_malay_corporate: [
     "A sharp 32-year-old Malay man with a clean-shaven face or very neat beard. Professional and successful appearance.",
@@ -157,6 +157,7 @@ export async function POST(req: NextRequest) {
     videoFormat = null, // "super_short" | "short" | "complete" | null
     varyBackground = false,
     productImage = null, // filename from /api/upload (for sending product image to Gemini)
+    specialInstruction = "",
   } = body;
 
   if (!productId && !customProduct)
@@ -291,6 +292,7 @@ ${product.usp ? `USP (Unique Selling Points): ${product.usp}` : ""}
 ${product.targetAudience ? `Target Audience: ${product.targetAudience}` : ""}
 ${backgroundDesc ? `BACKGROUND CONTEXT: ${backgroundDesc}` : ""}
 ${modelDesc ? `MODEL CONTEXT: ${modelDesc}` : ""}
+${specialInstruction ? `\nSPECIAL INSTRUCTION (MUST FOLLOW): ${specialInstruction}` : ""}
 ${
   product.usp || product.targetAudience
     ? `
@@ -761,6 +763,7 @@ All string fields must be plain strings (never objects or arrays).
       2. Keep the full model outfit description.
       3. Focus on product interaction: holding, applying, demonstrating.
     ${dialogLogic}
+    ${specialInstruction ? `SPECIAL INSTRUCTION (MUST FOLLOW): ${specialInstruction}` : ""}
     Task: ${promptStrategy}
 
     CRITICAL RULE — PAIRED IMAGE + VIDEO PROMPTS:
