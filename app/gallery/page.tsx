@@ -17,6 +17,7 @@ import {
   Send,
   CheckSquare,
   Square,
+  Combine,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -76,6 +77,9 @@ export default function GalleryPage() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  // Combine videos
+  const [showCombineModal, setShowCombineModal] = useState(false);
+  const [combining, setCombining] = useState(false);
   // Hook & Overlay for gallery video
   const [galleryHookTitle, setGalleryHookTitle] = useState("");
   const [galleryOverlayText, setGalleryOverlayText] = useState("");
@@ -247,6 +251,44 @@ export default function GalleryPage() {
   const toggleSelectMode = () => {
     setSelectMode((prev) => !prev);
     setSelectedItems(new Set());
+  };
+
+  const handleCombineVideos = async () => {
+    if (selectedItems.size < 2) return;
+    setCombining(true);
+    try {
+      const res = await fetch("/api/gallery/combine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          videoIds: Array.from(selectedItems),
+          hookTitle: galleryHookTitle.trim() || undefined,
+          hookBgColor: galleryHookBgColor.replace("#", ""),
+          hookTextColor: galleryHookTextColor.replace("#", ""),
+          hookFontSize: galleryHookFontSize,
+          overlayText: galleryOverlayText.trim() || undefined,
+          overlayPosition: galleryOverlayPosition,
+          overlayFontSize: galleryFontSize,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert("Failed to combine: " + (err.error || "Unknown error"));
+        return;
+      }
+      const newVideo = await res.json();
+      setVideos((prev) => [newVideo, ...prev]);
+      setShowCombineModal(false);
+      setSelectedItems(new Set());
+      setSelectMode(false);
+      setGalleryHookTitle("");
+      setGalleryOverlayText("");
+      alert("Videos combined successfully!");
+    } catch {
+      alert("Failed to combine videos");
+    } finally {
+      setCombining(false);
+    }
   };
 
   const toggleSelectItem = (id: string) => {
@@ -443,6 +485,24 @@ export default function GalleryPage() {
             </span>
           </div>
           <div className="flex items-center gap-2">
+            {tab === "videos" && (
+              <button
+                onClick={() => {
+                  setGalleryHookTitle("");
+                  setGalleryOverlayText("");
+                  setShowCombineModal(true);
+                }}
+                disabled={selectedItems.size < 2 || bulkDeleting || combining}
+                className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {combining ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Combine className="h-4 w-4" />
+                )}
+                Combine ({selectedItems.size})
+              </button>
+            )}
             <button
               onClick={handleBulkDelete}
               disabled={selectedItems.size === 0 || bulkDeleting}
@@ -842,6 +902,206 @@ export default function GalleryPage() {
                 className="flex items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
               >
                 <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Combine Videos Modal */}
+      {showCombineModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setShowCombineModal(false)}
+        >
+          <div
+            className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Combine {selectedItems.size} Videos
+              </h3>
+              <button
+                onClick={() => setShowCombineModal(false)}
+                className="rounded-full p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-4 p-5">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <p className="text-xs font-medium text-gray-500">
+                  Selected videos will be combined in the order they were
+                  selected.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {Array.from(selectedItems).map((id, idx) => {
+                    const v = videos.find((v) => v.id === id);
+                    return (
+                      <span
+                        key={id}
+                        className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700"
+                      >
+                        {idx + 1}.{" "}
+                        {v?.videoType
+                          ? VIDEO_TYPES[v.videoType] || v.videoType
+                          : v?.filename?.slice(0, 15) || "Video"}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Hook & Overlay Settings */}
+              <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Hook & Caption (Optional)
+                </p>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">
+                    Hook Title (shows first 0.5s on first clip)
+                  </label>
+                  <input
+                    type="text"
+                    value={galleryHookTitle}
+                    onChange={(e) => setGalleryHookTitle(e.target.value)}
+                    placeholder="e.g. Rahsia Kulit Glowing!"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    maxLength={100}
+                  />
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-500">
+                      Hook BG Color
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="color"
+                        value={galleryHookBgColor}
+                        onChange={(e) => setGalleryHookBgColor(e.target.value)}
+                        className="h-7 w-9 cursor-pointer rounded border border-gray-300"
+                      />
+                      <span className="text-[10px] text-gray-400">
+                        {galleryHookBgColor}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-500">
+                      Hook Text Color
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="color"
+                        value={galleryHookTextColor}
+                        onChange={(e) =>
+                          setGalleryHookTextColor(e.target.value)
+                        }
+                        className="h-7 w-9 cursor-pointer rounded border border-gray-300"
+                      />
+                      <span className="text-[10px] text-gray-400">
+                        {galleryHookTextColor}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">
+                    Hook Text Size: {galleryHookFontSize}px
+                  </label>
+                  <input
+                    type="range"
+                    min={32}
+                    max={96}
+                    step={2}
+                    value={galleryHookFontSize}
+                    onChange={(e) =>
+                      setGalleryHookFontSize(Number(e.target.value))
+                    }
+                    className="w-full accent-pink-500"
+                  />
+                  <div className="flex justify-between text-[10px] text-gray-400">
+                    <span>32px (kecil)</span>
+                    <span>96px (besar)</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">
+                    Caption Text (shows after hook on first clip)
+                  </label>
+                  <input
+                    type="text"
+                    value={galleryOverlayText}
+                    onChange={(e) => setGalleryOverlayText(e.target.value)}
+                    placeholder="e.g. Tahan 24 Jam, Kulit Glowing!"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    maxLength={200}
+                  />
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <label className="mb-1 block text-xs font-medium text-gray-500">
+                      Position
+                    </label>
+                    <select
+                      value={galleryOverlayPosition}
+                      onChange={(e) =>
+                        setGalleryOverlayPosition(
+                          e.target.value as "top" | "bottom" | "center",
+                        )
+                      }
+                      className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="top">Top</option>
+                      <option value="center">Center</option>
+                      <option value="bottom">Bottom</option>
+                    </select>
+                  </div>
+                  <div className="flex-1">
+                    <label className="mb-1 block text-xs font-medium text-gray-500">
+                      Text Size: {galleryFontSize}px
+                    </label>
+                    <input
+                      type="range"
+                      min={24}
+                      max={96}
+                      step={2}
+                      value={galleryFontSize}
+                      onChange={(e) =>
+                        setGalleryFontSize(Number(e.target.value))
+                      }
+                      className="w-full accent-indigo-600"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 border-t border-gray-200 bg-gray-50 px-5 py-4">
+              <button
+                onClick={() => setShowCombineModal(false)}
+                disabled={combining}
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCombineVideos}
+                disabled={combining}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-600 disabled:opacity-50"
+              >
+                {combining ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Combine className="h-4 w-4" />
+                )}
+                {combining ? "Combining..." : "Combine Videos"}
               </button>
             </div>
           </div>
