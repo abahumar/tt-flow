@@ -14,11 +14,18 @@ import {
   Clapperboard,
   PenTool,
   Sparkles,
+  Bolt,
 } from "lucide-react";
 
-const nav = [
+const nav: {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  badge?: string;
+}[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/products", label: "Katalog Produk", icon: ShoppingBag },
+  { href: "/quick-video", label: "Quick Video", icon: Bolt, badge: "BETA" },
   { href: "/tools", label: "Prompt Tools", icon: Wand2 },
   { href: "/content-tools", label: "Content Tools", icon: PenTool },
   { href: "/image-tools", label: "Image Tools", icon: ImageIcon },
@@ -54,6 +61,11 @@ export function Sidebar() {
             >
               <item.icon className="h-4 w-4" />
               {item.label}
+              {item.badge && (
+                <span className="ml-auto rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-600">
+                  {item.badge}
+                </span>
+              )}
             </Link>
           );
         })}

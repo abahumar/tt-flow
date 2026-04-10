@@ -8,6 +8,7 @@ import {
   type VideoFormatId,
   getFormatSceneInstructions,
   HOOK_TEMPLATES,
+  type HookStyle,
   GENRE_HOOK_STYLE,
   DIALOG_TONE_SANTAI,
 } from "@/lib/prompt-templates";
@@ -158,6 +159,10 @@ export async function POST(req: NextRequest) {
     varyBackground = false,
     productImage = null, // filename from /api/upload (for sending product image to Gemini)
     specialInstruction = "",
+    // Quick Video variation params
+    variationSeed = "",
+    hookStyleOverride = "",
+    temperature = 0,
   } = body;
 
   if (!productId && !customProduct)
@@ -625,7 +630,7 @@ All string fields must be plain strings (never objects or arrays).
                 const fmtId = videoFormat as VideoFormatId;
                 const fmt = VIDEO_FORMATS[fmtId];
                 const scenes = getFormatSceneInstructions(fmtId, sceneCount);
-                const hookStyle = GENRE_HOOK_STYLE[videoType] || "curiosity";
+                const hookStyle = (hookStyleOverride && hookStyleOverride in HOOK_TEMPLATES ? hookStyleOverride : GENRE_HOOK_STYLE[videoType] || "curiosity") as HookStyle;
                 const hookExamples = HOOK_TEMPLATES[hookStyle]
                   .slice(0, 3)
                   .join("\n        ");
@@ -691,7 +696,7 @@ All string fields must be plain strings (never objects or arrays).
       const introEl = shortElements.find((e) => e.code === "IN")!;
       const uspEl = shortElements.find((e) => e.code === "USP")!;
       const ctaEl = shortElements.find((e) => e.code === "AC")!;
-      const hookStyle = GENRE_HOOK_STYLE[videoType] || "curiosity";
+      const hookStyle = (hookStyleOverride && hookStyleOverride in HOOK_TEMPLATES ? hookStyleOverride : GENRE_HOOK_STYLE[videoType] || "curiosity") as HookStyle;
       const hookExamples = HOOK_TEMPLATES[hookStyle]
         .slice(0, 3)
         .join("\n        ");
@@ -764,6 +769,7 @@ All string fields must be plain strings (never objects or arrays).
       3. Focus on product interaction: holding, applying, demonstrating.
     ${dialogLogic}
     ${specialInstruction ? `SPECIAL INSTRUCTION (MUST FOLLOW): ${specialInstruction}` : ""}
+    ${variationSeed ? `VARIATION SEED (MUST FOLLOW — this determines the creative direction for THIS generation): Focus on a ${variationSeed}. Make the hook, dialog, poses, and overall vibe reflect this angle. DO NOT default to generic content — commit fully to this creative direction.` : ""}
     Task: ${promptStrategy}
 
     CRITICAL RULE — PAIRED IMAGE + VIDEO PROMPTS:
@@ -813,7 +819,10 @@ All string fields must be plain strings (never objects or arrays).
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ parts: promptParts }],
-          generationConfig: { responseMimeType: "application/json" },
+          generationConfig: {
+            responseMimeType: "application/json",
+            ...(temperature > 0 ? { temperature } : {}),
+          },
         }),
         cache: "no-store" as RequestCache,
       },
