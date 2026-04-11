@@ -127,7 +127,7 @@ export async function POST(
                 },
                 hookBgColor: config.hookBgColor || "E91E63",
                 hookTextColor: config.hookTextColor || "FFFFFF",
-                hookFontSize: config.hookFontSize || 36,
+                hookFontSize: config.hookFontSize || 48,
               });
             } else if (hasHook) {
               addHookOverlay({
@@ -138,7 +138,7 @@ export async function POST(
                 displayDuration: 0.5,
                 bgColor: config.hookBgColor || "E91E63",
                 textColor: config.hookTextColor || "FFFFFF",
-                hookFontSize: config.hookFontSize || 36,
+                hookFontSize: config.hookFontSize || 48,
               });
             } else if (hasOverlay) {
               addTextOverlay(processedPath, overlayedPath, {
@@ -255,6 +255,15 @@ export async function POST(
                   : job.tiktokCaption || "",
               },
             });
+
+            // Send combined video to Telegram (non-blocking)
+            const combinedPath = join(VIDEO_DIR, `${id}-combined.mp4`);
+            const combinedCaption = config.hookTitle
+              ? `${config.hookTitle} — ${job.tiktokCaption || ""}\n\nType: Combined (${scenes.length} scenes)`
+              : `${job.tiktokCaption || ""}\n\nType: Combined (${scenes.length} scenes)`;
+            sendVideoToTelegram(combinedPath, combinedCaption).catch((err) =>
+              console.error("[Telegram] Combined video send failed:", err),
+            );
 
             console.log(`[Video] Auto-combine complete for job ${id}`);
           }

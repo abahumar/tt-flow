@@ -373,7 +373,7 @@ Output JSON:
       ${dialogOutputFields ? dialogOutputFields + "," : ""}
       "visual_prompt_en": "Detailed visual scene description starting with 'From the image uploaded, accurate scale, no alter, no redesign.' — product must match uploaded reference exactly",
       "video_prompt": "Short single sentence motion description (max 15 words)",
-      "overlay_text": "Short punchy text (5-8 words) to display on screen during this scene, summarizing the key message. NO EMOJIS allowed — plain text only. Example: 'Tahan 24 Jam, Kulit Glowing!'. Leave empty for scenes that don't need text.",
+      "overlay_text": "Short punchy text (5-8 words) to display on screen during this scene, summarizing the key message. NO EMOJIS allowed — plain text only. Example: 'Tahan 24 Jam, Kulit Glowing!'. For the LAST/CTA scene: use ultra-short 2-4 word phrase ONLY like 'Grab Sekarang', 'Jangan Lepas', 'Cuba Sekarang', 'Mesti Try'. FORBIDDEN CTA phrases: 'Harga Promosi', 'Cek Link'. Leave empty for scenes that don't need text.",
       "variation_hook_title": "REQUIRED — Short punchy hook title for THIS scene (3-7 words, attention-grabbing, e.g. 'Rahsia Kulit Glowing!')",
       "variation_video_caption": "REQUIRED — Catchy video caption in casual Malay for THIS scene (max 100 chars, e.g. 'Tengok sendiri hasilnya!')",
       "tiktok_product_name": "Clean product name (max 30 chars)",
@@ -630,7 +630,11 @@ All string fields must be plain strings (never objects or arrays).
                 const fmtId = videoFormat as VideoFormatId;
                 const fmt = VIDEO_FORMATS[fmtId];
                 const scenes = getFormatSceneInstructions(fmtId, sceneCount);
-                const hookStyle = (hookStyleOverride && hookStyleOverride in HOOK_TEMPLATES ? hookStyleOverride : GENRE_HOOK_STYLE[videoType] || "curiosity") as HookStyle;
+                const hookStyle = (
+                  hookStyleOverride && hookStyleOverride in HOOK_TEMPLATES
+                    ? hookStyleOverride
+                    : GENRE_HOOK_STYLE[videoType] || "curiosity"
+                ) as HookStyle;
                 const hookExamples = HOOK_TEMPLATES[hookStyle]
                   .slice(0, 3)
                   .join("\n        ");
@@ -696,7 +700,11 @@ All string fields must be plain strings (never objects or arrays).
       const introEl = shortElements.find((e) => e.code === "IN")!;
       const uspEl = shortElements.find((e) => e.code === "USP")!;
       const ctaEl = shortElements.find((e) => e.code === "AC")!;
-      const hookStyle = (hookStyleOverride && hookStyleOverride in HOOK_TEMPLATES ? hookStyleOverride : GENRE_HOOK_STYLE[videoType] || "curiosity") as HookStyle;
+      const hookStyle = (
+        hookStyleOverride && hookStyleOverride in HOOK_TEMPLATES
+          ? hookStyleOverride
+          : GENRE_HOOK_STYLE[videoType] || "curiosity"
+      ) as HookStyle;
       const hookExamples = HOOK_TEMPLATES[hookStyle]
         .slice(0, 3)
         .join("\n        ");

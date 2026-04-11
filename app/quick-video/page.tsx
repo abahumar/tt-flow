@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Zap,
   Loader2,
@@ -14,11 +14,15 @@ import {
   User,
   AlertCircle,
   RefreshCw,
+  Upload,
+  X,
+  ImageIcon,
 } from "lucide-react";
 import Link from "next/link";
 
 interface Product {
   id: string;
+  url: string;
   title: string;
   description: string;
   price: string;
@@ -47,6 +51,7 @@ interface PresetConfig {
   sceneCount: number;
   includeDialog: boolean;
   enableHook: boolean;
+  enableOverlay: boolean;
   hookBgColor: string;
   hookTextColor: string;
   hookFontSize: number;
@@ -60,9 +65,10 @@ const DEFAULT_PRESET: PresetConfig = {
   sceneCount: 4,
   includeDialog: true,
   enableHook: true,
+  enableOverlay: true,
   hookBgColor: "E91E63",
   hookTextColor: "FFFFFF",
-  hookFontSize: 36,
+  hookFontSize: 48,
   overlayFontSize: 28,
 };
 
@@ -111,6 +117,89 @@ export default function QuickVideoPage() {
   const [preset, setPreset] = useState<PresetConfig>(DEFAULT_PRESET);
   const [savingPreset, setSavingPreset] = useState(false);
   const [hasGeminiKey, setHasGeminiKey] = useState(true);
+
+  // Custom image per product (overrides product scraped image as reference)
+  const [customImages, setCustomImages] = useState<
+    Record<string, { preview: string; filename: string }>
+  >({});
+  const [uploadingImage, setUploadingImage] = useState<string | null>(null);
+
+  // Global model image (custom avatar/model photo)
+  const [modelFile, setModelFile] = useState<File | null>(null);
+  const [modelPreview, setModelPreview] = useState<string | null>(null);
+  const [modelFilename, setModelFilename] = useState("");
+  const [uploadingModel, setUploadingModel] = useState(false);
+  const modelInputRef = useRef<HTMLInputElement>(null);
+
+  const uploadFile = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch("/api/upload", { method: "POST", body: formData });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Upload failed");
+    return data.filename;
+  };
+
+  const handleCustomImageUpload = async (
+    productId: string,
+    file: File,
+  ) => {
+    const allowed = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
+    if (!allowed.includes(file.type)) return;
+    if (file.size > 10 * 1024 * 1024) return;
+
+    setUploadingImage(productId);
+    try {
+      const filename = await uploadFile(file);
+      setCustomImages((prev) => ({
+        ...prev,
+        [productId]: {
+          preview: URL.createObjectURL(file),
+          filename,
+        },
+      }));
+    } catch {
+      // ignore
+    } finally {
+      setUploadingImage(null);
+    }
+  };
+
+  const clearCustomImage = (productId: string) => {
+    setCustomImages((prev) => {
+      const next = { ...prev };
+      if (next[productId]?.preview) URL.revokeObjectURL(next[productId].preview);
+      delete next[productId];
+      return next;
+    });
+  };
+
+  const handleModelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const allowed = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
+    if (!allowed.includes(file.type) || file.size > 10 * 1024 * 1024) return;
+    setModelFile(file);
+    setModelPreview(URL.createObjectURL(file));
+    setModelFilename("");
+    setUploadingModel(true);
+    try {
+      const fn = await uploadFile(file);
+      setModelFilename(fn);
+    } catch {
+      // ignore
+    } finally {
+      setUploadingModel(false);
+    }
+    e.target.value = "";
+  };
+
+  const clearModelImage = () => {
+    setModelFile(null);
+    if (modelPreview) URL.revokeObjectURL(modelPreview);
+    setModelPreview(null);
+    setModelFilename("");
+  };
 
   const fetchProducts = useCallback(async () => {
     const res = await fetch("/api/products");
@@ -162,7 +251,11 @@ export default function QuickVideoPage() {
       const res = await fetch("/api/quick-video", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId }),
+        body: JSON.stringify({
+          productId,
+          customImage: customImages[productId]?.filename || "",
+          modelImage: modelFilename || "",
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -331,6 +424,128 @@ export default function QuickVideoPage() {
               />
               Auto Hook Title
             </label>
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={preset.enableOverlay}
+                onChange={(e) =>
+                  setPreset((p) => ({
+                    ...p,
+                    enableOverlay: e.target.checked,
+                  }))
+                }
+                className="h-4 w-4 rounded border-gray-300 text-amber-500 focus:ring-amber-500"
+              />
+              Scene Caption Overlay
+            </label>
+          </div>
+
+          {/* Hook Title Font Size & Background Color */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">
+                Hook Font Size
+              </label>
+              <input
+                type="number"
+                min={20}
+                max={80}
+                value={preset.hookFontSize}
+                onChange={(e) =>
+                  setPreset((p) => ({
+                    ...p,
+                    hookFontSize: Math.max(20, Math.min(80, Number(e.target.value) || 48)),
+                  }))
+                }
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">
+                Hook Background Color
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={`#${preset.hookBgColor}`}
+                  onChange={(e) =>
+                    setPreset((p) => ({
+                      ...p,
+                      hookBgColor: e.target.value.replace("#", ""),
+                    }))
+                  }
+                  className="h-9 w-10 cursor-pointer rounded border border-gray-300"
+                />
+                <span className="text-xs text-gray-500">#{preset.hookBgColor}</span>
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">
+                Hook Text Color
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={`#${preset.hookTextColor}`}
+                  onChange={(e) =>
+                    setPreset((p) => ({
+                      ...p,
+                      hookTextColor: e.target.value.replace("#", ""),
+                    }))
+                  }
+                  className="h-9 w-10 cursor-pointer rounded border border-gray-300"
+                />
+                <span className="text-xs text-gray-500">#{preset.hookTextColor}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Model Image Upload (global custom avatar photo) */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">
+              Custom Model Photo (optional — use your own photo as avatar)
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                ref={modelInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/jpg,image/webp"
+                onChange={handleModelUpload}
+                className="hidden"
+              />
+              {modelPreview ? (
+                <div className="relative h-16 w-16 shrink-0">
+                  <img
+                    src={modelPreview}
+                    alt="Model"
+                    className="h-full w-full rounded-lg object-cover ring-2 ring-amber-400"
+                  />
+                  <button
+                    onClick={clearModelImage}
+                    className="absolute -right-1.5 -top-1.5 rounded-full bg-red-500 p-0.5 text-white shadow-sm hover:bg-red-600"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                  {uploadingModel && (
+                    <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/40">
+                      <Loader2 className="h-4 w-4 animate-spin text-white" />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <button
+                  onClick={() => modelInputRef.current?.click()}
+                  className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border-2 border-dashed border-amber-300 bg-amber-50 transition-colors hover:border-amber-400 hover:bg-amber-100"
+                >
+                  <Upload className="h-5 w-5 text-amber-400" />
+                </button>
+              )}
+              <p className="text-[11px] text-gray-500">
+                {modelFilename
+                  ? "Model photo ready — will be used as reference for all Quick Videos"
+                  : "Upload your own photo to use as avatar model in generated scenes"}
+              </p>
+            </div>
           </div>
 
           <button
@@ -400,10 +615,18 @@ export default function QuickVideoPage() {
                     <h3 className="line-clamp-2 text-sm font-semibold leading-tight">
                       {p.title}
                     </h3>
-                    <p className="truncate text-xs text-gray-500">
-                      {p.shopName}
-                    </p>
                     <p className="text-sm font-bold text-rose-500">{p.price}</p>
+                    {p.url && (
+                      <a
+                        href={p.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-gray-400 hover:text-amber-600"
+                      >
+                        <ExternalLink className="h-2.5 w-2.5" />
+                        View product
+                      </a>
+                    )}
                   </div>
                 </div>
 
@@ -447,6 +670,50 @@ export default function QuickVideoPage() {
                         </option>
                       ))}
                     </select>
+                  </div>
+
+                  {/* Custom reference image per product */}
+                  <div className="mt-2 flex items-center gap-2">
+                    <ImageIcon className="h-3.5 w-3.5 text-gray-400" />
+                    {customImages[p.id] ? (
+                      <div className="flex flex-1 items-center gap-2">
+                        <img
+                          src={customImages[p.id].preview}
+                          alt="Custom ref"
+                          className="h-8 w-8 rounded object-cover ring-1 ring-amber-300"
+                        />
+                        <span className="flex-1 truncate text-[10px] text-green-600">
+                          Custom image ready
+                        </span>
+                        <button
+                          onClick={() => clearCustomImage(p.id)}
+                          className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-red-500"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-1 cursor-pointer items-center gap-1.5 rounded border border-dashed border-gray-200 px-2 py-1 text-[10px] text-gray-500 transition-colors hover:border-amber-300 hover:bg-amber-50">
+                        {uploadingImage === p.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Upload className="h-3 w-3" />
+                        )}
+                        {uploadingImage === p.id
+                          ? "Uploading..."
+                          : "Custom product image (optional)"}
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/jpg,image/webp"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleCustomImageUpload(p.id, file);
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+                    )}
                   </div>
                 </div>
 

@@ -3849,6 +3849,27 @@ async function generateMultiScene({
         await sleep(500);
         await closeSettingsDropdown();
         await sleep(1000);
+
+        // Re-upload product reference image so Google Flow keeps product consistency
+        if (productImages && productImages.length > 0) {
+          console.log(
+            `[TikTok Flow] Scene ${si + 1}: Re-uploading product reference for consistency`,
+          );
+          await withRetry(
+            () => uploadAndAddReferenceToPrompt(productImages[0]),
+            {
+              maxAttempts: 2,
+              delayMs: 2000,
+              label: `Scene ${si + 1}: Re-upload product ref`,
+            },
+          );
+          for (let a = 0; a < 3; a++) {
+            if (await switchToMode("image")) break;
+            await sleep(1000);
+          }
+          await closeSettingsDropdown();
+          await sleep(1000);
+        }
       }
 
       // Fill image prompt

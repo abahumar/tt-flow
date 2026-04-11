@@ -157,7 +157,7 @@ export function addHookOverlay(options: {
   displayDuration?: number; // how long to show (default 0.5s)
   bgColor?: string; // hex without #, default "E91E63" (pink)
   textColor?: string; // hex without #, default "FFFFFF"
-  hookFontSize?: number; // font size for hook title, default 36
+  hookFontSize?: number; // font size for hook title, default 48
 }): void {
   const {
     inputPath,
@@ -167,7 +167,7 @@ export function addHookOverlay(options: {
     displayDuration = 0.5,
     bgColor = "E91E63",
     textColor = "FFFFFF",
-    hookFontSize = 36,
+    hookFontSize = 48,
   } = options;
 
   const subtitleSize = Math.round(hookFontSize * 0.5625); // proportional subtitle
@@ -223,7 +223,7 @@ export function addHookAndOverlay(options: {
     overlay,
     hookBgColor = "E91E63",
     hookTextColor = "FFFFFF",
-    hookFontSize = 36,
+    hookFontSize = 48,
   } = options;
 
   const subtitleSize = Math.round(hookFontSize * 0.5625);

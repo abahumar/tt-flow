@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     hookBgColor = "E91E63",
     hookTextColor = "FFFFFF",
     overlayFontSize = 28,
-    hookFontSize = 36,
+    hookFontSize = 48,
   } = body as {
     videoIds: string[];
     hookTitle?: string;

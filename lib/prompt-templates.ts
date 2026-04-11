@@ -262,16 +262,16 @@ const SEEIUWTOA_ELEMENTS: FormulaElement[] = [
     visualDirection:
       "Model presents product with excited/urgent expression. Product prominent, inviting composition.",
     dialogDirection:
-      "State the offer/price with urgency. MAX 20 words. 'Harga promosi terhad...'",
+      "State the offer/price with urgency. MAX 20 words. FORBIDDEN: 'Harga Promosi'. Example: 'Limited offer, grab sebelum habis!'",
   },
   {
     code: "AC",
     name: "Action",
-    purpose: "Clear CTA — click link, beg kuning TikTok, WhatsApp.",
+    purpose: "Clear CTA — short punchy phrase only.",
     visualDirection:
       "Model presents product directly to camera. Big warm smile, inviting expression. Product very prominent.",
     dialogDirection:
-      "Direct call to action. MAX 15 words. 'Tekan beg kuning sekarang!', 'Grab sebelum habis!'",
+      "Super short CTA phrase. MAX 4 words. FORBIDDEN phrases: 'Harga Promosi', 'Cek Link'. Examples: 'Grab Sekarang', 'Jangan Lepas', 'Cuba Sekarang', 'Mesti Try'. NO long sentences.",
   },
 ];
 
@@ -304,11 +304,11 @@ export const VIDEO_FORMATS = {
       {
         code: "AC",
         name: "Action",
-        purpose: "CTA — tekan beg kuning / grab sekarang.",
+        purpose: "CTA — super short punchy phrase.",
         visualDirection:
           "Model holds product beside face, warm inviting smile, product prominent. Chest-up framing.",
         dialogDirection:
-          "Direct CTA. MAX 15 words. Example: 'Tekan beg kuning sekarang!'",
+          "Super short CTA phrase. MAX 4 words. FORBIDDEN phrases: 'Harga Promosi', 'Cek Link'. Examples: 'Grab Sekarang', 'Mesti Try', 'Cuba Sekarang'. NO long sentences.",
       },
     ] as FormulaElement[],
   },
@@ -349,11 +349,11 @@ export const VIDEO_FORMATS = {
       {
         code: "AC",
         name: "Action",
-        purpose: "CTA with urgency.",
+        purpose: "CTA — super short punchy phrase.",
         visualDirection:
           "Model smiles warmly holding product beside face, inviting expression.",
         dialogDirection:
-          "CTA with urgency. MAX 15 words. Example: 'Grab sekarang, harga promosi terhad je!'",
+          "Super short CTA phrase. MAX 4 words. FORBIDDEN phrases: 'Harga Promosi', 'Cek Link'. Examples: 'Grab Sekarang', 'Jangan Lepas', 'Cuba Sekarang'. NO long sentences.",
       },
     ] as FormulaElement[],
   },

@@ -2371,6 +2371,7 @@ async function processPosting(job) {
   // Fetch video in background script (no CORS/CSP restrictions)
   // then pass as base64 to avoid tiktok.com blocking localhost fetches.
   // Always prefer the watermark-removed version from our API.
+  // For multi-scene jobs, use the combined video instead of scene-0.
   let videoBase64 = null;
   if (job.videoUrl) {
     try {
@@ -2379,7 +2380,17 @@ async function processPosting(job) {
         errorMessage: "Downloading video for upload...",
       });
 
-      const processedVideoUrl = `${API_BASE}/jobs/${job.id}/video`;
+      let isMultiScene = false;
+      try {
+        const sp = JSON.parse(job.scenePrompts || "[]");
+        isMultiScene = Array.isArray(sp) && sp.length > 1;
+      } catch {}
+      const processedVideoUrl = isMultiScene
+        ? `${API_BASE}/jobs/${job.id}/video?type=combined`
+        : `${API_BASE}/jobs/${job.id}/video`;
+      if (isMultiScene) {
+        console.log("[TikTok Flow] Multi-scene job — using combined video for posting");
+      }
       let videoBlob = null;
 
       // Step 1: Try fetching the processed (watermark-removed) video from our API
