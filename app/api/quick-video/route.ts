@@ -44,6 +44,63 @@ function pickRandom<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+function findNextCombo(
+  targets: string[],
+  scenarios: string[],
+  usps: string[],
+  usedCombos: string[],
+  phase: number,
+): {
+  combo: string;
+  target: string;
+  scenario: string;
+  usp: string;
+  phase: number;
+} | null {
+  const used = new Set(usedCombos);
+
+  if (phase === 1) {
+    for (let t = 0; t < targets.length; t++) {
+      for (let rs = 0; rs < scenarios.length; rs++) {
+        for (let u = 0; u < usps.length; u++) {
+          const key = `T${t}-RS${rs}-USP${u}`;
+          if (!used.has(key)) {
+            return {
+              combo: key,
+              target: targets[t],
+              scenario: scenarios[rs],
+              usp: usps[u],
+              phase: 1,
+            };
+          }
+        }
+      }
+    }
+  }
+
+  // Phase 2: double USP
+  for (let t = 0; t < targets.length; t++) {
+    for (let rs = 0; rs < scenarios.length; rs++) {
+      for (let u1 = 0; u1 < usps.length; u1++) {
+        for (let u2 = u1 + 1; u2 < usps.length; u2++) {
+          const key = `T${t}-RS${rs}-USP${u1}+USP${u2}`;
+          if (!used.has(key)) {
+            return {
+              combo: key,
+              target: targets[t],
+              scenario: scenarios[rs],
+              usp: `${usps[u1]} + ${usps[u2]}`,
+              phase: 2,
+            };
+          }
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { productId, customImage = "", modelImage = "" } = body;
@@ -116,9 +173,45 @@ export async function POST(req: NextRequest) {
     error?: string;
   };
 
-  // Pick random variation angle and hook style for each generation
-  const variationSeed = pickRandom(VARIATION_ANGLES);
-  const hookStyleOverride = pickRandom(HOOK_STYLES);
+  // Pick variation angle — use Tiga Segi matrix if available, else random
+  let variationSeed: string;
+  let hookStyleOverride: string;
+  let matrixCombo: string | null = null;
+  let matrixPhase: number | null = null;
+
+  const matrix = await prisma.contentMatrix.findUnique({
+    where: { productId },
+  });
+
+  if (matrix) {
+    const targets = JSON.parse(matrix.targets) as string[];
+    const scenarios = JSON.parse(matrix.scenarios) as string[];
+    const usps = JSON.parse(matrix.usps) as string[];
+    const usedCombos = JSON.parse(matrix.usedCombos) as string[];
+
+    // Find next unused combo
+    const next = findNextCombo(
+      targets,
+      scenarios,
+      usps,
+      usedCombos,
+      matrix.phase,
+    );
+
+    if (next) {
+      variationSeed = `Target Audience: ${next.target}. Real Scenario/Pain Point: ${next.scenario}. Focus USP: ${next.usp}`;
+      hookStyleOverride = pickRandom(HOOK_STYLES);
+      matrixCombo = next.combo;
+      matrixPhase = next.phase;
+    } else {
+      // All combos exhausted — fallback to random
+      variationSeed = pickRandom(VARIATION_ANGLES);
+      hookStyleOverride = pickRandom(HOOK_STYLES);
+    }
+  } else {
+    variationSeed = pickRandom(VARIATION_ANGLES);
+    hookStyleOverride = pickRandom(HOOK_STYLES);
+  }
 
   try {
     const aiRes = await fetch(`${baseUrl}/api/prompts/ai-generate`, {
@@ -226,6 +319,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Mark matrix combo as used
+    if (matrixCombo) {
+      const usedCombos = JSON.parse(matrix!.usedCombos) as string[];
+      usedCombos.push(matrixCombo);
+      const targets = JSON.parse(matrix!.targets) as string[];
+      const scenarios = JSON.parse(matrix!.scenarios) as string[];
+      const usps = JSON.parse(matrix!.usps) as string[];
+      const phase1Total = targets.length * scenarios.length * usps.length;
+      const phase1Used = usedCombos.filter((c) => !c.includes("+")).length;
+      await prisma.contentMatrix.update({
+        where: { productId },
+        data: {
+          usedCombos: JSON.stringify(usedCombos),
+          phase: phase1Used >= phase1Total ? 2 : matrix!.phase,
+        },
+      });
+    }
+
     return NextResponse.json({
       jobId: jobData.id,
       scenes: variations.length,
@@ -233,8 +344,12 @@ export async function POST(req: NextRequest) {
       format: preset.format,
       genre: preset.genre,
       avatar: avatarId,
-      variationAngle: variationSeed.split("—")[0].trim(),
+      variationAngle: matrixCombo
+        ? `[Tiga Segi P${matrixPhase}] ${matrixCombo}`
+        : variationSeed.split("—")[0].trim(),
       hookStyle: hookStyleOverride,
+      matrixCombo: matrixCombo || null,
+      matrixPhase: matrixPhase || null,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";

@@ -42,6 +42,34 @@ interface QuickResult {
   avatar: string;
   variationAngle?: string;
   hookStyle?: string;
+  matrixCombo?: string;
+  matrixPhase?: number;
+}
+
+interface MatrixData {
+  exists: boolean;
+  matrix: {
+    targets: string[];
+    scenarios: string[];
+    usps: string[];
+    usedCombos: string[];
+    phase: number;
+    mode: string;
+  } | null;
+  nextCombo: {
+    combo: string;
+    target: string;
+    scenario: string;
+    usp: string;
+    phase: number;
+  } | null;
+  stats: {
+    phase1Total: number;
+    phase2Total: number;
+    total: number;
+    used: number;
+    remaining: number;
+  };
 }
 
 interface PresetConfig {
@@ -118,6 +146,10 @@ export default function QuickVideoPage() {
   const [savingPreset, setSavingPreset] = useState(false);
   const [hasGeminiKey, setHasGeminiKey] = useState(true);
 
+  // Tiga Segi content matrix per product
+  const [matrices, setMatrices] = useState<Record<string, MatrixData>>({});
+  const [generatingMatrix, setGeneratingMatrix] = useState<string | null>(null);
+
   // Custom image per product (overrides product scraped image as reference)
   const [customImages, setCustomImages] = useState<
     Record<string, { preview: string; filename: string }>
@@ -140,10 +172,7 @@ export default function QuickVideoPage() {
     return data.filename;
   };
 
-  const handleCustomImageUpload = async (
-    productId: string,
-    file: File,
-  ) => {
+  const handleCustomImageUpload = async (productId: string, file: File) => {
     const allowed = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
     if (!allowed.includes(file.type)) return;
     if (file.size > 10 * 1024 * 1024) return;
@@ -168,7 +197,8 @@ export default function QuickVideoPage() {
   const clearCustomImage = (productId: string) => {
     setCustomImages((prev) => {
       const next = { ...prev };
-      if (next[productId]?.preview) URL.revokeObjectURL(next[productId].preview);
+      if (next[productId]?.preview)
+        URL.revokeObjectURL(next[productId].preview);
       delete next[productId];
       return next;
     });
@@ -203,9 +233,55 @@ export default function QuickVideoPage() {
 
   const fetchProducts = useCallback(async () => {
     const res = await fetch("/api/products");
-    setProducts(await res.json());
+    const prods = await res.json();
+    setProducts(prods);
     setLoading(false);
+    // Load matrices for all products
+    for (const p of prods) {
+      fetch(`/api/products/${p.id}/matrix`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.exists) setMatrices((m) => ({ ...m, [p.id]: data }));
+        })
+        .catch(() => {});
+    }
   }, []);
+
+  const handleGenerateMatrix = async (
+    productId: string,
+    mode: "gemini" | "parse",
+  ) => {
+    setGeneratingMatrix(productId);
+    try {
+      const res = await fetch(`/api/products/${productId}/matrix`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        // Refetch to get full structure with nextCombo
+        const getRes = await fetch(`/api/products/${productId}/matrix`);
+        const fullData = await getRes.json();
+        setMatrices((m) => ({ ...m, [productId]: fullData }));
+      } else {
+        setErrors((e) => ({ ...e, [productId]: data.error }));
+      }
+    } catch {
+      setErrors((e) => ({ ...e, [productId]: "Matrix generation failed" }));
+    } finally {
+      setGeneratingMatrix(null);
+    }
+  };
+
+  const handleResetMatrix = async (productId: string) => {
+    await fetch(`/api/products/${productId}/matrix`, { method: "DELETE" });
+    setMatrices((m) => {
+      const next = { ...m };
+      delete next[productId];
+      return next;
+    });
+  };
 
   const loadPreset = useCallback(async () => {
     const res = await fetch("/api/settings");
@@ -262,6 +338,13 @@ export default function QuickVideoPage() {
         setErrors((e) => ({ ...e, [productId]: data.error }));
       } else {
         setResults((r) => ({ ...r, [productId]: data }));
+        // Refresh matrix if combo was used
+        if (data.matrixCombo) {
+          fetch(`/api/products/${productId}/matrix`)
+            .then((r) => r.json())
+            .then((d) => setMatrices((m) => ({ ...m, [productId]: d })))
+            .catch(() => {});
+        }
       }
     } catch {
       setErrors((e) => ({ ...e, [productId]: "Network error" }));
@@ -454,7 +537,10 @@ export default function QuickVideoPage() {
                 onChange={(e) =>
                   setPreset((p) => ({
                     ...p,
-                    hookFontSize: Math.max(20, Math.min(80, Number(e.target.value) || 48)),
+                    hookFontSize: Math.max(
+                      20,
+                      Math.min(80, Number(e.target.value) || 48),
+                    ),
                   }))
                 }
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
@@ -476,7 +562,9 @@ export default function QuickVideoPage() {
                   }
                   className="h-9 w-10 cursor-pointer rounded border border-gray-300"
                 />
-                <span className="text-xs text-gray-500">#{preset.hookBgColor}</span>
+                <span className="text-xs text-gray-500">
+                  #{preset.hookBgColor}
+                </span>
               </div>
             </div>
             <div>
@@ -495,7 +583,9 @@ export default function QuickVideoPage() {
                   }
                   className="h-9 w-10 cursor-pointer rounded border border-gray-300"
                 />
-                <span className="text-xs text-gray-500">#{preset.hookTextColor}</span>
+                <span className="text-xs text-gray-500">
+                  #{preset.hookTextColor}
+                </span>
               </div>
             </div>
           </div>
@@ -652,15 +742,76 @@ export default function QuickVideoPage() {
                   </div>
                 )}
 
+                {/* Tiga Segi Matrix */}
+                <div className="border-t border-gray-100 px-4 py-2">
+                  {matrices[p.id]?.exists ? (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-semibold text-indigo-700">
+                          △ Tiga Segi — Phase {matrices[p.id].matrix?.phase}
+                        </span>
+                        <button
+                          onClick={() => handleResetMatrix(p.id)}
+                          className="text-[9px] text-gray-400 hover:text-red-500"
+                        >
+                          Reset
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="h-1.5 flex-1 rounded-full bg-gray-200">
+                          <div
+                            className="h-full rounded-full bg-indigo-500 transition-all"
+                            style={{
+                              width: `${Math.round(((matrices[p.id].stats?.used || 0) / Math.max(matrices[p.id].stats?.total || 1, 1)) * 100)}%`,
+                            }}
+                          />
+                        </div>
+                        <span className="text-[9px] text-gray-500">
+                          {matrices[p.id].stats?.used}/
+                          {matrices[p.id].stats?.total}
+                        </span>
+                      </div>
+                      {matrices[p.id].nextCombo ? (
+                        <p className="text-[9px] text-indigo-500">
+                          Next: {matrices[p.id].nextCombo!.target} ×{" "}
+                          {matrices[p.id].nextCombo!.scenario}
+                        </p>
+                      ) : (
+                        <p className="text-[9px] text-amber-600">
+                          All combos used! Reset to start over.
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-gray-400">
+                        △ Tiga Segi
+                      </span>
+                      <button
+                        onClick={() => handleGenerateMatrix(p.id, "gemini")}
+                        disabled={generatingMatrix === p.id}
+                        className="rounded bg-indigo-50 px-1.5 py-0.5 text-[9px] font-medium text-indigo-600 transition-colors hover:bg-indigo-100 disabled:opacity-50"
+                      >
+                        {generatingMatrix === p.id ? "..." : "Gemini"}
+                      </button>
+                      <button
+                        onClick={() => handleGenerateMatrix(p.id, "parse")}
+                        disabled={generatingMatrix === p.id}
+                        className="rounded bg-gray-100 px-1.5 py-0.5 text-[9px] font-medium text-gray-600 transition-colors hover:bg-gray-200 disabled:opacity-50"
+                      >
+                        Parse
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 {/* Avatar selector per product */}
                 <div className="border-t border-gray-100 px-4 py-2">
                   <div className="flex items-center gap-2">
                     <User className="h-3.5 w-3.5 text-gray-400" />
                     <select
                       value={p.avatarId || ""}
-                      onChange={(e) =>
-                        handleUpdateAvatar(p.id, e.target.value)
-                      }
+                      onChange={(e) => handleUpdateAvatar(p.id, e.target.value)}
                       className="flex-1 rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 focus:border-amber-400 focus:outline-none"
                     >
                       <option value="">Use default preset</option>
@@ -787,8 +938,8 @@ export default function QuickVideoPage() {
       <div className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-xs text-gray-500">
         <p>
           <strong>How it works:</strong> Click &quot;Quick Video&quot; → AI
-          generates{" "}
-          {FORMATS[preset.format]?.split("—")[1]?.trim() || "scenes"} using{" "}
+          generates {FORMATS[preset.format]?.split("—")[1]?.trim() || "scenes"}{" "}
+          using{" "}
           <span className="font-semibold">
             {GENRES[preset.genre] || preset.genre}
           </span>{" "}

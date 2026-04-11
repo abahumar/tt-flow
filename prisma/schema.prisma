@@ -23,6 +23,21 @@ model Product {
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
   videoJobs      VideoJob[]
+  contentMatrix  ContentMatrix?
+}
+
+model ContentMatrix {
+  id         Int      @id @default(autoincrement())
+  productId  String   @unique
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  targets    String   @default("[]") // JSON: ["Busy moms", "Students", ...]
+  scenarios  String   @default("[]") // JSON: ["Morning rush", "Late night", ...]
+  usps       String   @default("[]") // JSON: ["Fast delivery", "Affordable", ...]
+  usedCombos String   @default("[]") // JSON: ["T0-RS0-USP0", "T0-RS1-USP0", ...]
+  phase      Int      @default(1)    // 1 = single USP, 2 = double USP
+  mode       String   @default("gemini") // "gemini" | "parse"
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model VideoJob {

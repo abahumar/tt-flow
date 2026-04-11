@@ -45,6 +45,34 @@ interface QuickResult {
   avatar: string;
   variationAngle?: string;
   hookStyle?: string;
+  matrixCombo?: string;
+  matrixPhase?: number;
+}
+
+interface MatrixData {
+  exists: boolean;
+  matrix: {
+    targets: string[];
+    scenarios: string[];
+    usps: string[];
+    usedCombos: string[];
+    phase: number;
+    mode: string;
+  } | null;
+  nextCombo: {
+    combo: string;
+    target: string;
+    scenario: string;
+    usp: string;
+    phase: number;
+  } | null;
+  stats: {
+    phase1Total: number;
+    phase2Total: number;
+    total: number;
+    used: number;
+    remaining: number;
+  };
 }
 
 interface PresetConfig {
@@ -177,6 +205,13 @@ export default function CustomVideoPage() {
   const [history, setHistory] = useState<CustomProduct[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
 
+  // Tiga Segi matrix
+  const [matrices, setMatrices] = useState<Record<string, MatrixData>>({});
+  const [generatingMatrix, setGeneratingMatrix] = useState<string | null>(null);
+  const [autoMatrix, setAutoMatrix] = useState<"gemini" | "parse" | "off">(
+    "gemini",
+  );
+
   const uploadFile = async (file: File): Promise<string> => {
     const formData = new FormData();
     formData.append("file", file);
@@ -287,13 +322,56 @@ export default function CustomVideoPage() {
     setLoadingHistory(true);
     try {
       const res = await fetch("/api/custom-video");
-      setHistory(await res.json());
+      const prods = await res.json();
+      setHistory(prods);
+      // Load matrices for all custom products
+      for (const p of prods) {
+        fetch(`/api/products/${p.id}/matrix`)
+          .then((r) => r.json())
+          .then((data) => {
+            if (data.exists) setMatrices((m) => ({ ...m, [p.id]: data }));
+          })
+          .catch(() => {});
+      }
     } catch {
       // ignore
     } finally {
       setLoadingHistory(false);
     }
   }, []);
+
+  const handleGenerateMatrix = async (
+    productId: string,
+    mode: "gemini" | "parse",
+  ) => {
+    setGeneratingMatrix(productId);
+    try {
+      const res = await fetch(`/api/products/${productId}/matrix`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const getRes = await fetch(`/api/products/${productId}/matrix`);
+        const fullData = await getRes.json();
+        setMatrices((m) => ({ ...m, [productId]: fullData }));
+      }
+    } catch {
+      // ignore
+    } finally {
+      setGeneratingMatrix(null);
+    }
+  };
+
+  const handleResetMatrix = async (productId: string) => {
+    await fetch(`/api/products/${productId}/matrix`, { method: "DELETE" });
+    setMatrices((m) => {
+      const next = { ...m };
+      delete next[productId];
+      return next;
+    });
+  };
 
   useEffect(() => {
     loadSettings();
@@ -353,6 +431,18 @@ export default function CustomVideoPage() {
       } else {
         setResult(data);
         loadHistory();
+        // Auto-generate matrix for new product if enabled
+        if (data.productId && autoMatrix !== "off") {
+          fetch(`/api/products/${data.productId}/matrix`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: autoMatrix }),
+          })
+            .then(() => fetch(`/api/products/${data.productId}/matrix`))
+            .then((r) => r.json())
+            .then((d) => setMatrices((m) => ({ ...m, [data.productId]: d })))
+            .catch(() => {});
+        }
       }
     } catch {
       setError("Network error");
@@ -939,6 +1029,29 @@ export default function CustomVideoPage() {
           </div>
         )}
 
+        {/* Tiga Segi Auto-Matrix */}
+        <div className="flex items-center gap-3 rounded-lg border border-indigo-100 bg-indigo-50/50 px-4 py-2.5">
+          <span className="text-xs font-semibold text-indigo-700">
+            △ Tiga Segi
+          </span>
+          <select
+            value={autoMatrix}
+            onChange={(e) =>
+              setAutoMatrix(e.target.value as "gemini" | "parse" | "off")
+            }
+            className="rounded border border-indigo-200 bg-white px-2 py-1 text-xs text-indigo-600 focus:border-indigo-400 focus:outline-none"
+          >
+            <option value="gemini">Gemini (default)</option>
+            <option value="parse">Parse (no AI cost)</option>
+            <option value="off">Off</option>
+          </select>
+          <span className="text-[10px] text-indigo-400">
+            {autoMatrix === "off"
+              ? "Random angle per video"
+              : "Systematic T×RS×USP combos"}
+          </span>
+        </div>
+
         {/* Generate Button */}
         <button
           onClick={handleGenerate}
@@ -1045,6 +1158,58 @@ export default function CustomVideoPage() {
                       </p>
                     </div>
                   )}
+                  {/* Tiga Segi Matrix */}
+                  <div className="border-t border-gray-100 px-3 py-1.5">
+                    {matrices[p.id]?.exists ? (
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-semibold text-indigo-700">
+                            △ Phase {matrices[p.id].matrix?.phase}
+                          </span>
+                          <button
+                            onClick={() => handleResetMatrix(p.id)}
+                            className="text-[9px] text-gray-400 hover:text-red-500"
+                          >
+                            Reset
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 flex-1 rounded-full bg-gray-200">
+                            <div
+                              className="h-full rounded-full bg-indigo-500 transition-all"
+                              style={{
+                                width: `${Math.round(((matrices[p.id].stats?.used || 0) / Math.max(matrices[p.id].stats?.total || 1, 1)) * 100)}%`,
+                              }}
+                            />
+                          </div>
+                          <span className="text-[9px] text-gray-500">
+                            {matrices[p.id].stats?.used}/
+                            {matrices[p.id].stats?.total}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-gray-400">
+                          △ Tiga Segi
+                        </span>
+                        <button
+                          onClick={() => handleGenerateMatrix(p.id, "gemini")}
+                          disabled={generatingMatrix === p.id}
+                          className="rounded bg-indigo-50 px-1.5 py-0.5 text-[9px] font-medium text-indigo-600 hover:bg-indigo-100 disabled:opacity-50"
+                        >
+                          {generatingMatrix === p.id ? "..." : "Gemini"}
+                        </button>
+                        <button
+                          onClick={() => handleGenerateMatrix(p.id, "parse")}
+                          disabled={generatingMatrix === p.id}
+                          className="rounded bg-gray-100 px-1.5 py-0.5 text-[9px] font-medium text-gray-600 hover:bg-gray-200 disabled:opacity-50"
+                        >
+                          Parse
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })}
