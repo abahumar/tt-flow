@@ -2,6 +2,18 @@ const API_BASE = "http://localhost:3000/api";
 let currentTab = "image";
 let pollInterval = null;
 
+// Helper: push a setting change to the DB (fire-and-forget)
+function pushSettingToDB(key, value) {
+  fetch(`${API_BASE}/settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ [key]: String(value) }),
+  }).catch(() => {
+    // Server may be offline — chrome.storage.local is already updated as primary
+    console.debug("[SidePanel] Could not sync setting to DB:", key);
+  });
+}
+
 // Tab switching
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => {
@@ -287,6 +299,7 @@ chrome.storage.local.get("autoPostEnabled", ({ autoPostEnabled }) => {
 
 document.getElementById("autoPostToggle").addEventListener("change", (e) => {
   chrome.storage.local.set({ autoPostEnabled: e.target.checked });
+  pushSettingToDB("autoPostEnabled", e.target.checked ? "true" : "false");
 });
 
 // Video model selector
@@ -297,6 +310,7 @@ chrome.storage.local.get("videoModel", ({ videoModel }) => {
 
 document.getElementById("videoModelSelect").addEventListener("change", (e) => {
   chrome.storage.local.set({ videoModel: e.target.value });
+  pushSettingToDB("videoModel", e.target.value);
 });
 
 // Video engine selector (Google Flow / Grok)
@@ -307,6 +321,7 @@ chrome.storage.local.get("videoEngine", ({ videoEngine }) => {
 
 document.getElementById("videoEngineSelect").addEventListener("change", (e) => {
   chrome.storage.local.set({ videoEngine: e.target.value });
+  pushSettingToDB("videoEngine", e.target.value);
   console.log("[SidePanel] Video engine set to:", e.target.value);
 });
 

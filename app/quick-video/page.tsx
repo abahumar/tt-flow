@@ -84,6 +84,7 @@ interface PresetConfig {
   hookTextColor: string;
   hookFontSize: number;
   overlayFontSize: number;
+  temperature: number;
 }
 
 const DEFAULT_PRESET: PresetConfig = {
@@ -98,6 +99,7 @@ const DEFAULT_PRESET: PresetConfig = {
   hookTextColor: "FFFFFF",
   hookFontSize: 48,
   overlayFontSize: 28,
+  temperature: 1.5,
 };
 
 const AVATARS: Record<string, string> = {
@@ -109,6 +111,14 @@ const AVATARS: Record<string, string> = {
   man_malay_corporate: "👨‍💼 Lelaki Melayu (Korporat)",
   man_malay_elder: "👴 Pakcik Melayu (50+)",
   product_only: "📦 Produk Sahaja",
+  woman_malay_student: "🎓 Wanita Melayu (Student/Gen Z)",
+  woman_malay_mother: "👩‍👧 Ibu Muda Melayu",
+  woman_malay_beauty: "💄 Beauty Influencer",
+  woman_chinese_casual: "👩 Wanita Cina (Casual)",
+  woman_malay_homecook: "🍳 Suri Rumah / Home Cook",
+  man_malay_father: "👨‍👦 Ayah Muda",
+  couple_malay: "💑 Pasangan Melayu (Couple)",
+  hands_only: "🤲 Tangan Sahaja (Hands Only)",
 };
 
 const GENRES: Record<string, string> = {
@@ -587,6 +597,35 @@ export default function QuickVideoPage() {
                   #{preset.hookTextColor}
                 </span>
               </div>
+            </div>
+          </div>
+
+          {/* AI Temperature Slider */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">
+              AI Creativity (Temperature):{" "}
+              <span className="font-semibold text-amber-600">
+                {preset.temperature.toFixed(1)}
+              </span>
+            </label>
+            <input
+              type="range"
+              min={0.5}
+              max={2.0}
+              step={0.1}
+              value={preset.temperature}
+              onChange={(e) =>
+                setPreset((p) => ({
+                  ...p,
+                  temperature: parseFloat(e.target.value),
+                }))
+              }
+              className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-gray-200 accent-amber-500"
+            />
+            <div className="mt-1 flex justify-between text-[10px] text-gray-400">
+              <span>0.5 — Focused</span>
+              <span>1.0 — Balanced</span>
+              <span>2.0 — Creative</span>
             </div>
           </div>
 

@@ -20,6 +20,38 @@ async function getVideoEngine() {
   }
 }
 
+// ---- Settings Sync: DB → chrome.storage.local ----
+// The DB (Setting table) is the single source of truth.
+// This function pulls settings from the DB and mirrors them into chrome.storage.local
+// so background.js always reads consistent values.
+const SYNCED_SETTING_KEYS = ["autoPostEnabled", "videoEngine", "videoModel"];
+
+async function syncSettingsFromDB() {
+  try {
+    const res = await fetch(`${API_BASE}/settings`);
+    if (!res.ok) return;
+    const settings = await res.json(); // [{key, value}, ...]
+    const map = {};
+    for (const { key, value } of settings) {
+      if (SYNCED_SETTING_KEYS.includes(key)) {
+        // Convert "true"/"false" strings to booleans for autoPostEnabled
+        if (key === "autoPostEnabled") {
+          map[key] = value === "true";
+        } else {
+          map[key] = value;
+        }
+      }
+    }
+    if (Object.keys(map).length > 0) {
+      await chrome.storage.local.set(map);
+      console.log("[TikTok Flow] Settings synced from DB:", map);
+    }
+  } catch (e) {
+    // Silently ignore — server may be offline
+    console.debug("[TikTok Flow] Settings sync skipped (server offline)");
+  }
+}
+
 // ---- Grok Tab Management ----
 async function findGrokTab() {
   try {
@@ -1854,6 +1886,7 @@ chrome.storage.local.get(
 );
 
 // Keep service worker alive during long-running operations using alarms
+let _settingsSyncCounter = 0;
 try {
   chrome.alarms.create("keepAlive", { periodInMinutes: 0.4 });
   chrome.alarms.onAlarm.addListener((alarm) => {
@@ -1864,11 +1897,21 @@ try {
       }
       // Check for timed-out jobs every alarm cycle
       checkJobTimeouts();
+      // Sync settings from DB every ~30 seconds (every ~1.25 alarm cycles)
+      // Using a counter: sync on every other alarm tick ≈ 48s
+      _settingsSyncCounter++;
+      if (_settingsSyncCounter >= 2) {
+        _settingsSyncCounter = 0;
+        syncSettingsFromDB();
+      }
     }
   });
 } catch (e) {
   console.warn("[TikTok Flow] Could not create keepAlive alarm:", e);
 }
+
+// Initial settings sync on service worker startup
+syncSettingsFromDB();
 
 // Called by side panel or web app to start/stop auto mode
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -2389,7 +2432,9 @@ async function processPosting(job) {
         ? `${API_BASE}/jobs/${job.id}/video?type=combined`
         : `${API_BASE}/jobs/${job.id}/video`;
       if (isMultiScene) {
-        console.log("[TikTok Flow] Multi-scene job — using combined video for posting");
+        console.log(
+          "[TikTok Flow] Multi-scene job — using combined video for posting",
+        );
       }
       let videoBlob = null;
 

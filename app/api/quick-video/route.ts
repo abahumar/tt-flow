@@ -16,6 +16,7 @@ const DEFAULT_PRESET = {
   hookTextColor: "FFFFFF",
   hookFontSize: 48,
   overlayFontSize: 28,
+  temperature: 1.5,
 };
 
 const FORMAT_SCENES: Record<string, number> = {
@@ -231,7 +232,7 @@ export async function POST(req: NextRequest) {
         // Quick Video variation params
         variationSeed,
         hookStyleOverride,
-        temperature: 1.5,
+        temperature: preset.temperature ?? 1.5,
       }),
     });
 
