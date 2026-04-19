@@ -51,7 +51,7 @@ async function callGemini(
   if (config.responseFormat === "json") {
     generationConfig.responseMimeType = "application/json";
   }
-  if (config.temperature !== undefined && config.temperature > 0) {
+  if (config.temperature !== undefined) {
     generationConfig.temperature = config.temperature;
   }
 
@@ -77,6 +77,10 @@ async function callGemini(
   return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 }
 
+type ContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
 async function callOpenAI(
   prompt: string,
   imageBase64: string | null,
@@ -85,10 +89,6 @@ async function callOpenAI(
 ): Promise<string> {
   const key = config.openaiApiKey;
   if (!key) throw new Error("OpenAI API key not configured");
-
-  type ContentPart =
-    | { type: "text"; text: string }
-    | { type: "image_url"; image_url: { url: string } };
 
   const content: ContentPart[] = [{ type: "text", text: prompt }];
 
