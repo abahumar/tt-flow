@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
     customTargetAudience = "",
     videoFormat = null, // "super_short" | "short" | "complete" | null
     varyBackground = false,
-    productImage = null, // filename from /api/upload (for sending product image to Gemini)
+    productImage = null, // filename from /api/upload (for sending product image to AI provider)
     specialInstruction = "",
     // Quick Video variation params
     variationSeed = "",
@@ -230,7 +230,7 @@ export async function POST(req: NextRequest) {
     };
   }
 
-  // ─── Fetch product image as base64 for Gemini vision ───
+  // ─── Fetch product image as base64 for AI vision ───
   let productImageBase64: string | null = null;
   let productImageMime = "image/jpeg";
 
@@ -407,20 +407,9 @@ All string fields must be plain strings (never objects or arrays).
 `;
 
     try {
-      // Build parts array — text prompt + optional product image
-      const gempakParts: Array<
-        { text: string } | { inlineData: { mimeType: string; data: string } }
-      > = [{ text: gempakPrompt }];
-
       if (productImageBase64) {
-        gempakParts.push({
-          inlineData: {
-            mimeType: productImageMime,
-            data: productImageBase64,
-          },
-        });
         console.log(
-          "[ai-generate/gempak] Sending product image inline to Gemini for analysis",
+          `[ai-generate/gempak] Sending product image to ${provider} for analysis`,
         );
       }
 
@@ -810,20 +799,9 @@ All string fields must be plain strings (never objects or arrays).
   `;
 
   try {
-    // Build parts array — text prompt + optional product image
-    const promptParts: Array<
-      { text: string } | { inlineData: { mimeType: string; data: string } }
-    > = [{ text: systemPrompt }];
-
     if (productImageBase64) {
-      promptParts.push({
-        inlineData: {
-          mimeType: productImageMime,
-          data: productImageBase64,
-        },
-      });
       console.log(
-        "[ai-generate/paired] Sending product image inline to Gemini for analysis",
+        `[ai-generate/paired] Sending product image to ${provider} for analysis`,
       );
     }
 
@@ -849,7 +827,7 @@ All string fields must be plain strings (never objects or arrays).
     try {
       parsed = JSON.parse(cleaned);
     } catch {
-      // Fix common Gemini JSON issues: unescaped newlines/tabs inside strings
+      // Fix common LLM JSON issues: unescaped newlines/tabs inside strings
       const fixed = cleaned.replace(
         /(?<=:[\s]*")([\s\S]*?)(?="[\s]*[,}\]])/g,
         (match: string) =>
