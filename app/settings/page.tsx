@@ -10,6 +10,8 @@ import {
   ChevronUp,
   Pencil,
   X,
+  Upload,
+  ImageIcon,
 } from "lucide-react";
 
 interface SettingEntry {
@@ -24,6 +26,23 @@ interface CustomPrompt {
   videoPrompt: string;
   createdAt: string;
 }
+
+const AVATARS: Record<string, string> = {
+  woman_malay_hijab: "🧕 Wanita Melayu (Bertudung)",
+  woman_malay_freehair: "👩 Wanita Melayu (Moden)",
+  woman_malay_corporate: "👩‍💼 Wanita Melayu (Korporat)",
+  woman_malay_elder: "👵 Makcik Melayu (50+)",
+  man_malay_casual: "👨 Lelaki Melayu (Casual)",
+  man_malay_corporate: "👨‍💼 Lelaki Melayu (Korporat)",
+  man_malay_elder: "👴 Pakcik Melayu (50+)",
+  woman_malay_student: "🎓 Wanita Melayu (Student/Gen Z)",
+  woman_malay_mother: "👩‍👧 Ibu Muda Melayu",
+  woman_malay_beauty: "💄 Beauty Influencer",
+  woman_chinese_casual: "👩 Wanita Cina (Casual)",
+  woman_malay_homecook: "🍳 Suri Rumah / Home Cook",
+  man_malay_father: "👨‍👦 Ayah Muda",
+  couple_malay: "💑 Pasangan Melayu (Couple)",
+};
 
 const SETTING_FIELDS = [
   {
@@ -71,6 +90,10 @@ export default function SettingsPage() {
   const [editVideoPrompt, setEditVideoPrompt] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
 
+  // Avatar images state
+  const [avatarImages, setAvatarImages] = useState<Record<string, string>>({});
+  const [uploadingAvatar, setUploadingAvatar] = useState<string | null>(null);
+
   const fetchCustomPrompts = async () => {
     const res = await fetch("/api/custom-prompts");
     const data = await res.json();
@@ -85,6 +108,14 @@ export default function SettingsPage() {
         for (const s of data) map[s.key] = s.value;
         setSettings(map);
         setLoaded(true);
+        // Load avatar images
+        if (map.avatar_images) {
+          try {
+            setAvatarImages(JSON.parse(map.avatar_images));
+          } catch {
+            // ignore parse error
+          }
+        }
       });
     fetchCustomPrompts();
   }, []);
@@ -97,6 +128,40 @@ export default function SettingsPage() {
       body: JSON.stringify(settings),
     });
     setSaving(false);
+  };
+
+  const saveAvatarImages = async (updated: Record<string, string>) => {
+    setAvatarImages(updated);
+    await fetch("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ avatar_images: JSON.stringify(updated) }),
+    });
+  };
+
+  const handleAvatarImageUpload = async (avatarId: string, file: File) => {
+    setUploadingAvatar(avatarId);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      const updated = { ...avatarImages, [avatarId]: data.filename };
+      await saveAvatarImages(updated);
+    } catch (e) {
+      console.error("Avatar image upload failed:", e);
+    }
+    setUploadingAvatar(null);
+  };
+
+  const handleAvatarImageRemove = async (avatarId: string) => {
+    const updated = { ...avatarImages };
+    delete updated[avatarId];
+    await saveAvatarImages(updated);
   };
 
   const handleAddPrompt = async () => {
@@ -247,6 +312,75 @@ export default function SettingsPage() {
               }`}
             />
           </button>
+        </div>
+      </div>
+
+      {/* Avatar Images Section */}
+      <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6">
+        <div>
+          <h2 className="text-lg font-semibold">Avatar Images</h2>
+          <p className="text-xs text-gray-500">
+            Upload your own reference image for each avatar. When set, this
+            image will be used as model reference instead of AI-generated faces.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {Object.entries(AVATARS).map(([id, label]) => (
+            <div
+              key={id}
+              className="flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3"
+            >
+              {/* Thumbnail */}
+              <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-white">
+                {avatarImages[id] ? (
+                  <img
+                    src={`/api/upload/${avatarImages[id]}`}
+                    alt={label}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-gray-300">
+                    <ImageIcon className="h-6 w-6" />
+                  </div>
+                )}
+              </div>
+              {/* Info & actions */}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-gray-800 truncate">
+                  {label}
+                </p>
+                <div className="mt-1 flex items-center gap-1.5">
+                  <label className="flex cursor-pointer items-center gap-1 rounded bg-rose-500 px-2 py-1 text-[10px] font-medium text-white hover:bg-rose-600 transition-colors">
+                    {uploadingAvatar === id ? (
+                      <RefreshCw className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Upload className="h-3 w-3" />
+                    )}
+                    {avatarImages[id] ? "Change" : "Upload"}
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleAvatarImageUpload(id, file);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                  {avatarImages[id] && (
+                    <button
+                      onClick={() => handleAvatarImageRemove(id)}
+                      className="flex items-center gap-0.5 rounded bg-gray-200 px-2 py-1 text-[10px] font-medium text-gray-600 hover:bg-red-100 hover:text-red-600 transition-colors"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 

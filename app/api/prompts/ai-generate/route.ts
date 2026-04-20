@@ -58,9 +58,9 @@ const AVATAR_DNA: Record<string, string[]> = {
     "A graceful 48-year-old Malay woman with a calm, elegant demeanor. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Mature beauty with a confident, nurturing presence.",
   ],
   man_malay_casual: [
-    "A 26-year-old Malay man with a short, neat haircut and a slight stubble. Relaxed and friendly boy-next-door vibe.",
-    "A laid-back 24-year-old Malay man with a textured middle-part hairstyle. Clean-shaven with a warm, easygoing smile. Chill beach-town guy energy.",
-    "A cool 27-year-old Malay man with a buzz cut. Subtle streetwear vibe with a confident, mysterious edge. No chains or necklaces.",
+    "A 26-year-old Malay man with a short textured crop haircut and a slight stubble. Wearing a fitted navy polo shirt and dark chinos. Relaxed and friendly boy-next-door vibe.",
+    "A laid-back 24-year-old Malay man with a textured middle-part hairstyle. Clean-shaven with a warm, easygoing smile. Wearing an oversized earth-tone linen shirt over a white tee, paired with jogger pants. Chill creative-guy energy.",
+    "A cool 27-year-old Malay man with a buzz cut and trimmed beard. Wearing a black henley shirt with rolled sleeves and slim olive cargo pants. Subtle streetwear vibe with a confident, put-together edge. No chains or necklaces.",
   ],
   man_malay_corporate: [
     "A sharp 32-year-old Malay man with a clean-shaven face or very neat beard. Professional and successful appearance.",
@@ -68,20 +68,79 @@ const AVATAR_DNA: Record<string, string[]> = {
     "A polished 34-year-old Malay man with a clean fade haircut and frameless glasses. Modern tech-CEO sophisticated vibe.",
   ],
   man_malay_elder: [
-    "A wise 55-year-old Malay pakcik with a neatly trimmed grey beard and warm eyes. Wearing a kopiah. Calm, fatherly, and trustworthy uncle energy.",
-    "A dignified 52-year-old Malay man with salt-and-pepper hair and a kind smile. Wearing neat songkok. Experienced, respected community leader vibe.",
-    "A gentle 58-year-old Malay man with reading glasses and a soft-spoken demeanor. Clean and well-groomed. Wise grandfather energy with warmth and authority.",
+    "A wise 55-year-old Malay pakcik with a neatly trimmed grey beard and warm eyes. Calm, fatherly, and trustworthy uncle energy. (Attire: Choose outfit that fits the product, scene situation, and background — e.g., casual polo at home, batik shirt at kedai, sporty wear outdoors. Do NOT default to kopiah/songkok unless religiously relevant.)",
+    "A dignified 52-year-old Malay man with salt-and-pepper hair and a kind smile. Experienced, respected community leader vibe. (Attire: Match outfit to the product context and setting — e.g., smart-casual for tech products, relaxed homewear for household items, neat shirt for health supplements. No fixed headwear.)",
+    "A gentle 58-year-old Malay man with reading glasses and a soft-spoken demeanor. Clean and well-groomed. Wise grandfather energy with warmth and authority. (Attire: Adapt clothing to the scene and product — e.g., apron in kitchen, comfortable tee at home, collared shirt for formal settings. Keep it natural and contextual.)",
   ],
   product_only: [
     "No human model. Focus entirely on the product packaging, textures, and ingredients. High-end product photography style with aesthetic props and clean backgrounds.",
     "No human model. Showcase the product on a marble surface with soft botanical accents and warm directional lighting. Premium flatlay aesthetic with subtle shadows.",
     "No human model. Display the product against a clean gradient background with geometric props and soft fabric draping. Minimalist editorial product photography style.",
   ],
+  woman_malay_student: [
+    "A fresh-faced 20-year-old Malay university student with a bright curious smile. Hijabi with a sporty casual style, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Youthful Gen Z energy, backpack-and-campus vibe.",
+    "A bubbly 19-year-old Malay girl with round glasses and a playful grin. Hijabi with a cute oversized hoodie look, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Student budget-queen energy.",
+    "A trendy 21-year-old Malay student with a minimalist aesthetic. Hijabi with clean pastel tones, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Smart, study-focused TikTok creator vibe.",
+  ],
+  woman_malay_mother: [
+    "A loving 30-year-old Malay young mother with a warm, nurturing smile. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Practical and relatable busy-mom energy.",
+    "A cheerful 28-year-old Malay ibu muda with gentle eyes and a soft laugh. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Multitasking supermom vibe, always on the go.",
+    "A radiant 32-year-old Malay mother with a calm, confident demeanor. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Organized, family-first energy with a touch of style.",
+  ],
+  woman_malay_beauty: [
+    "A glamorous 24-year-old Malay beauty influencer with flawless dewy skin and soft glam makeup. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Confident beauty-guru energy with ring light glow.",
+    "A polished 22-year-old Malay beauty creator with defined brows and glossy lips. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Clean-girl aesthetic with editorial beauty vibe.",
+    "A radiant 26-year-old Malay beauty enthusiast with a natural glow-up look. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Skincare-obsessed influencer energy.",
+  ],
+  woman_chinese_casual: [
+    "A friendly 24-year-old Chinese Malaysian woman with shoulder-length straight black hair and a warm smile. Casual trendy outfit. Approachable, relatable girl-next-door energy.",
+    "A stylish 22-year-old Chinese Malaysian woman with long hair and subtle makeup. Modern minimalist fashion sense. Sweet, bubbly personality with a confident edge.",
+    "A cheerful 26-year-old Chinese Malaysian woman with a bob cut and natural look. Effortlessly chic casual style. Warm, easygoing energy with a creative flair.",
+  ],
+  woman_malay_homecook: [
+    "A cheerful 35-year-old Malay suri rumah with a warm maternal smile, wearing a simple apron over her outfit. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Homely, kitchen-expert energy.",
+    "A skilled 33-year-old Malay home cook with flour-dusted apron and bright eyes. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Passionate foodie-mom vibe.",
+    "A creative 30-year-old Malay woman in a cozy kitchen setting with neat hijab. Wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Suri rumah content creator energy, always sharing resepi viral.",
+  ],
+  man_malay_father: [
+    "A responsible 32-year-old Malay young father with a short neat haircut and trimmed beard. Wearing a casual button-up shirt. Warm, dependable dad energy with a gentle smile.",
+    "A caring 30-year-old Malay ayah muda with a friendly face and clean-shaven look. Relaxed weekend-dad outfit with rolled sleeves. Hands-on, modern fatherhood vibe.",
+    "A strong 34-year-old Malay father with a well-groomed beard and calm confident demeanor. Smart-casual polo shirt. Protective, reliable family-man energy.",
+  ],
+  couple_malay: [
+    "A sweet Malay couple in their mid-20s. The woman is hijabi with inner sleeve stop below the wrist, socks, full modest coverage (no skin visible except face and fingers). The man has a neat haircut and trimmed beard. Matching casual outfits. Wholesome, in-love couple energy.",
+    "An adorable Malay couple, both 26. She wears a pastel hijab with full modest coverage, inner sleeve below wrist, socks. He has a textured crop and clean-shaven face. Coordinated earth-tone outfits. Sweet Instagram-couple aesthetic.",
+    "A trendy Malay couple in their late 20s. She is hijabi with full modest coverage, inner sleeve below wrist, socks. He sports a buzz cut with subtle stubble. Stylish streetwear-coordinated look. Fun, adventurous couple vibes.",
+  ],
+  hands_only: [
+    "No face visible. Close-up of well-manicured feminine hands interacting with the product. Clean, aesthetic background. Satisfying ASMR-style product showcase.",
+    "No face visible. Close-up of neat masculine hands demonstrating the product. Minimal props, clean surface. Focused product-demo energy.",
+    "No face visible. Overhead shot of hands unboxing or arranging the product on a clean surface. Aesthetic flatlay style with soft natural lighting.",
+  ],
 };
 
 function pickAvatarDna(avatarId: string): string {
   const variants = AVATAR_DNA[avatarId] || AVATAR_DNA.woman_malay_hijab;
   return variants[Math.floor(Math.random() * variants.length)];
+}
+
+function getAvatarPronounRule(avatarId: string): string {
+  if (avatarId === "woman_malay_elder") {
+    return `KATA GANTI DIRI OVERRIDE: Guna "acik" atau "makcik" sebagai kata ganti diri (BUKAN "saya" atau "aku"). Contoh: "Acik dah try ni tau...", "Makcik memang recommend ni."`;
+  }
+  if (avatarId === "man_malay_elder") {
+    return `KATA GANTI DIRI OVERRIDE: Guna "pakcik" sebagai kata ganti diri (BUKAN "saya" atau "aku"). Contoh: "Pakcik dah try ni tau...", "Pakcik memang recommend ni."`;
+  }
+  if (
+    avatarId === "woman_malay_mother" ||
+    avatarId === "woman_malay_homecook"
+  ) {
+    return `KATA GANTI DIRI: Guna "saya" sebagai kata ganti diri. Boleh juga guna "mama" atau "ibu" bila sesuai. Contoh: "Saya as ibu memang suka ni...", "Mama confirm recommend."`;
+  }
+  if (avatarId === "man_malay_father") {
+    return `KATA GANTI DIRI: Guna "saya" sebagai kata ganti diri. Boleh juga guna "ayah" atau "papa" bila sesuai. Contoh: "Saya as ayah memang recommend ni...", "Papa confirm suka."`;
+  }
+  return "";
 }
 
 const GENRE_INSTRUCTIONS: Record<string, string> = {
@@ -158,6 +217,7 @@ export async function POST(req: NextRequest) {
     videoFormat = null, // "super_short" | "short" | "complete" | null
     varyBackground = false,
     productImage = null, // filename from /api/upload (for sending product image to Gemini)
+    modelImage = null, // filename from /api/upload (for sending model face image to Gemini)
     specialInstruction = "",
     // Quick Video variation params
     variationSeed = "",
@@ -259,6 +319,35 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // ─── Fetch model face image as base64 for Gemini vision ───
+  let modelImageBase64: string | null = null;
+  let modelImageMime = "image/jpeg";
+
+  if (modelImage) {
+    try {
+      const imgPath = join(REFERENCES_DIR, String(modelImage));
+      if (existsSync(imgPath)) {
+        const buf = await readFile(imgPath);
+        modelImageBase64 = buf.toString("base64");
+        const ext = String(modelImage).split(".").pop()?.toLowerCase();
+        modelImageMime =
+          ext === "png"
+            ? "image/png"
+            : ext === "webp"
+              ? "image/webp"
+              : "image/jpeg";
+        console.log(
+          `[ai-generate] Loaded model face image from upload: ${modelImage} (${Math.round(buf.length / 1024)}KB)`,
+        );
+      }
+    } catch (e) {
+      console.warn(
+        "[ai-generate] Could not read uploaded model face image:",
+        e,
+      );
+    }
+  }
+
   // ─── GEMPAK MODE (Video Studio v2) ───
   if (mode === "gempak") {
     const isCustomModel = avatarId === "custom";
@@ -268,13 +357,13 @@ export async function POST(req: NextRequest) {
     const genreInst =
       GENRE_INSTRUCTIONS[videoType] || `GENRE: ${videoType.toUpperCase()}`;
     const dialogInst = includeDialog
-      ? `Include dialog in casual Bahasa Melayu for each scene. Max 20 words per scene. ${DIALOG_TONE_SANTAI}`
+      ? `Include dialog in casual Bahasa Melayu for each scene. MUST be 8-22 words per scene (minimum 8 words — shorter dialog causes video generation errors). ${DIALOG_TONE_SANTAI}\n${getAvatarPronounRule(avatarId)}`
       : "NO DIALOG REQUIRED.";
     const englishDialogInst = includeEnglishDialog
       ? 'Also include "dialog_english" field with English translation.'
       : "";
     const dialogOutputFields = [
-      includeDialog ? '"script": "Dialog BM (max 20 words)"' : null,
+      includeDialog ? '"script": "Dialog BM (8-22 words, minimum 8)"' : null,
       includeEnglishDialog ? '"dialog_english": "English translation"' : null,
     ]
       .filter(Boolean)
@@ -316,11 +405,18 @@ ${
 
 IMPORTANT — PRODUCT IMAGE ANALYSIS:
 ${productImageBase64 ? "- A product image has been provided inline. ANALYZE it carefully to understand the product's exact appearance, color, shape, material, branding, and category." : "- No product image available. Rely on the text description above."}
+${
+  modelImageBase64
+    ? `- A MODEL FACE image has been provided inline. ANALYZE it carefully to understand the model's exact appearance — face shape, skin tone, age, expression, hijab/hair style, clothing. Use this as the EXACT model reference for ALL scenes.
+- CRITICAL: Since the model face image is uploaded, DO NOT re-describe the model's face, skin tone, age, hair, hijab, or clothing in the visual_prompt_en. The image generator already has the reference. Only describe POSE, EXPRESSION, CAMERA FRAMING, and PRODUCT INTERACTION.`
+    : ""
+}
 - The PRODUCT IMAGE has been uploaded as a reference image in Google Flow.
-- ${isCustomModel ? "The MODEL FACE has also been uploaded as a reference image." : ""}
+- ${isCustomModel || modelImageBase64 ? "The MODEL FACE has also been uploaded as a separate reference image in Google Flow. TWO reference images total (product + model)." : ""}
 - The AI image generator (Google Flow) will have access to these uploaded reference images.
-- Your visual_prompt_en MUST instruct Google Flow to use these uploaded reference images exactly as they are.
+- Your visual_prompt_en MUST instruct Google Flow to use ${isCustomModel || modelImageBase64 ? "BOTH uploaded reference images (product AND model)" : "the uploaded reference image"} exactly as they are.
 - DO NOT invent or describe a different product. The product in the reference image IS the product.
+${isCustomModel || modelImageBase64 ? "- DO NOT invent or describe a different model. The person in the model reference image IS the model to use." : ""}
 
 PRODUCT-AWARE MODEL RULES (CRITICAL — analyze the product image):
 - If the product is WEARABLE (hijab, headscarf, clothing, dress, blouse, shoes, accessories, bag):
@@ -340,9 +436,18 @@ ${englishDialogInst}
 
 RULES FOR visual_prompt_en (CRITICAL — this goes to Google Flow image generator):
 - Each visual_prompt_en must be a SELF-CONTAINED, detailed description for AI image generation.
-- MUST start with: "From the image uploaded, accurate scale, no alter, no redesign."
+${
+  isCustomModel || modelImageBase64
+    ? `- BOTH the product image AND the model face image have been uploaded as reference images in Google Flow.
+- MUST start with: "From the images uploaded, accurate scale, no alter, no redesign."
+- DO NOT re-describe the model's facial features, skin tone, age, hair/hijab style, or clothing from the reference image. The AI image generator already has the model image.
+- For the model, ONLY describe: pose, expression, camera framing, and how they interact with the product.
+- Example good prompt: "From the images uploaded, accurate scale, no alter, no redesign. The model holds the product in her right hand, warm smile, looking at camera. Static chest-up framing, 9:16 vertical."
+- Example BAD prompt (DO NOT DO THIS): "From the images uploaded... A 25-year-old Malay woman with warm brown skin, wearing a light beige hijab..." — this re-describes the model which conflicts with the uploaded reference.`
+    : `- MUST start with: "From the image uploaded, accurate scale, no alter, no redesign."
+- Include: subject appearance (based on MODEL DNA above), pose, expression, camera framing, product placement.`
+}
 - The product MUST be the EXACT product from the uploaded reference image — same packaging, same label, same colors, same branding. DO NOT change or redesign the product.
-- Include: subject appearance (based on MODEL DNA above), pose, expression, camera framing, product placement.
 - MUST specify 9:16 vertical composition.
 - Scene 1 is the MASTER REFERENCE — establish the model look here. Other scenes MUST keep the same model.
 ${varyBackground ? "- VARY the background/setting for EACH scene — use different locations, times of day, or environments (e.g., kitchen, living room, outdoor café, park, vanity table, office desk). This keeps the video visually dynamic. The MODEL and PRODUCT must stay consistent, but the BACKGROUND must change every scene." : ""}
@@ -363,7 +468,7 @@ Output JSON:
   "script_title": "Catchy viral title in casual Malay",
   "hook_title": "Short punchy hook title for intro card (3-5 words, catchy, e.g. 'Rahsia Kulit Glowing!')",
   "hook_subtitle": "Product name or tagline for intro subtitle",
-  "visual_dna": "Detailed, consistent model appearance. Include: age, ethnicity, expression, vibe. If product is WEARABLE: describe the model wearing the EXACT product from the image (color, material, design). Do NOT add conflicting clothing. If product is NOT wearable: describe a suitable outfit that complements the product.",
+  "visual_dna": "${isCustomModel || modelImageBase64 ? "Brief model context from the uploaded reference image. DO NOT describe facial features or clothing in detail — the reference image is the source of truth. Only note general vibe/energy." : "Detailed, consistent model appearance. Include: age, ethnicity, expression, vibe. If product is WEARABLE: describe the model wearing the EXACT product from the image (color, material, design). Do NOT add conflicting clothing. If product is NOT wearable: describe a suitable outfit that complements the product."}",
   "genre_style": "Genre name",
   "variations": [
     {
@@ -371,7 +476,7 @@ Output JSON:
       "time": "0-3s",
       "stage": "HOOK",
       ${dialogOutputFields ? dialogOutputFields + "," : ""}
-      "visual_prompt_en": "Detailed visual scene description starting with 'From the image uploaded, accurate scale, no alter, no redesign.' — product must match uploaded reference exactly",
+      "visual_prompt_en": "${isCustomModel || modelImageBase64 ? "Detailed visual scene description starting with 'From the images uploaded, accurate scale, no alter, no redesign.' — product and model must match uploaded references exactly. DO NOT re-describe the model appearance." : "Detailed visual scene description starting with 'From the image uploaded, accurate scale, no alter, no redesign.' — product must match uploaded reference exactly"}",
       "video_prompt": "Short single sentence motion description (max 15 words)",
       "overlay_text": "Short punchy text (5-8 words) to display on screen during this scene, summarizing the key message. NO EMOJIS allowed — plain text only. Example: 'Tahan 24 Jam, Kulit Glowing!'. For the LAST/CTA scene: use ultra-short 2-4 word phrase ONLY like 'Grab Sekarang', 'Jangan Lepas', 'Cuba Sekarang', 'Mesti Try'. FORBIDDEN CTA phrases: 'Harga Promosi', 'Cek Link'. Leave empty for scenes that don't need text.",
       "variation_hook_title": "REQUIRED — Short punchy hook title for THIS scene (3-7 words, attention-grabbing, e.g. 'Rahsia Kulit Glowing!')",
@@ -403,6 +508,18 @@ All string fields must be plain strings (never objects or arrays).
         });
         console.log(
           "[ai-generate/gempak] Sending product image inline to Gemini for analysis",
+        );
+      }
+
+      if (modelImageBase64) {
+        gempakParts.push({
+          inlineData: {
+            mimeType: modelImageMime,
+            data: modelImageBase64,
+          },
+        });
+        console.log(
+          "[ai-generate/gempak] Sending model face image inline to Gemini for analysis",
         );
       }
 
@@ -533,12 +650,15 @@ All string fields must be plain strings (never objects or arrays).
 
   // --- DIALOG LOGIC ---
   const santaiTone = videoFormat && includeDialog ? DIALOG_TONE_SANTAI : "";
+  const pronounRule = includeDialog ? getAvatarPronounRule(avatarId) : "";
   const dialogLogic = `
     DIALOGUE STRUCTURE: Strictly follow [HOOK] + [CONTENT] + [CTA].
-    ${includeDialog ? '1. MALAY ("dialog"): Soft Selling, Friendly. Must be a single string.' : ""}
+    CRITICAL: Every scene dialog MUST be 8-22 words. Dialog shorter than 8 words will cause video generation to fail.
+    ${includeDialog ? '1. MALAY ("dialog"): Soft Selling, Friendly. Must be a single string. 8-22 words per scene.' : ""}
     ${includeEnglishDialog ? '2. ENGLISH ("dialog_english"): Translated version. Must be a single string.' : ""}
     ${!includeDialog && !includeEnglishDialog ? "NO DIALOG REQUIRED." : ""}
     ${santaiTone}
+    ${pronounRule}
   `;
 
   const dialogFields = [

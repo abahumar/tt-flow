@@ -14,43 +14,67 @@ const parseDataUrl = (dataUrl: string) => {
   if (matches) {
     return { mimeType: matches[1], data: matches[2] };
   }
-  return { mimeType: 'image/jpeg', data: dataUrl };
+  return { mimeType: "image/jpeg", data: dataUrl };
 };
 
 const cleanJson = (text: string) => {
-  return text.replace(/```json/g, "").replace(/```/g, "").trim();
+  return text
+    .replace(/```json/g, "")
+    .replace(/```/g, "")
+    .trim();
 };
 
-export const generateTikTokScript = async (productName: string, additionalContext: string, personaType: string, genre: string, images: string[], numScenes: number = 5) => {
+export const generateTikTokScript = async (
+  productName: string,
+  additionalContext: string,
+  personaType: string,
+  genre: string,
+  images: string[],
+  numScenes: number = 5,
+) => {
   const ai = getAI();
-  
+
   let genreInstruction = "";
   switch (genre) {
-    case 'comedy':
-      genreInstruction = "GENRE: COMEDY/SKETCH. Use humor, exaggerated reactions, funny relatable situations. Tone: Playful, 'Masuk air'.";
+    case "comedy":
+      genreInstruction =
+        "GENRE: COMEDY/SKETCH. Use humor, exaggerated reactions, funny relatable situations. Tone: Playful, 'Masuk air'.";
       break;
-    case 'educational':
-      genreInstruction = "GENRE: EDUCATIONAL/TIPS. Focus on value, hacks, 'How-To', and facts. Tone: Helpful, Smart, Trustworthy.";
+    case "educational":
+      genreInstruction =
+        "GENRE: EDUCATIONAL/TIPS. Focus on value, hacks, 'How-To', and facts. Tone: Helpful, Smart, Trustworthy.";
       break;
-    case 'emotional':
-      genreInstruction = "GENRE: EMOTIONAL/STORYTELLING. Focus on pain points, feelings, transformation. Tone: Soft, Touching, Relatable.";
+    case "emotional":
+      genreInstruction =
+        "GENRE: EMOTIONAL/STORYTELLING. Focus on pain points, feelings, transformation. Tone: Soft, Touching, Relatable.";
       break;
-    case 'hardsell':
-      genreInstruction = "GENRE: HARD SELL/PROMO. High energy, fast cuts, focus on discounts, urgency and 'Buy Now'. Tone: Hype, Exciting.";
+    case "hardsell":
+      genreInstruction =
+        "GENRE: HARD SELL/PROMO. High energy, fast cuts, focus on discounts, urgency and 'Buy Now'. Tone: Hype, Exciting.";
       break;
-    case 'softsell':
-      genreInstruction = "GENRE: SOFT SELL/LIFESTYLE. Storytelling first, product second. Subtle integration into daily life. Tone: Chill, aesthetic, genuine recommendation like a friend.";
+    case "softsell":
+      genreInstruction =
+        "GENRE: SOFT SELL/LIFESTYLE. Storytelling first, product second. Subtle integration into daily life. Tone: Chill, aesthetic, genuine recommendation like a friend.";
       break;
-    case 'pov':
-      genreInstruction = "GENRE: POV (POINT OF VIEW). Relatable scenario starting with 'POV: ...'. Direct address to camera. Tone: Conversational, immersive, relatable situation.";
+    case "pov":
+      genreInstruction =
+        "GENRE: POV (POINT OF VIEW). Relatable scenario starting with 'POV: ...'. Direct address to camera. Tone: Conversational, immersive, relatable situation.";
       break;
-    case 'asmr':
-      genreInstruction = "GENRE: ASMR/SATISFYING. Focus intensely on sounds (tapping, unboxing, applying), textures, and visual satisfaction. Minimal dialogue, high sensory details. Tone: Calm, mesmerizing.";
+    case "asmr":
+      genreInstruction =
+        "GENRE: ASMR/SATISFYING. Focus intensely on sounds (tapping, unboxing, applying), textures, and visual satisfaction. Minimal dialogue, high sensory details. Tone: Calm, mesmerizing.";
       break;
-    case 'vlog':
-      genreInstruction = "GENRE: VLOG/DAY IN LIFE. Documenting a routine where the product fits in naturally. 'A day with me' style. Tone: Casual, authentic, diary-style.";
+    case "vlog":
+      genreInstruction =
+        "GENRE: VLOG/DAY IN LIFE. Documenting a routine where the product fits in naturally. 'A day with me' style. Tone: Casual, authentic, diary-style.";
       break;
   }
+
+  const pronounRule = personaType.includes("elder")
+    ? personaType.includes("woman")
+      ? 'KATA GANTI DIRI: Guna "acik" atau "makcik" (BUKAN "aku" atau "saya"). Contoh: "Acik dah try ni tau..."'
+      : 'KATA GANTI DIRI: Guna "pakcik" (BUKAN "aku" atau "saya"). Contoh: "Pakcik dah try ni tau..."'
+    : 'KATA GANTI DIRI: Guna "saya" (BUKAN "aku"). Contoh: "Saya dah try...", "Saya memang suka..."';
 
   const systemInstruction = `You are a Top Malaysian TikTok Content Creator. Create a high-converting video script in CASUAL BAHASA MALAYSIA (slang).
   
@@ -58,6 +82,7 @@ export const generateTikTokScript = async (productName: string, additionalContex
   ${genreInstruction}
   PERSONA: ${personaType}
   NUMBER OF SCENES: ${numScenes}
+  ${pronounRule}
   
   Output JSON format:
   {
@@ -74,11 +99,11 @@ export const generateTikTokScript = async (productName: string, additionalContex
     contents: {
       parts: [
         { text: `Product: ${productName}. Context: ${additionalContext}.` },
-        ...images.slice(0, 1).map(img => {
+        ...images.slice(0, 1).map((img) => {
           const { mimeType, data } = parseDataUrl(img);
           return { inlineData: { mimeType, data } };
-        })
-      ]
+        }),
+      ],
     },
     config: {
       systemInstruction,
@@ -96,15 +121,15 @@ export const generateTikTokScript = async (productName: string, additionalContex
                 time: { type: Type.STRING },
                 stage: { type: Type.STRING },
                 script: { type: Type.STRING },
-                visual_prompt_en: { type: Type.STRING }
+                visual_prompt_en: { type: Type.STRING },
               },
-              required: ["time", "stage", "script", "visual_prompt_en"]
-            }
-          }
+              required: ["time", "stage", "script", "visual_prompt_en"],
+            },
+          },
         },
-        required: ["script_title", "visual_dna", "structure"]
-      }
-    }
+        required: ["script_title", "visual_dna", "structure"],
+      },
+    },
   });
 
   try {
@@ -115,19 +140,30 @@ export const generateTikTokScript = async (productName: string, additionalContex
   }
 };
 
-export const generateSceneImage = async (prompt: string, visualDna: string, productBase64: string, characterBase64?: string) => {
+export const generateSceneImage = async (
+  prompt: string,
+  visualDna: string,
+  productBase64: string,
+  characterBase64?: string,
+) => {
   const ai = getAI();
-  
+
   const parts: any[] = [
-    { text: `Generate a high-quality 9:16 vertical photo. SCENE: ${prompt}. MODEL DNA: ${visualDna}. STYLE: Cinematic, realistic, 8k.` }
+    {
+      text: `Generate a high-quality 9:16 vertical photo. SCENE: ${prompt}. MODEL DNA: ${visualDna}. STYLE: Cinematic, realistic, 8k.`,
+    },
   ];
 
   const product = parseDataUrl(productBase64);
-  parts.push({ inlineData: { mimeType: product.mimeType, data: product.data } });
+  parts.push({
+    inlineData: { mimeType: product.mimeType, data: product.data },
+  });
 
   if (characterBase64) {
     const character = parseDataUrl(characterBase64);
-    parts.push({ inlineData: { mimeType: character.mimeType, data: character.data } });
+    parts.push({
+      inlineData: { mimeType: character.mimeType, data: character.data },
+    });
   }
 
   const response = await ai.models.generateContent({
@@ -135,15 +171,16 @@ export const generateSceneImage = async (prompt: string, visualDna: string, prod
     contents: { parts },
     config: {
       imageConfig: {
-        aspectRatio: "9:16"
-      }
-    }
+        aspectRatio: "9:16",
+      },
+    },
   });
 
-  const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+  const imagePart = response.candidates?.[0]?.content?.parts?.find(
+    (p) => p.inlineData,
+  );
   if (imagePart?.inlineData) {
     return `data:image/png;base64,${imagePart.inlineData.data}`;
   }
   return null;
 };
-

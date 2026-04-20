@@ -2245,18 +2245,44 @@ async function generateImage({
     await sleep(1000);
 
     // Step 2: Upload reference image → right-click → "Add to Prompt" (same pattern as Animate)
+    // Upload product image TWICE for stronger product fidelity (double-reference strategy)
     if (productImages && productImages.length > 0) {
       console.log(
-        "[TikTok Flow] Uploading product reference image:",
+        "[TikTok Flow] Uploading product reference image (1st pass):",
         productImages[0].substring(0, 80),
       );
       await withRetry(() => uploadAndAddReferenceToPrompt(productImages[0]), {
         maxAttempts: 2,
         delayMs: 2000,
-        label: "Upload reference image",
+        label: "Upload reference image (1st)",
       });
       console.log(
-        "[TikTok Flow] ✅ Reference image uploaded and added to prompt",
+        "[TikTok Flow] ✅ Reference image (1st) uploaded and added to prompt",
+      );
+
+      // Re-verify Image mode after Add to Prompt
+      switched = false;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        switched = await switchToMode("image");
+        if (switched) break;
+        await sleep(1000);
+      }
+      await closeSettingsDropdown();
+      await sleep(1000);
+
+      // Upload same product image a SECOND time to reinforce product fidelity
+      // This makes the model give more weight to the product appearance
+      console.log(
+        "[TikTok Flow] Uploading product reference image (2nd pass - double-reference for fidelity):",
+        productImages[0].substring(0, 80),
+      );
+      await withRetry(() => uploadAndAddReferenceToPrompt(productImages[0]), {
+        maxAttempts: 2,
+        delayMs: 2000,
+        label: "Upload reference image (2nd)",
+      });
+      console.log(
+        "[TikTok Flow] ✅ Reference image (2nd) uploaded and added to prompt",
       );
 
       // Verify we are still in Image mode after "Add to Prompt"
@@ -2478,18 +2504,43 @@ async function generateImageOnly({ jobId, prompt, referenceImages }) {
     await sleep(1000);
 
     // Step 3: Upload reference image if available
+    // Upload product image TWICE for stronger product fidelity (double-reference strategy)
     if (referenceImages && referenceImages.length > 0) {
       console.log(
-        "[TikTok Flow] Uploading reference image:",
+        "[TikTok Flow] Uploading reference image (1st pass):",
         referenceImages[0].substring(0, 80),
       );
       await withRetry(() => uploadAndAddReferenceToPrompt(referenceImages[0]), {
         maxAttempts: 2,
         delayMs: 2000,
-        label: "Upload reference image",
+        label: "Upload reference image (1st)",
       });
       console.log(
-        "[TikTok Flow] ✅ Reference image uploaded and added to prompt",
+        "[TikTok Flow] ✅ Reference image (1st) uploaded and added to prompt",
+      );
+
+      // Re-verify Image mode after Add to Prompt
+      switched = false;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        switched = await switchToMode("image");
+        if (switched) break;
+        await sleep(1000);
+      }
+      await closeSettingsDropdown();
+      await sleep(1000);
+
+      // Upload same reference image a SECOND time to reinforce product fidelity
+      console.log(
+        "[TikTok Flow] Uploading reference image (2nd pass - double-reference for fidelity):",
+        referenceImages[0].substring(0, 80),
+      );
+      await withRetry(() => uploadAndAddReferenceToPrompt(referenceImages[0]), {
+        maxAttempts: 2,
+        delayMs: 2000,
+        label: "Upload reference image (2nd)",
+      });
+      console.log(
+        "[TikTok Flow] ✅ Reference image (2nd) uploaded and added to prompt",
       );
 
       // Verify still in Image mode after "Add to Prompt"

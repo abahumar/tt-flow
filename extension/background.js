@@ -1,5 +1,18 @@
 const API_BASE = "http://localhost:3000/api";
 
+// Add region/locale params to bypass TikTok security checks
+function addScrapeParams(urlStr) {
+  try {
+    const u = new URL(urlStr);
+    u.searchParams.set("region", "MY");
+    u.searchParams.set("locale", "en-US");
+    u.searchParams.set("source", "agency");
+    return u.toString();
+  } catch {
+    return urlStr;
+  }
+}
+
 // ---- Fetch video model setting from chrome.storage.local ----
 async function getVideoModel() {
   try {
@@ -401,42 +414,47 @@ function handleMessage(message, sender, sendResponse) {
 
     case "SCRAPE_PRODUCT_BY_URL":
       // Open a TikTok Shop URL in a new tab and scrape it
-      chrome.tabs.create({ url: payload.url, active: false }, (tab) => {
-        const tabId = tab.id;
-        // Wait for page to load, then scrape
-        const onComplete = (updatedTabId, changeInfo) => {
-          if (updatedTabId === tabId && changeInfo.status === "complete") {
-            chrome.tabs.onUpdated.removeListener(onComplete);
-            // Give it extra time for dynamic content
-            setTimeout(() => {
-              chrome.tabs.sendMessage(
-                tabId,
-                { type: "SCRAPE_PRODUCT" },
-                (result) => {
-                  // Close the tab after scraping
-                  chrome.tabs.remove(tabId);
-                  if (chrome.runtime.lastError || !result?.success) {
-                    sendResponse({ error: result?.error || "Scraping failed" });
-                    return;
-                  }
-                  // Send to API
-                  fetch(`${API_BASE}/products/scrape`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ scraped: result.data }),
-                  })
-                    .then((r) => r.json())
-                    .then((data) =>
-                      sendResponse({ success: true, product: data }),
-                    )
-                    .catch((err) => sendResponse({ error: err.message }));
-                },
-              );
-            }, 3000);
-          }
-        };
-        chrome.tabs.onUpdated.addListener(onComplete);
-      });
+      chrome.tabs.create(
+        { url: addScrapeParams(payload.url), active: false },
+        (tab) => {
+          const tabId = tab.id;
+          // Wait for page to load, then scrape
+          const onComplete = (updatedTabId, changeInfo) => {
+            if (updatedTabId === tabId && changeInfo.status === "complete") {
+              chrome.tabs.onUpdated.removeListener(onComplete);
+              // Give it extra time for dynamic content
+              setTimeout(() => {
+                chrome.tabs.sendMessage(
+                  tabId,
+                  { type: "SCRAPE_PRODUCT" },
+                  (result) => {
+                    // Close the tab after scraping
+                    chrome.tabs.remove(tabId);
+                    if (chrome.runtime.lastError || !result?.success) {
+                      sendResponse({
+                        error: result?.error || "Scraping failed",
+                      });
+                      return;
+                    }
+                    // Send to API
+                    fetch(`${API_BASE}/products/scrape`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ scraped: result.data }),
+                    })
+                      .then((r) => r.json())
+                      .then((data) =>
+                        sendResponse({ success: true, product: data }),
+                      )
+                      .catch((err) => sendResponse({ error: err.message }));
+                  },
+                );
+              }, 3000);
+            }
+          };
+          chrome.tabs.onUpdated.addListener(onComplete);
+        },
+      );
       return true;
 
     case "INSPECT_FLOW":
@@ -1401,91 +1419,94 @@ async function pollScrapeRequests() {
     });
 
     // Open the URL in a background tab and scrape
-    chrome.tabs.create({ url: req.url, active: false }, (tab) => {
-      const tabId = tab.id;
+    chrome.tabs.create(
+      { url: addScrapeParams(req.url), active: false },
+      (tab) => {
+        const tabId = tab.id;
 
-      const onComplete = (updatedTabId, changeInfo) => {
-        if (updatedTabId === tabId && changeInfo.status === "complete") {
-          chrome.tabs.onUpdated.removeListener(onComplete);
+        const onComplete = (updatedTabId, changeInfo) => {
+          if (updatedTabId === tabId && changeInfo.status === "complete") {
+            chrome.tabs.onUpdated.removeListener(onComplete);
 
-          // Wait for dynamic content to load
-          setTimeout(() => {
-            chrome.tabs.sendMessage(
-              tabId,
-              { type: "SCRAPE_PRODUCT" },
-              async (result) => {
-                chrome.tabs.remove(tabId);
+            // Wait for dynamic content to load
+            setTimeout(() => {
+              chrome.tabs.sendMessage(
+                tabId,
+                { type: "SCRAPE_PRODUCT" },
+                async (result) => {
+                  chrome.tabs.remove(tabId);
 
-                if (chrome.runtime.lastError || !result?.success) {
-                  // Mark as failed
-                  await fetch(`${API_BASE}/scrape-requests/${req.id}`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      status: "failed",
-                      error: result?.error || "Scraping failed",
-                    }),
-                  });
+                  if (chrome.runtime.lastError || !result?.success) {
+                    // Mark as failed
+                    await fetch(`${API_BASE}/scrape-requests/${req.id}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        status: "failed",
+                        error: result?.error || "Scraping failed",
+                      }),
+                    });
+                    isProcessingScrape = false;
+                    return;
+                  }
+
+                  try {
+                    // Save product to API
+                    const saveRes = await fetch(`${API_BASE}/products/scrape`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ scraped: result.data }),
+                    });
+                    const product = await saveRes.json();
+
+                    // Mark scrape request as done with product ID
+                    await fetch(`${API_BASE}/scrape-requests/${req.id}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        status: "done",
+                        productId: product.id,
+                      }),
+                    });
+                  } catch (err) {
+                    await fetch(`${API_BASE}/scrape-requests/${req.id}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        status: "failed",
+                        error: err.message,
+                      }),
+                    });
+                  }
                   isProcessingScrape = false;
-                  return;
-                }
+                },
+              );
+            }, 3000);
+          }
+        };
 
-                try {
-                  // Save product to API
-                  const saveRes = await fetch(`${API_BASE}/products/scrape`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ scraped: result.data }),
-                  });
-                  const product = await saveRes.json();
+        chrome.tabs.onUpdated.addListener(onComplete);
 
-                  // Mark scrape request as done with product ID
-                  await fetch(`${API_BASE}/scrape-requests/${req.id}`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      status: "done",
-                      productId: product.id,
-                    }),
-                  });
-                } catch (err) {
-                  await fetch(`${API_BASE}/scrape-requests/${req.id}`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      status: "failed",
-                      error: err.message,
-                    }),
-                  });
-                }
-                isProcessingScrape = false;
-              },
-            );
-          }, 3000);
-        }
-      };
-
-      chrome.tabs.onUpdated.addListener(onComplete);
-
-      // Timeout safety: if tab never finishes loading in 30s, fail
-      setTimeout(async () => {
-        if (isProcessingScrape) {
-          chrome.tabs.onUpdated.removeListener(onComplete);
-          try {
-            chrome.tabs.remove(tabId);
-          } catch {}
-          await fetch(`${API_BASE}/scrape-requests/${req.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              status: "failed",
-              error: "Timed out waiting for page to load",
-            }),
-          });
-          isProcessingScrape = false;
-        }
-      }, 30000);
-    });
+        // Timeout safety: if tab never finishes loading in 30s, fail
+        setTimeout(async () => {
+          if (isProcessingScrape) {
+            chrome.tabs.onUpdated.removeListener(onComplete);
+            try {
+              chrome.tabs.remove(tabId);
+            } catch {}
+            await fetch(`${API_BASE}/scrape-requests/${req.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                status: "failed",
+                error: "Timed out waiting for page to load",
+              }),
+            });
+            isProcessingScrape = false;
+          }
+        }, 30000);
+      },
+    );
   } catch {
     isProcessingScrape = false;
   }
@@ -2741,21 +2762,94 @@ async function processImageGeneration(job) {
   }
 
   // Extract product images to use as reference in Google Flow
-  // Custom uploaded images replace catalog images (same upload path in google-flow.js)
+  // When job has productId (catalog), customRefImages are model/reference images only — product comes from catalog
+  // When no productId (upload mode), customRefImages[0] = product, rest = model/reference
   let productImages = [];
   let studioReferenceImages = [];
-  if (customRefImages.length > 0) {
-    productImages = customRefImages;
-    console.log(
-      "[TikTok Flow] Using",
-      customRefImages.length,
-      "custom reference image(s) as product images — skipping catalog",
-    );
-  } else {
+
+  // Check for custom product image (uploaded via Quick Video)
+  let customProductImageDataUrl = null;
+  if (job.referenceImage) {
     try {
-      productImages = JSON.parse(job.product?.images || "[]");
-    } catch {
-      productImages = [];
+      const imgRes = await fetch(`${API_BASE}/upload/${job.referenceImage}`);
+      if (imgRes.ok) {
+        const blob = await imgRes.blob();
+        customProductImageDataUrl = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(blob);
+        });
+        console.log(
+          "[TikTok Flow] \u2705 Fetched custom product image:",
+          job.referenceImage,
+          "(" + Math.round(blob.size / 1024) + "KB)",
+        );
+      }
+    } catch (e) {
+      console.warn(
+        "[TikTok Flow] Could not fetch custom product image:",
+        e.message,
+      );
+    }
+  }
+
+  if (customRefImages.length > 0) {
+    if (job.productId && job.product?.images) {
+      // Catalog mode: determine product image source
+      if (customProductImageDataUrl) {
+        // Quick Video: custom product image stored in referenceImage (singular)
+        productImages = [customProductImageDataUrl];
+        studioReferenceImages = customRefImages; // all plural refs are model/avatar
+        console.log(
+          "[TikTok Flow] Catalog mode: Using custom uploaded product image (replacing catalog)",
+        );
+      } else {
+        // Custom Video / Video Studio: first ref is product image, rest are model/avatar
+        productImages = [customRefImages[0]];
+        studioReferenceImages = customRefImages.slice(1);
+        console.log(
+          "[TikTok Flow] Catalog mode: Using custom ref[0] as product image +",
+          studioReferenceImages.length,
+          "model/reference image(s)",
+        );
+      }
+      console.log(
+        "[TikTok Flow] Catalog mode: Using",
+        productImages.length,
+        "product image(s) +",
+        studioReferenceImages.length,
+        "custom reference image(s) (model face, etc.)",
+      );
+    } else {
+      // Upload mode: first custom ref = product image, rest = model/reference
+      productImages = [customRefImages[0]];
+      if (customRefImages.length > 1) {
+        studioReferenceImages = customRefImages.slice(1);
+        console.log(
+          "[TikTok Flow] Upload mode: Using 1 product image + " +
+            studioReferenceImages.length +
+            " additional reference image(s) (model face, etc.)",
+        );
+      }
+      console.log(
+        "[TikTok Flow] Using",
+        customRefImages.length,
+        "custom reference image(s) — skipping catalog",
+      );
+    }
+  } else {
+    // No custom ref images — use custom product image or catalog
+    if (customProductImageDataUrl) {
+      productImages = [customProductImageDataUrl];
+      console.log(
+        "[TikTok Flow] Using custom uploaded product image (no model refs)",
+      );
+    } else {
+      try {
+        productImages = JSON.parse(job.product?.images || "[]");
+      } catch {
+        productImages = [];
+      }
     }
   }
 
@@ -3007,21 +3101,94 @@ async function processMultiSceneJob(job, scenePrompts) {
     /* no refs */
   }
 
-  // Custom uploaded images replace catalog images (same upload path in google-flow.js)
+  // When job has productId (catalog), customRefImages are model/reference images only
+  // When no productId (upload mode), customRefImages[0] = product, rest = model/reference
   let productImages = [];
   let studioReferenceImages = [];
-  if (customRefImages.length > 0) {
-    productImages = customRefImages;
-    console.log(
-      "[TikTok Flow] Using",
-      customRefImages.length,
-      "custom reference image(s) as product images — skipping catalog (multi-scene)",
-    );
-  } else {
+
+  // Check for custom product image (uploaded via Quick Video)
+  let customProductImageDataUrl = null;
+  if (job.referenceImage) {
     try {
-      productImages = JSON.parse(job.product?.images || "[]");
-    } catch {
-      productImages = [];
+      const imgRes = await fetch(`${API_BASE}/upload/${job.referenceImage}`);
+      if (imgRes.ok) {
+        const blob = await imgRes.blob();
+        customProductImageDataUrl = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(blob);
+        });
+        console.log(
+          "[TikTok Flow] \u2705 Fetched custom product image:",
+          job.referenceImage,
+          "(" + Math.round(blob.size / 1024) + "KB)",
+        );
+      }
+    } catch (e) {
+      console.warn(
+        "[TikTok Flow] Could not fetch custom product image:",
+        e.message,
+      );
+    }
+  }
+
+  if (customRefImages.length > 0) {
+    if (job.productId && job.product?.images) {
+      // Catalog mode: determine product image source
+      if (customProductImageDataUrl) {
+        // Quick Video: custom product image stored in referenceImage (singular)
+        productImages = [customProductImageDataUrl];
+        studioReferenceImages = customRefImages; // all plural refs are model/avatar
+        console.log(
+          "[TikTok Flow] Catalog mode (multi-scene): Using custom uploaded product image (replacing catalog)",
+        );
+      } else {
+        // Custom Video / Video Studio: first ref is product image, rest are model/avatar
+        productImages = [customRefImages[0]];
+        studioReferenceImages = customRefImages.slice(1);
+        console.log(
+          "[TikTok Flow] Catalog mode (multi-scene): Using custom ref[0] as product image +",
+          studioReferenceImages.length,
+          "model/reference image(s)",
+        );
+      }
+      console.log(
+        "[TikTok Flow] Catalog mode (multi-scene): Using",
+        productImages.length,
+        "product image(s) +",
+        studioReferenceImages.length,
+        "custom reference image(s) (model face, etc.)",
+      );
+    } else {
+      // Upload mode: first custom ref = product image, rest = model/reference
+      productImages = [customRefImages[0]];
+      if (customRefImages.length > 1) {
+        studioReferenceImages = customRefImages.slice(1);
+        console.log(
+          "[TikTok Flow] Upload mode (multi-scene): Using 1 product image + " +
+            studioReferenceImages.length +
+            " additional reference image(s) (model face, etc.)",
+        );
+      }
+      console.log(
+        "[TikTok Flow] Using",
+        customRefImages.length,
+        "custom reference image(s) — skipping catalog (multi-scene)",
+      );
+    }
+  } else {
+    // No custom ref images — use custom product image or catalog
+    if (customProductImageDataUrl) {
+      productImages = [customProductImageDataUrl];
+      console.log(
+        "[TikTok Flow] Using custom uploaded product image, no model refs (multi-scene)",
+      );
+    } else {
+      try {
+        productImages = JSON.parse(job.product?.images || "[]");
+      } catch {
+        productImages = [];
+      }
     }
   }
 

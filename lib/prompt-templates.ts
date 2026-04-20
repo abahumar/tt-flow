@@ -7,58 +7,69 @@ export const VIDEO_TYPES = {
 
 export type VideoType = keyof typeof VIDEO_TYPES;
 
+const PRODUCT_FIDELITY_SUFFIX =
+  " IMPORTANT: The product must be an EXACT copy of the product from the uploaded reference image — same packaging, label, colors, text, shape. Do NOT generate a different or imagined version of the product.";
+
 const IMAGE_TEMPLATES: Record<VideoType, string> = {
   fungsi_produk:
     "From the image uploaded, accurate scale, no alter, no redesign. " +
     "Create a professional product showcase photo. " +
-    "Keep the product EXACTLY as shown — same shape, color, design, branding, and details. " +
+    "Keep the product EXACTLY as shown in the reference — same shape, color, design, branding, and details. " +
     "Place it on a clean white/light background with studio lighting, showing the product in use demonstrating its function. " +
-    "Product: {title}. {description}",
+    "Product: {title}. {description}" +
+    PRODUCT_FIDELITY_SUFFIX,
   review:
     "From the image uploaded, accurate scale, no alter, no redesign. " +
     "Create a realistic product review style photo. " +
-    "Keep the product EXACTLY as shown — same shape, color, design, branding, and details. " +
+    "Keep the product EXACTLY as shown in the reference — same shape, color, design, branding, and details. " +
     "Display the product attractively with warm lighting in a lifestyle setting. " +
-    "Product: {title}. {description}",
+    "Product: {title}. {description}" +
+    PRODUCT_FIDELITY_SUFFIX,
   unboxing:
     "From the image uploaded, accurate scale, no alter, no redesign. " +
     "Create an exciting unboxing scene. " +
-    "Keep the product EXACTLY as shown — same shape, color, design, branding, and details. " +
+    "Keep the product EXACTLY as shown in the reference — same shape, color, design, branding, and details. " +
     "Show the product being revealed from packaging with tissue paper and box, overhead angle, clean background. " +
-    "Product: {title}. {description}",
+    "Product: {title}. {description}" +
+    PRODUCT_FIDELITY_SUFFIX,
   problem_solution:
     "From the image uploaded, accurate scale, no alter, no redesign. " +
     "Create a before-and-after style image. " +
-    "Keep the product EXACTLY as shown — same shape, color, design, branding, and details. " +
+    "Keep the product EXACTLY as shown in the reference — same shape, color, design, branding, and details. " +
     "Left side shows a common problem, right side shows the solution with the product prominently displayed. " +
-    "Product: {title}. {description}",
+    "Product: {title}. {description}" +
+    PRODUCT_FIDELITY_SUFFIX,
 };
 
 const CLOTHING_IMAGE_TEMPLATES: Record<VideoType, string> = {
   fungsi_produk:
     "From the image uploaded, accurate scale, no alter, no redesign. " +
     "Create a professional fashion showcase photo with a model WEARING the clothing item. " +
-    "Keep the clothing EXACTLY as shown — same color, pattern, fabric, design, and branding. " +
+    "Keep the clothing EXACTLY as shown in the reference — same color, pattern, fabric, design, and branding. " +
     "Model in a confident standing pose on a clean white/light background with studio lighting, showing how the clothing fits and drapes on the body. " +
-    "Product: {title}. {description}",
+    "Product: {title}. {description}" +
+    PRODUCT_FIDELITY_SUFFIX,
   review:
     "From the image uploaded, accurate scale, no alter, no redesign. " +
     "Create a realistic fashion review style photo with a model WEARING the clothing item. " +
-    "Keep the clothing EXACTLY as shown — same color, pattern, fabric, design, and branding. " +
+    "Keep the clothing EXACTLY as shown in the reference — same color, pattern, fabric, design, and branding. " +
     "Model in a natural lifestyle setting with warm lighting, showing the clothing in everyday context with a relaxed pose. " +
-    "Product: {title}. {description}",
+    "Product: {title}. {description}" +
+    PRODUCT_FIDELITY_SUFFIX,
   unboxing:
     "From the image uploaded, accurate scale, no alter, no redesign. " +
     "Create an exciting clothing reveal scene with a model WEARING the clothing item. " +
-    "Keep the clothing EXACTLY as shown — same color, pattern, fabric, design, and branding. " +
+    "Keep the clothing EXACTLY as shown in the reference — same color, pattern, fabric, design, and branding. " +
     "Model doing a casual try-on pose with packaging visible nearby, clean background, showing the first impression of the outfit. " +
-    "Product: {title}. {description}",
+    "Product: {title}. {description}" +
+    PRODUCT_FIDELITY_SUFFIX,
   problem_solution:
     "From the image uploaded, accurate scale, no alter, no redesign. " +
     "Create a before-and-after style image. " +
-    "Keep the clothing EXACTLY as shown — same color, pattern, fabric, design, and branding. " +
+    "Keep the clothing EXACTLY as shown in the reference — same color, pattern, fabric, design, and branding. " +
     "Left side shows a plain/unstylish outfit, right side shows a model WEARING the product looking stylish and confident. " +
-    "Product: {title}. {description}",
+    "Product: {title}. {description}" +
+    PRODUCT_FIDELITY_SUFFIX,
 };
 
 const VIDEO_TEMPLATES: Record<VideoType, string> = {
@@ -196,7 +207,7 @@ const SEEIUWTOA_ELEMENTS: FormulaElement[] = [
     visualDirection:
       "Model shows relatable problem WITHOUT product. Frustrated/emotional expression in everyday setting.",
     dialogDirection:
-      "Hook with pain point or dream the audience relates to. MAX 20 words. Use one of the hook templates.",
+      "Hook with pain point or dream the audience relates to. 8-22 words. Use one of the hook templates.",
   },
   {
     code: "EX",
@@ -206,7 +217,7 @@ const SEEIUWTOA_ELEMENTS: FormulaElement[] = [
     visualDirection:
       "Model shows heightened frustration/emotion. More dramatic expression, body language conveys stress.",
     dialogDirection:
-      "Amplify the situation emotionally. MAX 20 words. Make audience feel understood.",
+      "Amplify the situation emotionally. 8-22 words. Make audience feel understood.",
   },
   {
     code: "ED",
@@ -216,7 +227,7 @@ const SEEIUWTOA_ELEMENTS: FormulaElement[] = [
     visualDirection:
       "Model in thoughtful/informative pose. Can hold phone showing info or gesture knowingly at camera.",
     dialogDirection:
-      "Reveal insight or root cause with a fact. MAX 25 words. Educational but casual tone.",
+      "Reveal insight or root cause with a fact. 8-22 words. Educational but casual tone.",
   },
   {
     code: "IN",
@@ -225,7 +236,7 @@ const SEEIUWTOA_ELEMENTS: FormulaElement[] = [
     visualDirection:
       "Model reveals product for the first time. Happy/relieved expression. Product clearly visible.",
     dialogDirection:
-      "Introduce the product naturally as the solution. MAX 20 words. Like sharing a discovery.",
+      "Introduce the product naturally as the solution. 8-22 words. Like sharing a discovery.",
   },
   {
     code: "US",
@@ -234,7 +245,7 @@ const SEEIUWTOA_ELEMENTS: FormulaElement[] = [
     visualDirection:
       "Close-up of product features/details. Model demonstrates or points at key feature.",
     dialogDirection:
-      "Highlight specific unique benefits. MAX 20 words. What makes it different and better.",
+      "Highlight specific unique benefits. 8-22 words. What makes it different and better.",
   },
   {
     code: "WHO",
@@ -244,7 +255,7 @@ const SEEIUWTOA_ELEMENTS: FormulaElement[] = [
     visualDirection:
       "Model gestures warmly toward camera, inclusive body language. Product held casually.",
     dialogDirection:
-      "Describe who benefits. MAX 20 words. 'Sesuai untuk...' — expand audience.",
+      "Describe who benefits. 8-22 words. 'Sesuai untuk...' — expand audience.",
   },
   {
     code: "TR",
@@ -253,7 +264,7 @@ const SEEIUWTOA_ELEMENTS: FormulaElement[] = [
     visualDirection:
       "Model shows confident, trustworthy expression. Can gesture as if sharing proof or testimonial.",
     dialogDirection:
-      "Share social proof or credibility. MAX 20 words. 'Ramai dah guna...', 'Dah terbukti...'",
+      "Share social proof or credibility. 8-22 words. 'Ramai dah guna...', 'Dah terbukti...'",
   },
   {
     code: "OF",
@@ -262,16 +273,16 @@ const SEEIUWTOA_ELEMENTS: FormulaElement[] = [
     visualDirection:
       "Model presents product with excited/urgent expression. Product prominent, inviting composition.",
     dialogDirection:
-      "State the offer/price with urgency. MAX 20 words. FORBIDDEN: 'Harga Promosi'. Example: 'Limited offer, grab sebelum habis!'",
+      "State the offer/price with urgency. 8-22 words. FORBIDDEN: 'Harga Promosi'. Example: 'Limited offer, grab sebelum habis!'",
   },
   {
     code: "AC",
     name: "Action",
-    purpose: "Clear CTA — short punchy phrase only.",
+    purpose: "Clear CTA — punchy closing line with urgency.",
     visualDirection:
       "Model presents product directly to camera. Big warm smile, inviting expression. Product very prominent.",
     dialogDirection:
-      "Super short CTA phrase. MAX 4 words. FORBIDDEN phrases: 'Harga Promosi', 'Cek Link'. Examples: 'Grab Sekarang', 'Jangan Lepas', 'Cuba Sekarang', 'Mesti Try'. NO long sentences.",
+      "CTA closing line. MUST be 8-22 words. FORBIDDEN phrases: 'Harga Promosi', 'Cek Link'. Examples: 'Jom grab sekarang, korang memang tak akan menyesal percaya cakap aku!', 'Serious best gila, cepat grab sebelum habis stok tau!', 'Mesti try ni, confirm korang suka lepas guna!'. Must feel natural and complete.",
   },
 ];
 
@@ -290,7 +301,7 @@ export const VIDEO_FORMATS = {
         visualDirection:
           "Model holds product up to camera, excited expression, product clearly visible. Close-up chest-up framing.",
         dialogDirection:
-          "Quick hook — what is this product and why should they care. MAX 20 words. Example: 'Korang kena try ni, serious berbaloi!'",
+          "Quick hook — what is this product and why should they care. 8-22 words. Example: 'Korang kena try ni, serious berbaloi!'",
       },
       {
         code: "USP",
@@ -299,16 +310,16 @@ export const VIDEO_FORMATS = {
         visualDirection:
           "Model demonstrates product key feature, pointing at detail. Medium shot, product in focus.",
         dialogDirection:
-          "One killer benefit that differentiates. MAX 20 words. Short and punchy. Example: 'Bahan dia premium, tahan lama, tak mudah rosak!'",
+          "One killer benefit that differentiates. 8-22 words. Short and punchy. Example: 'Bahan dia premium, tahan lama, tak mudah rosak!'",
       },
       {
         code: "AC",
         name: "Action",
-        purpose: "CTA — super short punchy phrase.",
+        purpose: "CTA — punchy closing line with urgency.",
         visualDirection:
           "Model holds product beside face, warm inviting smile, product prominent. Chest-up framing.",
         dialogDirection:
-          "Super short CTA phrase. MAX 4 words. FORBIDDEN phrases: 'Harga Promosi', 'Cek Link'. Examples: 'Grab Sekarang', 'Mesti Try', 'Cuba Sekarang'. NO long sentences.",
+          "CTA closing line. MUST be 8-22 words. FORBIDDEN phrases: 'Harga Promosi', 'Cek Link'. Examples: 'Jom grab sekarang, korang memang tak akan menyesal percaya cakap aku!', 'Serious best gila, cepat grab sebelum habis stok tau!'. Must feel natural and complete.",
       },
     ] as FormulaElement[],
   },
@@ -326,7 +337,7 @@ export const VIDEO_FORMATS = {
         visualDirection:
           "Model looks frustrated/disappointed in everyday setting. No product visible yet.",
         dialogDirection:
-          "Hook with a relatable problem. MAX 20 words. Use hook templates. Example: 'Penat kan rambut gugur tak henti-henti?'",
+          "Hook with a relatable problem. 8-22 words. Use hook templates. Example: 'Penat kan rambut gugur tak henti-henti?'",
       },
       {
         code: "IN",
@@ -335,7 +346,7 @@ export const VIDEO_FORMATS = {
         visualDirection:
           "Model holds up product with relieved/happy expression. Product clearly shown.",
         dialogDirection:
-          "Introduce product naturally. MAX 20 words. Example: 'Tapi lepas guna ni, semua berubah...'",
+          "Introduce product naturally. 8-22 words. Example: 'Tapi lepas guna ni, semua berubah...'",
       },
       {
         code: "USP",
@@ -344,16 +355,16 @@ export const VIDEO_FORMATS = {
         visualDirection:
           "Close-up of product feature/label. Model points at key detail.",
         dialogDirection:
-          "Specific unique benefit. MAX 20 words. Example: 'Ada Biotin & Keratin, memang proven berkesan!'",
+          "Specific unique benefit. 8-22 words. Example: 'Ada Biotin & Keratin, memang proven berkesan!'",
       },
       {
         code: "AC",
         name: "Action",
-        purpose: "CTA — super short punchy phrase.",
+        purpose: "CTA — punchy closing line with urgency.",
         visualDirection:
           "Model smiles warmly holding product beside face, inviting expression.",
         dialogDirection:
-          "Super short CTA phrase. MAX 4 words. FORBIDDEN phrases: 'Harga Promosi', 'Cek Link'. Examples: 'Grab Sekarang', 'Jangan Lepas', 'Cuba Sekarang'. NO long sentences.",
+          "CTA closing line. MUST be 8-22 words. FORBIDDEN phrases: 'Harga Promosi', 'Cek Link'. Examples: 'Jom grab sekarang, korang memang tak akan menyesal percaya cakap aku!', 'Serious best gila, cepat grab sebelum habis stok tau!'. Must feel natural and complete.",
       },
     ] as FormulaElement[],
   },
@@ -491,18 +502,18 @@ export const HOOK_TEMPLATES = {
     "Masalah kau bukan _________ — tapi _________.",
   ],
   curiosity: [
-    "Aku baru sedar satu benda pasal _________... selama ni aku buat salah.",
+    "Saya baru sedar satu benda pasal _________... selama ni saya buat salah.",
     "Kenapa ada orang _________ walaupun _________?",
-    "Ada satu benda pasal _________ aku wish aku tahu awal...",
+    "Ada satu benda pasal _________ saya wish saya tahu awal...",
     "Macam mana _________ boleh bagi _________?",
     "Apa sebenarnya yang orang _________ buat berbeza dalam _________?",
   ],
   story_based: [
-    "Dulu aku pun _________... sampai satu hari aku sedar _________.",
-    "Aku pernah _________ lama... sampai aku ubah satu benda ni: _________.",
-    "Semua berubah bila aku start _________.",
-    "Aku ingat _________... rupanya _________.",
-    "Aku hampir _________... tapi _________ ubah semua.",
+    "Dulu saya pun _________... sampai satu hari saya sedar _________.",
+    "Saya pernah _________ lama... sampai saya ubah satu benda ni: _________.",
+    "Semua berubah bila saya start _________.",
+    "Saya ingat _________... rupanya _________.",
+    "Saya hampir _________... tapi _________ ubah semua.",
   ],
 } as const;
 
@@ -539,6 +550,13 @@ DIALOG TONE — GAYA BAHASA SANTAI (KUALA LUMPUR SLANG):
 - Prioritize: Emotion → Story → Product → Conversion.
 - Dialog mesti mudah di sebut untuk AI voice — ayat pendek, direct, natural flow.
 
+KATA GANTI DIRI (CRITICAL — WAJIB IKUT):
+- DILARANG guna "aku" sebagai kata ganti diri. "Aku" kedengaran kasar dan tidak sesuai untuk content selling.
+- WAJIB guna "saya" sebagai kata ganti diri utama. Contoh: "Saya dah try...", "Saya memang suka...", "Saya nak share..."
+- "Saya" masih boleh digabung dengan slang KL — contoh: "Saya serious cakap lah...", "Saya confirm recommend ni."
+- Untuk avatar Makcik/Pakcik, guna kata ganti diri "acik" atau "makcik"/"pakcik". Contoh: "Acik dah try ni tau...", "Makcik memang suka...", "Pakcik recommend ni."
+- JANGAN sesekali guna "aku", "gue", "gw" — ini DILARANG sepenuhnya.
+
 VARIASI PEMBUKAAN SCENE 1 (HOOK):
 - JANGAN mulakan Scene 1 dengan "Aduh" atau "Wei korang". DILARANG guna "Wei korang" sebagai pembukaan. Terlalu overused.
 - Pilih pembukaan dari senarai ini secara RAWAK setiap kali generate — WAJIB tukar setiap kali:
@@ -547,9 +565,9 @@ VARIASI PEMBUKAAN SCENE 1 (HOOK):
   3. Cabaran: "Cuba teka...", "Bet korang tak tau..."
   4. Pernyataan bold: "Serious cakap...", "No cap..."
   5. Luahan: "Fuh gila...", "Perghhh...", "Bro..."
-  6. Cerita pendek: "Hari tu aku...", "Dulu aku pun..."
+  6. Cerita pendek: "Hari tu saya...", "Dulu saya pun..."
   7. POV: "POV: Korang baru jumpa...", "POV: Bila mak suruh..."
-  8. Confession: "Aku nak ngaku...", "Jujur cakap..."
+  8. Confession: "Saya nak ngaku...", "Jujur cakap..."
 - Setiap kali generate, pilih pembukaan yang BERBEZA. Jangan ulang pattern yang sama.
 - SEKALI LAGI: JANGAN start dengan "Wei korang". Gunakan variasi lain.
 

@@ -61,11 +61,28 @@ export async function POST(req: NextRequest) {
     CRITICAL RULES:
     1. Each prompt MUST start with: "From the image uploaded, accurate scale, no alter, no redesign."
        (This tells Google Flow to use the uploaded reference image as a base)
-    2. Each prompt should be a different creative angle/interpretation of the user's description
-    3. Be specific about: lighting, camera angle, background, composition, mood
-    4. Keep prompts concise but descriptive (2-4 sentences max)
-    5. DO NOT use the word "flow" in any prompt (causes issues with Google Flow)
-    6. DO NOT describe opening, unsealing, or unboxing (AI hallucinates interiors)
+    2. Each prompt MUST end with: "IMPORTANT: The product in the person's hand must be the EXACT product from the uploaded reference image — same packaging, same label, same colors, same text, same shape. Do NOT generate a generic or imagined version of the product."
+       (This reinforces product fidelity at the end of the prompt via recency bias)
+    3. PRODUCT REFERENCE RULE (MOST IMPORTANT):
+       When describing the person holding, using, or interacting with the product,
+       ALWAYS write "the exact product from the uploaded reference image" or "the product from the reference image".
+       NEVER describe the product by its appearance, color, shape, or name.
+       
+       ❌ WRONG: "holds the black product container in his right hand"
+       ❌ WRONG: "holds the BAIYAOLANG 20g cream tube"
+       ❌ WRONG: "holds a small dark bottle"
+       ❌ WRONG: "holds the product up to the camera"
+       ✅ CORRECT: "holds the exact product from the uploaded reference image in his right hand"
+       ✅ CORRECT: "proudly displays the exact product from the reference image towards the camera"
+       ✅ CORRECT: "grips the exact product from the uploaded reference image, positioned prominently"
+       
+       This is critical because generic descriptions like "black container" or "product" cause the AI to INVENT a new product instead of using the reference image.
+    4. Each prompt should be a different creative angle/interpretation of the user's description
+    5. Be specific about: lighting, camera angle, background, composition, mood
+    6. Keep prompts concise but descriptive (3-5 sentences max)
+    7. DO NOT use the word "flow" in any prompt (causes issues with Google Flow)
+    8. DO NOT describe opening, unsealing, or unboxing (AI hallucinates interiors)
+    9. When including a human model holding/using the product, keep the product as the PRIMARY SUBJECT — the human is secondary context. The product must be the most detailed and prominent element.
     ${clothingRules}
     VARIATION STYLES:
     1. Clean & Minimal — White/light background, studio lighting

@@ -102,9 +102,108 @@ function findNextCombo(
   return null;
 }
 
+// ─── Helper: build overlay config & create job ───
+
+async function createVideoJob(
+  baseUrl: string,
+  productId: string,
+  preset: typeof DEFAULT_PRESET,
+  hookTitle: string,
+  tiktokCaption: string,
+  variations: {
+    imagePrompt?: string;
+    videoPrompt?: string;
+    tiktokProductName?: string;
+    tiktokDescription?: string;
+    tiktokCaption?: string;
+    tiktokHashtags?: string[];
+    overlayText?: string;
+    overlayPosition?: string;
+  }[],
+  referenceImages: string[],
+  customProductImage = "",
+) {
+  const allScenePrompts = variations.map((v) => ({
+    imagePrompt: v.imagePrompt || "",
+    videoPrompt: v.videoPrompt || "",
+  }));
+
+  const overlays =
+    preset.enableOverlay !== false
+      ? variations.map((v) =>
+          v.overlayText
+            ? { text: v.overlayText, position: v.overlayPosition || "bottom" }
+            : null,
+        )
+      : variations.map(() => null);
+
+  const overlayConfig = JSON.stringify({
+    hookTitle: preset.enableHook ? hookTitle : "",
+    hookSubtitle: "",
+    hookBgColor: preset.hookBgColor,
+    hookTextColor: preset.hookTextColor,
+    hookFontSize: preset.hookFontSize,
+    overlays,
+    overlayFontSize: preset.overlayFontSize,
+  });
+
+  const scene1 = variations[0];
+
+  const jobRes = await fetch(`${baseUrl}/api/jobs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      productId,
+      videoType: preset.genre,
+      userImagePrompt: scene1.imagePrompt || "",
+      userVideoPrompt: scene1.videoPrompt || "",
+      tiktokProductName: scene1.tiktokProductName || "",
+      tiktokDescription: scene1.tiktokDescription || "",
+      tiktokCaption: tiktokCaption || scene1.tiktokCaption || "",
+      tiktokHashtags: scene1.tiktokHashtags || [],
+      referenceImage: customProductImage || undefined,
+      referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
+      scenePrompts: JSON.stringify(allScenePrompts),
+      overlayConfig,
+    }),
+  });
+
+  return jobRes;
+}
+
+// ─── Helper: mark matrix combo as used ───
+
+async function markMatrixComboUsed(productId: string, matrixCombo: string) {
+  const matrix = await prisma.contentMatrix.findUnique({
+    where: { productId },
+  });
+  if (!matrix) return;
+
+  const usedCombos = JSON.parse(matrix.usedCombos) as string[];
+  usedCombos.push(matrixCombo);
+  const targets = JSON.parse(matrix.targets) as string[];
+  const scenarios = JSON.parse(matrix.scenarios) as string[];
+  const usps = JSON.parse(matrix.usps) as string[];
+  const phase1Total = targets.length * scenarios.length * usps.length;
+  const phase1Used = usedCombos.filter((c) => !c.includes("+")).length;
+  await prisma.contentMatrix.update({
+    where: { productId },
+    data: {
+      usedCombos: JSON.stringify(usedCombos),
+      phase: phase1Used >= phase1Total ? 2 : matrix.phase,
+    },
+  });
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { productId, customImage = "", modelImage = "" } = body;
+  const {
+    productId,
+    customImage = "",
+    modelImage = "",
+    preview = false,
+    editedContent,
+  } = body;
 
   if (!productId) {
     return NextResponse.json(
@@ -134,6 +233,108 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Determine avatar: product-level > preset > default
+  const avatarId = product.avatarId || preset.avatar || DEFAULT_PRESET.avatar;
+
+  const host = req.headers.get("host") || "localhost:3000";
+  const protocol = host.startsWith("localhost") ? "http" : "https";
+  const baseUrl = `${protocol}://${host}`;
+
+  // Build reference images array (model/avatar refs only — custom product image goes separately)
+  const referenceImages: string[] = [];
+  if (modelImage) referenceImages.push(modelImage);
+
+  // Auto-inject avatar's custom image if no explicit modelImage provided
+  let hasCustomAvatarImage = false;
+  let effectiveModelImage = modelImage || "";
+  if (!modelImage && avatarId !== "product_only" && avatarId !== "hands_only") {
+    const avatarImgSetting = await prisma.setting.findUnique({
+      where: { key: "avatar_images" },
+    });
+    if (avatarImgSetting?.value) {
+      try {
+        const avatarImagesMap = JSON.parse(avatarImgSetting.value) as Record<
+          string,
+          string
+        >;
+        if (avatarImagesMap[avatarId]) {
+          referenceImages.push(avatarImagesMap[avatarId]);
+          effectiveModelImage = avatarImagesMap[avatarId];
+          hasCustomAvatarImage = true;
+        }
+      } catch {
+        // ignore parse error
+      }
+    }
+  }
+
+  // ─── CONFIRM MODE: editedContent provided → skip AI, create job from edited data ───
+  if (editedContent) {
+    const {
+      hookTitle,
+      tiktokCaption,
+      variations,
+      matrixCombo,
+      matrixPhase,
+      variationAngle,
+      hookStyle,
+    } = editedContent;
+
+    if (!Array.isArray(variations) || variations.length === 0) {
+      return NextResponse.json(
+        { error: "editedContent.variations is required" },
+        { status: 400 },
+      );
+    }
+
+    try {
+      const jobRes = await createVideoJob(
+        baseUrl,
+        productId,
+        preset,
+        hookTitle || "",
+        tiktokCaption || "",
+        variations,
+        referenceImages,
+        customImage,
+      );
+
+      const jobData = await jobRes.json();
+      if (!jobRes.ok) {
+        return NextResponse.json(
+          { error: jobData.error || "Job creation failed" },
+          { status: 500 },
+        );
+      }
+
+      // Mark matrix combo as used
+      if (matrixCombo) {
+        await markMatrixComboUsed(productId, matrixCombo);
+      }
+
+      return NextResponse.json({
+        jobId: jobData.id,
+        scenes: variations.length,
+        hookTitle: hookTitle || "",
+        format: preset.format,
+        genre: preset.genre,
+        avatar: avatarId,
+        variationAngle: variationAngle || null,
+        hookStyle: hookStyle || null,
+        matrixCombo: matrixCombo || null,
+        matrixPhase: matrixPhase || null,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Unknown error";
+      return NextResponse.json(
+        { error: `Job creation failed: ${msg}` },
+        { status: 500 },
+      );
+    }
+  }
+
+  // ─── GENERATE MODE: call AI, then either preview or create job ───
+
   // 3. Load Gemini API key
   const apiKeySetting = await prisma.setting.findUnique({
     where: { key: "gemini_api_key" },
@@ -146,17 +347,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Determine avatar: product-level > preset > default
-  const avatarId = product.avatarId || preset.avatar || DEFAULT_PRESET.avatar;
   const sceneCount =
     FORMAT_SCENES[preset.format] ||
     preset.sceneCount ||
     DEFAULT_PRESET.sceneCount;
-
-  // 4. Call AI generation (internal fetch to our own endpoint)
-  const host = req.headers.get("host") || "localhost:3000";
-  const protocol = host.startsWith("localhost") ? "http" : "https";
-  const baseUrl = `${protocol}://${host}`;
 
   let aiData: {
     variations?: {
@@ -229,6 +423,16 @@ export async function POST(req: NextRequest) {
         sceneCount,
         includeDialog: preset.includeDialog,
         videoFormat: preset.format,
+        // Send uploaded images to Gemini for AI analysis
+        productImage: customImage || null,
+        modelImage: effectiveModelImage || null,
+        // When avatar has custom uploaded image, tell AI to use reference image
+        ...(hasCustomAvatarImage
+          ? {
+              modelDesc:
+                "Use the uploaded model reference image exactly as shown.",
+            }
+          : {}),
         // Quick Video variation params
         variationSeed,
         hookStyleOverride,
@@ -259,58 +463,40 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 5. Build scene prompts & overlay config (mirrors Video Studio handleQueueSelected)
-  const allScenePrompts = variations.map((v) => ({
-    imagePrompt: v.imagePrompt || "",
-    videoPrompt: v.videoPrompt || "",
-  }));
+  const variationAngle = matrixCombo
+    ? `[Tiga Segi P${matrixPhase}] ${matrixCombo}`
+    : variationSeed.split("—")[0].trim();
 
-  const overlays =
-    preset.enableOverlay !== false
-      ? variations.map((v) =>
-          v.overlayText
-            ? { text: v.overlayText, position: v.overlayPosition || "bottom" }
-            : null,
-        )
-      : variations.map(() => null);
+  // ─── PREVIEW MODE: return AI content for editing, don't create job yet ───
+  if (preview) {
+    return NextResponse.json({
+      preview: true,
+      hookTitle: aiData.hookTitle || "",
+      tiktokCaption: variations[0]?.tiktokCaption || "",
+      variations,
+      format: preset.format,
+      genre: preset.genre,
+      avatar: avatarId,
+      variationAngle,
+      hookStyle: hookStyleOverride,
+      matrixCombo: matrixCombo || null,
+      matrixPhase: matrixPhase || null,
+    });
+  }
 
-  const overlayConfig = JSON.stringify({
-    hookTitle: preset.enableHook ? aiData.hookTitle || "" : "",
-    hookSubtitle: "",
-    hookBgColor: preset.hookBgColor,
-    hookTextColor: preset.hookTextColor,
-    hookFontSize: preset.hookFontSize,
-    overlays,
-    overlayFontSize: preset.overlayFontSize,
-  });
-
-  // Build reference images array (custom product image + model image)
-  const referenceImages: string[] = [];
-  if (customImage) referenceImages.push(customImage);
-  if (modelImage) referenceImages.push(modelImage);
-
-  // 6. Create the VideoJob
-  const scene1 = variations[0];
+  // ─── DIRECT MODE (legacy): create job immediately ───
 
   try {
-    const jobRes = await fetch(`${baseUrl}/api/jobs`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        productId,
-        videoType: preset.genre,
-        userImagePrompt: scene1.imagePrompt || "",
-        userVideoPrompt: scene1.videoPrompt || "",
-        tiktokProductName: scene1.tiktokProductName || "",
-        tiktokDescription: scene1.tiktokDescription || "",
-        tiktokCaption: scene1.tiktokCaption || "",
-        tiktokHashtags: scene1.tiktokHashtags || [],
-        referenceImages:
-          referenceImages.length > 0 ? referenceImages : undefined,
-        scenePrompts: JSON.stringify(allScenePrompts),
-        overlayConfig,
-      }),
-    });
+    const jobRes = await createVideoJob(
+      baseUrl,
+      productId,
+      preset,
+      aiData.hookTitle || "",
+      variations[0]?.tiktokCaption || "",
+      variations,
+      referenceImages,
+      customImage,
+    );
 
     const jobData = await jobRes.json();
     if (!jobRes.ok) {
@@ -322,20 +508,7 @@ export async function POST(req: NextRequest) {
 
     // Mark matrix combo as used
     if (matrixCombo) {
-      const usedCombos = JSON.parse(matrix!.usedCombos) as string[];
-      usedCombos.push(matrixCombo);
-      const targets = JSON.parse(matrix!.targets) as string[];
-      const scenarios = JSON.parse(matrix!.scenarios) as string[];
-      const usps = JSON.parse(matrix!.usps) as string[];
-      const phase1Total = targets.length * scenarios.length * usps.length;
-      const phase1Used = usedCombos.filter((c) => !c.includes("+")).length;
-      await prisma.contentMatrix.update({
-        where: { productId },
-        data: {
-          usedCombos: JSON.stringify(usedCombos),
-          phase: phase1Used >= phase1Total ? 2 : matrix!.phase,
-        },
-      });
+      await markMatrixComboUsed(productId, matrixCombo);
     }
 
     return NextResponse.json({
@@ -345,9 +518,7 @@ export async function POST(req: NextRequest) {
       format: preset.format,
       genre: preset.genre,
       avatar: avatarId,
-      variationAngle: matrixCombo
-        ? `[Tiga Segi P${matrixPhase}] ${matrixCombo}`
-        : variationSeed.split("—")[0].trim(),
+      variationAngle,
       hookStyle: hookStyleOverride,
       matrixCombo: matrixCombo || null,
       matrixPhase: matrixPhase || null,

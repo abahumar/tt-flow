@@ -112,6 +112,14 @@ const AVATARS: Record<string, string> = {
   man_malay_corporate: "👨‍💼 Lelaki Melayu (Korporat)",
   man_malay_elder: "👴 Pakcik Melayu (50+)",
   product_only: "📦 Produk Sahaja",
+  woman_malay_student: "🎓 Wanita Melayu (Student/Gen Z)",
+  woman_malay_mother: "👩‍👧 Ibu Muda Melayu",
+  woman_malay_beauty: "💄 Beauty Influencer",
+  woman_chinese_casual: "👩 Wanita Cina (Casual)",
+  woman_malay_homecook: "🍳 Suri Rumah / Home Cook",
+  man_malay_father: "👨‍👦 Ayah Muda",
+  couple_malay: "💑 Pasangan Melayu (Couple)",
+  hands_only: "🤲 Tangan Sahaja (Hands Only)",
 };
 
 const GENRES: Record<string, string> = {
@@ -169,6 +177,9 @@ export default function CustomVideoPage() {
   const [price, setPrice] = useState("");
   const [platform, setPlatform] = useState("shopee");
   const [avatarId, setAvatarId] = useState("");
+
+  // Avatar images from Settings
+  const [avatarImages, setAvatarImages] = useState<Record<string, string>>({});
 
   // Product image
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -316,6 +327,15 @@ export default function CustomVideoPage() {
     }
     const geminiKey = settings.find((s) => s.key === "gemini_api_key");
     setHasGeminiKey(!!geminiKey?.value);
+    // Load avatar images
+    const avatarEntry = settings.find((s) => s.key === "avatar_images");
+    if (avatarEntry?.value) {
+      try {
+        setAvatarImages(JSON.parse(avatarEntry.value));
+      } catch {
+        /* ignore */
+      }
+    }
   }, []);
 
   const loadHistory = useCallback(async () => {
@@ -865,6 +885,7 @@ export default function CustomVideoPage() {
               <option value="">Use default preset</option>
               {Object.entries(AVATARS).map(([k, v]) => (
                 <option key={k} value={k}>
+                  {avatarImages[k] ? "📷 " : ""}
                   {v}
                 </option>
               ))}

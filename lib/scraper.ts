@@ -20,7 +20,12 @@ export async function scrapeTikTokProduct(
     throw new Error("URL must be a TikTok Shop product link");
   }
 
-  const res = await fetch(productUrl, {
+  // Add region/locale params to bypass TikTok security checks
+  url.searchParams.set("region", "MY");
+  url.searchParams.set("locale", "en-US");
+  url.searchParams.set("source", "agency");
+
+  const res = await fetch(url.toString(), {
     headers: {
       "User-Agent":
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",

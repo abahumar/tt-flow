@@ -17,6 +17,8 @@ import {
   Upload,
   X,
   ImageIcon,
+  Pencil,
+  Check,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -70,6 +72,28 @@ interface MatrixData {
     used: number;
     remaining: number;
   };
+}
+
+interface PreviewData {
+  hookTitle: string;
+  tiktokCaption: string;
+  variations: {
+    imagePrompt?: string;
+    videoPrompt?: string;
+    tiktokProductName?: string;
+    tiktokDescription?: string;
+    tiktokCaption?: string;
+    tiktokHashtags?: string[];
+    overlayText?: string;
+    overlayPosition?: string;
+  }[];
+  format: string;
+  genre: string;
+  avatar: string;
+  variationAngle?: string;
+  hookStyle?: string;
+  matrixCombo?: string | null;
+  matrixPhase?: number | null;
 }
 
 interface PresetConfig {
@@ -160,6 +184,10 @@ export default function QuickVideoPage() {
   const [matrices, setMatrices] = useState<Record<string, MatrixData>>({});
   const [generatingMatrix, setGeneratingMatrix] = useState<string | null>(null);
 
+  // Preview edit state per product
+  const [previews, setPreviews] = useState<Record<string, PreviewData>>({});
+  const [confirming, setConfirming] = useState<string | null>(null);
+
   // Custom image per product (overrides product scraped image as reference)
   const [customImages, setCustomImages] = useState<
     Record<string, { preview: string; filename: string }>
@@ -172,6 +200,9 @@ export default function QuickVideoPage() {
   const [modelFilename, setModelFilename] = useState("");
   const [uploadingModel, setUploadingModel] = useState(false);
   const modelInputRef = useRef<HTMLInputElement>(null);
+
+  // Avatar images from Settings
+  const [avatarImages, setAvatarImages] = useState<Record<string, string>>({});
 
   const uploadFile = async (file: File): Promise<string> => {
     const formData = new FormData();
@@ -306,6 +337,15 @@ export default function QuickVideoPage() {
     }
     const geminiKey = settings.find((s) => s.key === "gemini_api_key");
     setHasGeminiKey(!!geminiKey?.value);
+    // Load avatar images
+    const avatarEntry = settings.find((s) => s.key === "avatar_images");
+    if (avatarEntry?.value) {
+      try {
+        setAvatarImages(JSON.parse(avatarEntry.value));
+      } catch {
+        /* ignore */
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -332,6 +372,12 @@ export default function QuickVideoPage() {
       delete next[productId];
       return next;
     });
+    // Clear previous result when regenerating
+    setResults((r) => {
+      const next = { ...r };
+      delete next[productId];
+      return next;
+    });
 
     try {
       const res = await fetch("/api/quick-video", {
@@ -341,6 +387,50 @@ export default function QuickVideoPage() {
           productId,
           customImage: customImages[productId]?.filename || "",
           modelImage: modelFilename || "",
+          preview: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setErrors((e) => ({ ...e, [productId]: data.error }));
+      } else {
+        setPreviews((p) => ({ ...p, [productId]: data }));
+      }
+    } catch {
+      setErrors((e) => ({ ...e, [productId]: "Network error" }));
+    } finally {
+      setGenerating(null);
+    }
+  };
+
+  const handleConfirmVideo = async (productId: string) => {
+    const previewData = previews[productId];
+    if (!previewData) return;
+
+    setConfirming(productId);
+    setErrors((e) => {
+      const next = { ...e };
+      delete next[productId];
+      return next;
+    });
+
+    try {
+      const res = await fetch("/api/quick-video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId,
+          customImage: customImages[productId]?.filename || "",
+          modelImage: modelFilename || "",
+          editedContent: {
+            hookTitle: previewData.hookTitle,
+            tiktokCaption: previewData.tiktokCaption,
+            variations: previewData.variations,
+            matrixCombo: previewData.matrixCombo,
+            matrixPhase: previewData.matrixPhase,
+            variationAngle: previewData.variationAngle,
+            hookStyle: previewData.hookStyle,
+          },
         }),
       });
       const data = await res.json();
@@ -348,6 +438,11 @@ export default function QuickVideoPage() {
         setErrors((e) => ({ ...e, [productId]: data.error }));
       } else {
         setResults((r) => ({ ...r, [productId]: data }));
+        setPreviews((p) => {
+          const next = { ...p };
+          delete next[productId];
+          return next;
+        });
         // Refresh matrix if combo was used
         if (data.matrixCombo) {
           fetch(`/api/products/${productId}/matrix`)
@@ -359,8 +454,16 @@ export default function QuickVideoPage() {
     } catch {
       setErrors((e) => ({ ...e, [productId]: "Network error" }));
     } finally {
-      setGenerating(null);
+      setConfirming(null);
     }
+  };
+
+  const handleCancelPreview = (productId: string) => {
+    setPreviews((p) => {
+      const next = { ...p };
+      delete next[productId];
+      return next;
+    });
   };
 
   const handleUpdateAvatar = async (productId: string, avatarId: string) => {
@@ -441,6 +544,7 @@ export default function QuickVideoPage() {
               >
                 {Object.entries(AVATARS).map(([k, v]) => (
                   <option key={k} value={k}>
+                    {avatarImages[k] ? "📷 " : ""}
                     {v}
                   </option>
                 ))}
@@ -856,6 +960,7 @@ export default function QuickVideoPage() {
                       <option value="">Use default preset</option>
                       {Object.entries(AVATARS).map(([k, v]) => (
                         <option key={k} value={k}>
+                          {avatarImages[k] ? "📷 " : ""}
                           {v}
                         </option>
                       ))}
@@ -907,6 +1012,123 @@ export default function QuickVideoPage() {
                   </div>
                 </div>
 
+                {/* Preview Edit Panel */}
+                {previews[p.id] && !result && (
+                  <div className="space-y-2.5 border-t border-blue-200 bg-blue-50 px-4 py-3">
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 text-xs font-semibold text-blue-700">
+                        <Pencil className="h-3.5 w-3.5" />
+                        Review & Edit
+                      </span>
+                      <button
+                        onClick={() => handleCancelPreview(p.id)}
+                        className="text-[10px] text-gray-400 hover:text-red-500"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+
+                    {/* Hook Title */}
+                    <div>
+                      <label className="mb-0.5 block text-[10px] font-medium text-blue-600">
+                        Hook Title
+                      </label>
+                      <input
+                        type="text"
+                        value={previews[p.id].hookTitle}
+                        onChange={(e) =>
+                          setPreviews((prev) => ({
+                            ...prev,
+                            [p.id]: {
+                              ...prev[p.id],
+                              hookTitle: e.target.value,
+                            },
+                          }))
+                        }
+                        className="w-full rounded border border-blue-200 bg-white px-2 py-1.5 text-xs focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      />
+                    </div>
+
+                    {/* TikTok Caption */}
+                    <div>
+                      <label className="mb-0.5 block text-[10px] font-medium text-blue-600">
+                        TikTok Caption
+                      </label>
+                      <textarea
+                        value={previews[p.id].tiktokCaption}
+                        onChange={(e) =>
+                          setPreviews((prev) => ({
+                            ...prev,
+                            [p.id]: {
+                              ...prev[p.id],
+                              tiktokCaption: e.target.value,
+                            },
+                          }))
+                        }
+                        rows={2}
+                        className="w-full rounded border border-blue-200 bg-white px-2 py-1.5 text-xs focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      />
+                    </div>
+
+                    {/* Overlay Texts per Scene */}
+                    <div>
+                      <label className="mb-0.5 block text-[10px] font-medium text-blue-600">
+                        Scene Captions
+                      </label>
+                      {previews[p.id].variations.map((v, i) => (
+                        <div key={i} className="mt-1 flex items-center gap-1.5">
+                          <span className="w-4 shrink-0 text-[9px] font-bold text-blue-400">
+                            {i + 1}
+                          </span>
+                          <input
+                            type="text"
+                            value={v.overlayText || ""}
+                            onChange={(e) => {
+                              const newVariations = [
+                                ...previews[p.id].variations,
+                              ];
+                              newVariations[i] = {
+                                ...newVariations[i],
+                                overlayText: e.target.value,
+                              };
+                              setPreviews((prev) => ({
+                                ...prev,
+                                [p.id]: {
+                                  ...prev[p.id],
+                                  variations: newVariations,
+                                },
+                              }));
+                            }}
+                            placeholder={`Scene ${i + 1} overlay`}
+                            className="flex-1 rounded border border-blue-100 bg-white px-2 py-1 text-[11px] focus:border-blue-300 focus:outline-none"
+                          />
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Variation angle info */}
+                    {previews[p.id].variationAngle && (
+                      <p className="text-[9px] text-blue-400">
+                        Angle: {previews[p.id].variationAngle}
+                      </p>
+                    )}
+
+                    {/* Confirm button */}
+                    <button
+                      onClick={() => handleConfirmVideo(p.id)}
+                      disabled={confirming === p.id}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white transition-all hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50"
+                    >
+                      {confirming === p.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Check className="h-3.5 w-3.5" />
+                      )}
+                      {confirming === p.id ? "Queuing..." : "Confirm & Queue"}
+                    </button>
+                  </div>
+                )}
+
                 {/* Result / Error feedback */}
                 {result && (
                   <div className="border-t border-green-100 bg-green-50 px-4 py-2.5">
@@ -950,12 +1172,14 @@ export default function QuickVideoPage() {
                 <div className="border-t border-gray-100 p-3">
                   <button
                     onClick={() => handleQuickVideo(p.id)}
-                    disabled={isGenerating || !hasGeminiKey}
+                    disabled={
+                      isGenerating || !hasGeminiKey || confirming === p.id
+                    }
                     className="flex w-full items-center justify-center gap-2 rounded-lg bg-linear-to-r from-amber-500 to-orange-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:from-amber-600 hover:to-orange-600 hover:shadow-md active:scale-[0.98] disabled:opacity-50 disabled:shadow-none"
                   >
                     {isGenerating ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : result ? (
+                    ) : result || previews[p.id] ? (
                       <RefreshCw className="h-4 w-4" />
                     ) : (
                       <Sparkles className="h-4 w-4" />
@@ -964,7 +1188,9 @@ export default function QuickVideoPage() {
                       ? "Generating..."
                       : result
                         ? "Regenerate"
-                        : "Quick Video"}
+                        : previews[p.id]
+                          ? "Regenerate Script"
+                          : "Quick Video"}
                   </button>
                 </div>
               </div>

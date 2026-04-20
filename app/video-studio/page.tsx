@@ -121,6 +121,46 @@ const AVATARS = [
     label: "Produk Sahaja",
     emoji: "📦",
   },
+  {
+    id: "woman_malay_student",
+    label: "Wanita Melayu (Student/Gen Z)",
+    emoji: "🎓",
+  },
+  {
+    id: "woman_malay_mother",
+    label: "Ibu Muda Melayu",
+    emoji: "👩‍👧",
+  },
+  {
+    id: "woman_malay_beauty",
+    label: "Beauty Influencer",
+    emoji: "💄",
+  },
+  {
+    id: "woman_chinese_casual",
+    label: "Wanita Cina (Casual)",
+    emoji: "👩",
+  },
+  {
+    id: "woman_malay_homecook",
+    label: "Suri Rumah / Home Cook",
+    emoji: "🍳",
+  },
+  {
+    id: "man_malay_father",
+    label: "Ayah Muda",
+    emoji: "👨‍👦",
+  },
+  {
+    id: "couple_malay",
+    label: "Pasangan Melayu (Couple)",
+    emoji: "💑",
+  },
+  {
+    id: "hands_only",
+    label: "Tangan Sahaja (Hands Only)",
+    emoji: "🤲",
+  },
 ] as const;
 
 export default function VideoStudioPage() {
@@ -161,6 +201,7 @@ export default function VideoStudioPage() {
 
   // Avatar
   const [avatarId, setAvatarId] = useState("woman_malay_hijab");
+  const [avatarImages, setAvatarImages] = useState<Record<string, string>>({});
 
   // Scene generation
   const [useManualPrompts, setUseManualPrompts] = useState(false);
@@ -239,6 +280,24 @@ export default function VideoStudioPage() {
     fetchTemplates();
     const savedKey = localStorage.getItem("gemini_api_key");
     if (savedKey) setApiKey(savedKey);
+
+    // Load avatar images from settings
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((data: { key: string; value: string }[]) => {
+        const map: Record<string, string> = {};
+        for (const s of data) map[s.key] = s.value;
+        if (map.avatar_images) {
+          try {
+            setAvatarImages(JSON.parse(map.avatar_images));
+          } catch {
+            /* ignore */
+          }
+        }
+      })
+      .catch(() => {
+        /* ignore */
+      });
   }, [fetchProducts, fetchTemplates]);
 
   // Load template into form
@@ -389,6 +448,24 @@ export default function VideoStudioPage() {
 
     try {
       const uploads = await ensureUploads();
+
+      // Resolve model: manual template upload > settings avatar image
+      const settingsAvatarFile =
+        !useTemplate && !modelFilename && avatarImages[avatarId]
+          ? avatarImages[avatarId]
+          : null;
+      const effectiveModelDesc =
+        modelDesc ||
+        (useTemplate && (modelFilename || modelFile)
+          ? "Use the uploaded model reference image exactly as shown"
+          : settingsAvatarFile
+            ? "Use the uploaded model reference image exactly as shown"
+            : "");
+      const effectiveAvatarId =
+        (useTemplate && (modelFilename || modelFile)) || settingsAvatarFile
+          ? "custom"
+          : avatarId;
+
       const res = await fetch("/api/prompts/ai-generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -401,7 +478,7 @@ export default function VideoStudioPage() {
           mode: "storyline",
           videoType,
           apiKey,
-          avatarId,
+          avatarId: effectiveAvatarId,
           consistentMode: true,
           sceneCount,
           includeDialog,
@@ -413,11 +490,7 @@ export default function VideoStudioPage() {
             (bgFilename || bgPreview
               ? "Use the uploaded background image exactly as shown"
               : ""),
-          modelDesc:
-            modelDesc ||
-            (useTemplate && (modelFilename || modelFile)
-              ? "Use the uploaded model reference image exactly as shown"
-              : ""),
+          modelDesc: effectiveModelDesc,
           ...(specialInstruction.trim()
             ? { specialInstruction: specialInstruction.trim() }
             : {}),
@@ -507,12 +580,19 @@ export default function VideoStudioPage() {
       // Ensure custom product image is uploaded
       await ensureUploads();
 
-      // Build reference images array from background + model + custom product uploads
+      // Build reference images array from uploads
+      // Order matters: product image first (for background.js splitting), then bg, then model
       const refImages: string[] = [];
-      if (bgFilename) refImages.push(bgFilename);
-      if (modelFilename) refImages.push(modelFilename);
       if (useCustomProduct && customProductFilename)
         refImages.push(customProductFilename);
+      if (bgFilename) refImages.push(bgFilename);
+      // Model: manual template upload > settings avatar image
+      const settingsAvatarFile =
+        !useTemplate && !modelFilename && avatarImages[avatarId]
+          ? avatarImages[avatarId]
+          : null;
+      const effectiveModelFile = modelFilename || settingsAvatarFile;
+      if (effectiveModelFile) refImages.push(effectiveModelFile);
 
       // Scene 1 prompts go into main fields, all scenes go into scenePrompts
       const scene1 = selected[0];
@@ -1150,6 +1230,7 @@ export default function VideoStudioPage() {
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {AVATARS.map((av) => {
                   const isActive = avatarId === av.id;
+                  const hasSettingsAvatar = !!avatarImages[av.id];
                   return (
                     <button
                       key={av.id}
@@ -1160,7 +1241,15 @@ export default function VideoStudioPage() {
                           : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
                       }`}
                     >
-                      <span className="text-base">{av.emoji}</span>
+                      {hasSettingsAvatar ? (
+                        <img
+                          src={`/api/upload/${avatarImages[av.id]}`}
+                          alt={av.label}
+                          className="h-5 w-5 rounded-full object-cover border border-purple-300"
+                        />
+                      ) : (
+                        <span className="text-base">{av.emoji}</span>
+                      )}
                       <span className="leading-tight">{av.label}</span>
                     </button>
                   );

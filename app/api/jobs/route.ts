@@ -311,6 +311,7 @@ export async function POST(req: NextRequest) {
       tiktokHashtags,
       tiktokProductName,
       tiktokDescription,
+      referenceImage: referenceImage || "",
       referenceImages,
       templateId: templateId || "",
       groupId: groupId || "",

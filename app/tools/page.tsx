@@ -147,6 +147,46 @@ const AVATARS = [
     label: "Produk Sahaja",
     emoji: "📦",
   },
+  {
+    id: "woman_malay_student",
+    label: "Wanita Melayu (Student/Gen Z)",
+    emoji: "🎓",
+  },
+  {
+    id: "woman_malay_mother",
+    label: "Ibu Muda Melayu",
+    emoji: "👩‍👧",
+  },
+  {
+    id: "woman_malay_beauty",
+    label: "Beauty Influencer",
+    emoji: "💄",
+  },
+  {
+    id: "woman_chinese_casual",
+    label: "Wanita Cina (Casual)",
+    emoji: "👩",
+  },
+  {
+    id: "woman_malay_homecook",
+    label: "Suri Rumah / Home Cook",
+    emoji: "🍳",
+  },
+  {
+    id: "man_malay_father",
+    label: "Ayah Muda",
+    emoji: "👨‍👦",
+  },
+  {
+    id: "couple_malay",
+    label: "Pasangan Melayu (Couple)",
+    emoji: "💑",
+  },
+  {
+    id: "hands_only",
+    label: "Tangan Sahaja (Hands Only)",
+    emoji: "🤲",
+  },
 ] as const;
 
 type PlatformKey = keyof typeof PLATFORMS;

@@ -342,6 +342,33 @@ export async function POST(req: NextRequest) {
   if (backgroundImage) referenceImages.push(backgroundImage);
   if (modelImage) referenceImages.push(modelImage);
 
+  // Auto-inject avatar's custom image from settings if no explicit modelImage
+  if (
+    !modelImage &&
+    resolvedAvatar !== "product_only" &&
+    resolvedAvatar !== "hands_only"
+  ) {
+    try {
+      const avatarImgSetting = await prisma.setting.findUnique({
+        where: { key: "avatar_images" },
+      });
+      if (avatarImgSetting?.value) {
+        const avatarImagesMap = JSON.parse(avatarImgSetting.value) as Record<
+          string,
+          string
+        >;
+        if (avatarImagesMap[resolvedAvatar]) {
+          referenceImages.push(avatarImagesMap[resolvedAvatar]);
+          console.log(
+            `[custom-video] Auto-injected avatar image for ${resolvedAvatar}`,
+          );
+        }
+      }
+    } catch {
+      // ignore parse error
+    }
+  }
+
   // 6. Create the VideoJob
   const scene1 = variations[0];
 
