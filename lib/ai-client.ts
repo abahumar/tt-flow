@@ -47,6 +47,11 @@ async function callGeminiMulti(
   const key = config.geminiApiKey;
   if (!key) throw new Error("Gemini API key not configured");
 
+  const model = "gemini-2.5-flash";
+  const imgNote = images.length > 0 ? ` + ${images.length} image(s)` : "";
+  console.log(`[ai-client] ▶ Gemini (${model})${imgNote} | temp=${config.temperature ?? "default"} | format=${config.responseFormat ?? "text"}`);
+  const t0 = Date.now();
+
   const parts: Array<
     { text: string } | { inlineData: { mimeType: string; data: string } }
   > = [{ text: prompt }];
@@ -78,11 +83,14 @@ async function callGeminiMulti(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
+    console.error(`[ai-client] ✗ Gemini error ${res.status} (${Date.now() - t0}ms)`);
     throw new Error(err?.error?.message || `Gemini error: ${res.status}`);
   }
 
   const data = await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  console.log(`[ai-client] ✓ Gemini done (${Date.now() - t0}ms) | ${text.length} chars`);
+  return text;
 }
 
 type ContentPart =
@@ -96,6 +104,11 @@ async function callOpenAIMulti(
 ): Promise<string> {
   const key = config.openaiApiKey;
   if (!key) throw new Error("OpenAI API key not configured");
+
+  const model = "gpt-4o-mini";
+  const imgNote = images.length > 0 ? ` + ${images.length} image(s)` : "";
+  console.log(`[ai-client] ▶ OpenAI (${model})${imgNote} | temp=${config.temperature ?? 1.0} | format=${config.responseFormat ?? "text"}`);
+  const t0 = Date.now();
 
   const content: ContentPart[] = [{ type: "text", text: prompt }];
 
@@ -128,11 +141,14 @@ async function callOpenAIMulti(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
+    console.error(`[ai-client] ✗ OpenAI error ${res.status} (${Date.now() - t0}ms)`);
     throw new Error(
       err?.error?.message || `OpenAI error: ${res.status}`,
     );
   }
 
   const data = await res.json();
-  return data.choices?.[0]?.message?.content || "";
+  const text = data.choices?.[0]?.message?.content || "";
+  console.log(`[ai-client] ✓ OpenAI done (${Date.now() - t0}ms) | ${text.length} chars`);
+  return text;
 }
