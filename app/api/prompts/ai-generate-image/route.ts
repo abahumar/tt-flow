@@ -26,19 +26,17 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "Gemini API key is required" },
-      { status: 400 },
-    );
-  }
-
   const providerSetting = await prisma.setting.findUnique({ where: { key: "ai_provider" } });
   const provider = (providerSetting?.value === "openai" ? "openai" : "gemini") as "gemini" | "openai";
 
   const openaiKeySetting = await prisma.setting.findUnique({ where: { key: "openai_api_key" } });
   const openaiApiKey = openaiKeySetting?.value || "";
 
+  if (provider === "gemini" && !apiKey)
+    return NextResponse.json(
+      { error: "Gemini API key is required" },
+      { status: 400 },
+    );
   if (provider === "openai" && !openaiApiKey)
     return NextResponse.json(
       { error: "OpenAI API key not configured. Set it in Settings." },
@@ -113,7 +111,7 @@ export async function POST(req: NextRequest) {
     try {
       parsed = JSON.parse(cleaned);
     } catch {
-      // Fix common Gemini JSON issues
+      // Fix common AI JSON response issues
       const fixed = cleaned.replace(
         /(?<=:[\s]*")([\s\S]*?)(?="[\s]*[,}\]])/g,
         (match: string) =>
