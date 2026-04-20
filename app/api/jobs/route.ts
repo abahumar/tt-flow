@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { generateText, type AIConfig } from "@/lib/ai-client";
 import { copyFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
 import { join } from "path";
@@ -265,12 +266,17 @@ export async function POST(req: NextRequest) {
     !(userDescription && userDescription.trim())
   ) {
     try {
-      const geminiKeySetting = await prisma.setting.findUnique({
-        where: { key: "gemini_api_key" },
-      });
-      if (geminiKeySetting?.value) {
-        const geminiResult = await generateWithGemini(
-          geminiKeySetting.value,
+      const providerSetting = await prisma.setting.findUnique({ where: { key: "ai_provider" } });
+      const jobProvider = (providerSetting?.value === "openai" ? "openai" : "gemini") as "gemini" | "openai";
+      const geminiKeySetting = await prisma.setting.findUnique({ where: { key: "gemini_api_key" } });
+      const openaiKeySetting = await prisma.setting.findUnique({ where: { key: "openai_api_key" } });
+      const jobGeminiKey = geminiKeySetting?.value || "";
+      const jobOpenaiKey = openaiKeySetting?.value || "";
+      const hasAiKey = jobProvider === "gemini" ? !!jobGeminiKey : !!jobOpenaiKey;
+      if (hasAiKey) {
+        const jobAiConfig: AIConfig = { provider: jobProvider, geminiApiKey: jobGeminiKey, openaiApiKey: jobOpenaiKey };
+        const aiResult = await generateWithAI(
+          jobAiConfig,
           pTitle,
           pDesc,
           pPrice,
@@ -279,18 +285,18 @@ export async function POST(req: NextRequest) {
         );
         if (
           !(userProductName && userProductName.trim()) &&
-          geminiResult.productName
+          aiResult.productName
         )
-          tiktokProductName = geminiResult.productName;
+          tiktokProductName = aiResult.productName;
         if (
           !(userDescription && userDescription.trim()) &&
-          geminiResult.description
+          aiResult.description
         )
-          tiktokDescription = geminiResult.description;
+          tiktokDescription = aiResult.description;
       }
     } catch (err) {
       console.warn(
-        "[jobs] Gemini generation failed, using template defaults:",
+        "[jobs] AI generation failed, using template defaults:",
         err,
       );
     }
@@ -343,9 +349,9 @@ export async function DELETE() {
   return NextResponse.json({ deleted: count });
 }
 
-// ---- Gemini-powered product name + description generation ----
-async function generateWithGemini(
-  apiKey: string,
+// ---- AI-powered product name + description generation ----
+async function generateWithAI(
+  config: AIConfig,
   title: string,
   description: string,
   price: string,
@@ -368,24 +374,7 @@ Generate:
 
 Output JSON only: { "productName": "...", "description": "..." }`;
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: "application/json" },
-      }),
-    },
-  );
-
-  if (!res.ok) {
-    throw new Error(`Gemini API error: ${res.status}`);
-  }
-
-  const data = await res.json();
-  const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  const rawText = await generateText(prompt, { ...config, responseFormat: "json" });
   const cleaned = rawText.replace(/```json|```/g, "").trim();
   const parsed = JSON.parse(cleaned);
 

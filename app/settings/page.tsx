@@ -58,6 +58,12 @@ const SETTING_FIELDS = [
     type: "password",
   },
   {
+    key: "openai_api_key",
+    label: "ChatGPT API Key",
+    placeholder: "sk-...",
+    type: "password",
+  },
+  {
     key: "telegram_bot_token",
     label: "Telegram Bot Token",
     placeholder: "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11",
@@ -253,6 +259,36 @@ export default function SettingsPage() {
             />
           </div>
         ))}
+
+        {/* AI Provider Selector */}
+        <fieldset>
+          <legend className="mb-1 block text-sm font-medium text-gray-700">
+            AI Provider
+          </legend>
+          <p className="mb-3 text-xs text-gray-500">
+            Choose which AI is used for all prompt and content generation
+          </p>
+          <div className="flex gap-4">
+            {(["gemini", "openai"] as const).map((p) => (
+              <label
+                key={p}
+                className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm transition-colors has-[:checked]:border-rose-500 has-[:checked]:bg-rose-50"
+              >
+                <input
+                  type="radio"
+                  name="ai_provider"
+                  value={p}
+                  checked={(settings["ai_provider"] || "gemini") === p}
+                  onChange={() =>
+                    setSettings((s) => ({ ...s, ai_provider: p }))
+                  }
+                  className="accent-rose-500"
+                />
+                {p === "gemini" ? "Gemini (Google)" : "ChatGPT (OpenAI)"}
+              </label>
+            ))}
+          </div>
+        </fieldset>
 
         <button
           onClick={handleSave}

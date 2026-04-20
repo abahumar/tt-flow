@@ -12,10 +12,7 @@ export async function generateText(
   prompt: string,
   config: AIConfig,
 ): Promise<string> {
-  if (config.provider === "openai") {
-    return callOpenAI(prompt, null, null, config);
-  }
-  return callGemini(prompt, null, null, config);
+  return generateTextWithImages(prompt, [], config);
 }
 
 export async function generateTextWithImage(
@@ -24,16 +21,27 @@ export async function generateTextWithImage(
   imageMimeType: string,
   config: AIConfig,
 ): Promise<string> {
-  if (config.provider === "openai") {
-    return callOpenAI(prompt, imageBase64, imageMimeType, config);
-  }
-  return callGemini(prompt, imageBase64, imageMimeType, config);
+  return generateTextWithImages(
+    prompt,
+    [{ base64: imageBase64, mimeType: imageMimeType }],
+    config,
+  );
 }
 
-async function callGemini(
+export async function generateTextWithImages(
   prompt: string,
-  imageBase64: string | null,
-  imageMimeType: string | null,
+  images: Array<{ base64: string; mimeType: string }>,
+  config: AIConfig,
+): Promise<string> {
+  if (config.provider === "openai") {
+    return callOpenAIMulti(prompt, images, config);
+  }
+  return callGeminiMulti(prompt, images, config);
+}
+
+async function callGeminiMulti(
+  prompt: string,
+  images: Array<{ base64: string; mimeType: string }>,
   config: AIConfig,
 ): Promise<string> {
   const key = config.geminiApiKey;
@@ -43,8 +51,8 @@ async function callGemini(
     { text: string } | { inlineData: { mimeType: string; data: string } }
   > = [{ text: prompt }];
 
-  if (imageBase64 && imageMimeType) {
-    parts.push({ inlineData: { mimeType: imageMimeType, data: imageBase64 } });
+  for (const img of images) {
+    parts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } });
   }
 
   const generationConfig: Record<string, unknown> = {};
@@ -81,10 +89,9 @@ type ContentPart =
   | { type: "text"; text: string }
   | { type: "image_url"; image_url: { url: string } };
 
-async function callOpenAI(
+async function callOpenAIMulti(
   prompt: string,
-  imageBase64: string | null,
-  imageMimeType: string | null,
+  images: Array<{ base64: string; mimeType: string }>,
   config: AIConfig,
 ): Promise<string> {
   const key = config.openaiApiKey;
@@ -92,10 +99,10 @@ async function callOpenAI(
 
   const content: ContentPart[] = [{ type: "text", text: prompt }];
 
-  if (imageBase64 && imageMimeType) {
+  for (const img of images) {
     content.push({
       type: "image_url",
-      image_url: { url: `data:${imageMimeType};base64,${imageBase64}` },
+      image_url: { url: `data:${img.mimeType};base64,${img.base64}` },
     });
   }
 

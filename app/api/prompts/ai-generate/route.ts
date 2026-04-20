@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { readFile } from "fs/promises";
+import { generateText, generateTextWithImage, generateTextWithImages, type AIConfig } from "@/lib/ai-client";
 import { existsSync } from "fs";
 import { join } from "path";
 import {
@@ -216,8 +217,8 @@ export async function POST(req: NextRequest) {
     customTargetAudience = "",
     videoFormat = null, // "super_short" | "short" | "complete" | null
     varyBackground = false,
-    productImage = null, // filename from /api/upload (for sending product image to Gemini)
-    modelImage = null, // filename from /api/upload (for sending model face image to Gemini)
+    productImage = null, // filename from /api/upload (for sending product image to AI provider)
+    modelImage = null, // filename from /api/upload (for sending model face image to AI provider)
     specialInstruction = "",
     // Quick Video variation params
     variationSeed = "",
@@ -230,11 +231,28 @@ export async function POST(req: NextRequest) {
       { error: "productId or customProduct is required" },
       { status: 400 },
     );
-  if (!apiKey)
+  const providerSetting = await prisma.setting.findUnique({ where: { key: "ai_provider" } });
+  const provider = (providerSetting?.value === "openai" ? "openai" : "gemini") as "gemini" | "openai";
+
+  const openaiKeySetting = await prisma.setting.findUnique({ where: { key: "openai_api_key" } });
+  const openaiApiKey = openaiKeySetting?.value || "";
+
+  if (provider === "gemini" && !apiKey)
     return NextResponse.json(
       { error: "Gemini API key is required" },
       { status: 400 },
     );
+  if (provider === "openai" && !openaiApiKey)
+    return NextResponse.json(
+      { error: "OpenAI API key not configured. Set it in Settings." },
+      { status: 400 },
+    );
+
+  const aiConfig: AIConfig = {
+    provider,
+    geminiApiKey: apiKey,
+    openaiApiKey,
+  };
 
   // Build product info from either DB product or custom input
   let product: {
@@ -272,7 +290,7 @@ export async function POST(req: NextRequest) {
     };
   }
 
-  // ─── Fetch product image as base64 for Gemini vision ───
+  // ─── Fetch product image as base64 for AI vision ───
   let productImageBase64: string | null = null;
   let productImageMime = "image/jpeg";
 
@@ -494,58 +512,34 @@ All string fields must be plain strings (never objects or arrays).
 `;
 
     try {
-      // Build parts array — text prompt + optional product image
-      const gempakParts: Array<
-        { text: string } | { inlineData: { mimeType: string; data: string } }
-      > = [{ text: gempakPrompt }];
-
       if (productImageBase64) {
-        gempakParts.push({
-          inlineData: {
-            mimeType: productImageMime,
-            data: productImageBase64,
-          },
-        });
         console.log(
-          "[ai-generate/gempak] Sending product image inline to Gemini for analysis",
+          `[ai-generate/gempak] Sending product image to ${provider} for analysis`,
         );
       }
 
       if (modelImageBase64) {
-        gempakParts.push({
-          inlineData: {
-            mimeType: modelImageMime,
-            data: modelImageBase64,
-          },
-        });
         console.log(
-          "[ai-generate/gempak] Sending model face image inline to Gemini for analysis",
+          `[ai-generate/gempak] Sending model face image to ${provider} for analysis`,
         );
       }
 
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: gempakParts }],
-            generationConfig: { responseMimeType: "application/json" },
-          }),
-          cache: "no-store" as RequestCache,
-        },
-      );
-
-      if (!res.ok) {
-        const err = await res.json();
-        return NextResponse.json(
-          { error: err.error?.message || "Gemini API error" },
-          { status: res.status },
-        );
+      let rawText: string;
+      try {
+        const callConfig: AIConfig = { ...aiConfig, temperature: temperature > 0 ? temperature : undefined, responseFormat: "json" };
+        const images = [
+          ...(productImageBase64 ? [{ base64: productImageBase64, mimeType: productImageMime }] : []),
+          ...(modelImageBase64 ? [{ base64: modelImageBase64, mimeType: modelImageMime }] : []),
+        ];
+        if (images.length > 0) {
+          rawText = await generateTextWithImages(gempakPrompt, images, callConfig);
+        } else {
+          rawText = await generateText(gempakPrompt, callConfig);
+        }
+      } catch (aiErr: unknown) {
+        const msg = aiErr instanceof Error ? aiErr.message : "AI error";
+        return NextResponse.json({ error: msg }, { status: 500 });
       }
-
-      const data = await res.json();
-      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
       const cleaned = rawText.replace(/```json|```/g, "").trim();
 
       let parsed: Record<string, unknown>;
@@ -923,49 +917,24 @@ All string fields must be plain strings (never objects or arrays).
   `;
 
   try {
-    // Build parts array — text prompt + optional product image
-    const promptParts: Array<
-      { text: string } | { inlineData: { mimeType: string; data: string } }
-    > = [{ text: systemPrompt }];
-
     if (productImageBase64) {
-      promptParts.push({
-        inlineData: {
-          mimeType: productImageMime,
-          data: productImageBase64,
-        },
-      });
       console.log(
-        "[ai-generate/paired] Sending product image inline to Gemini for analysis",
+        `[ai-generate/paired] Sending product image to ${provider} for analysis`,
       );
     }
 
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: promptParts }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            ...(temperature > 0 ? { temperature } : {}),
-          },
-        }),
-        cache: "no-store" as RequestCache,
-      },
-    );
-
-    if (!res.ok) {
-      const err = await res.json();
-      return NextResponse.json(
-        { error: err.error?.message || "Gemini API error" },
-        { status: res.status },
-      );
+    let rawText: string;
+    try {
+      const callConfig: AIConfig = { ...aiConfig, temperature: temperature > 0 ? temperature : undefined, responseFormat: "json" };
+      if (productImageBase64) {
+        rawText = await generateTextWithImage(systemPrompt, productImageBase64, productImageMime, callConfig);
+      } else {
+        rawText = await generateText(systemPrompt, callConfig);
+      }
+    } catch (aiErr: unknown) {
+      const msg = aiErr instanceof Error ? aiErr.message : "AI error";
+      return NextResponse.json({ error: msg }, { status: 500 });
     }
-
-    const data = await res.json();
-    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
     const cleaned = rawText.replace(/```json|```/g, "").trim();
 
     let parsed: {
@@ -976,7 +945,7 @@ All string fields must be plain strings (never objects or arrays).
     try {
       parsed = JSON.parse(cleaned);
     } catch {
-      // Fix common Gemini JSON issues: unescaped newlines/tabs inside strings
+      // Fix common LLM JSON issues: unescaped newlines/tabs inside strings
       const fixed = cleaned.replace(
         /(?<=:[\s]*")([\s\S]*?)(?="[\s]*[,}\]])/g,
         (match: string) =>
