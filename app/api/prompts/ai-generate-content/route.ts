@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { generateText, type AIConfig } from "@/lib/ai-client";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -23,6 +24,26 @@ export async function POST(req: NextRequest) {
       { error: "Gemini API key is required" },
       { status: 400 },
     );
+
+  const providerSetting = await prisma.setting.findUnique({ where: { key: "ai_provider" } });
+  const provider = (providerSetting?.value === "openai" ? "openai" : "gemini") as "gemini" | "openai";
+
+  const openaiKeySetting = await prisma.setting.findUnique({ where: { key: "openai_api_key" } });
+  const openaiApiKey = openaiKeySetting?.value || "";
+
+  if (provider === "openai" && !openaiApiKey)
+    return NextResponse.json(
+      { error: "OpenAI API key not configured. Set it in Settings." },
+      { status: 400 },
+    );
+
+  const aiConfig: AIConfig = {
+    provider,
+    geminiApiKey: apiKey,
+    openaiApiKey,
+    temperature: 0.9,
+    responseFormat: "text",
+  };
 
   // Build product info
   let product: {
@@ -116,33 +137,13 @@ IMPORTANT:
 - DO NOT use markdown, only raw JSON`;
 
   try {
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.9,
-            topP: 0.95,
-            maxOutputTokens: 4096,
-          },
-        }),
-      },
-    );
-
-    if (!geminiRes.ok) {
-      const err = await geminiRes.text();
-      return NextResponse.json(
-        { error: `Gemini API error: ${err}` },
-        { status: 500 },
-      );
+    let rawText: string;
+    try {
+      rawText = await generateText(prompt, aiConfig);
+    } catch (aiErr: unknown) {
+      const msg = aiErr instanceof Error ? aiErr.message : "AI error";
+      return NextResponse.json({ error: `AI API error: ${msg}` }, { status: 500 });
     }
-
-    const geminiData = await geminiRes.json();
-    const rawText =
-      geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
     // Extract JSON from response
     const jsonMatch = rawText.match(/\{[\s\S]*\}/);
