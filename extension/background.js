@@ -308,16 +308,14 @@ function handleMessage(message, sender, sendResponse) {
       return true;
 
     case "POST_GALLERY_VIDEO":
-      (async () => {
-        try {
-          const { galleryId } = payload || {};
-          await postGalleryVideo(galleryId);
-          sendResponse({ ok: true });
-        } catch (err) {
-          sendResponse({ error: err.message });
-        }
-      })();
-      return true;
+      {
+        const { galleryId } = payload || {};
+        postGalleryVideo(galleryId).catch((err) =>
+          console.error("[Gallery Post] Failed:", err.message),
+        );
+        sendResponse({ ok: true });
+      }
+      break;
 
     case "GET_CURRENT_JOB":
       fetchCurrentJob().then(sendResponse);

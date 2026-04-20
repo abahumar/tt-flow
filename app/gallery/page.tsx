@@ -192,13 +192,10 @@ export default function GalleryPage() {
         alert("Extension not found. Make sure the Chrome extension is installed.");
         return;
       }
-      const result = await sendToExtension(extensionId, {
+      await sendToExtension(extensionId, {
         type: "POST_GALLERY_VIDEO",
         payload: { galleryId: video.id },
       });
-      if (result && "error" in result && result.error) {
-        alert("Failed to post: " + result.error);
-      }
     } catch {
       alert("Failed to post video to TikTok");
     } finally {
