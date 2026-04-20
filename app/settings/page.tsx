@@ -196,11 +196,11 @@ export default function SettingsPage() {
         ))}
 
         {/* AI Provider Selector */}
-        <div>
-          <label className="mb-2 block text-sm font-medium text-gray-700">
+        <fieldset>
+          <legend className="mb-1 block text-sm font-medium text-gray-700">
             AI Provider
-          </label>
-          <p className="mb-2 text-xs text-gray-500">
+          </legend>
+          <p className="mb-3 text-xs text-gray-500">
             Choose which AI is used for all prompt and content generation
           </p>
           <div className="flex gap-4">
@@ -223,7 +223,7 @@ export default function SettingsPage() {
               </label>
             ))}
           </div>
-        </div>
+        </fieldset>
 
         <button
           onClick={handleSave}
