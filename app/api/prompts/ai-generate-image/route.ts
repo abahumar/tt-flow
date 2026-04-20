@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { generateText, type AIConfig } from "@/lib/ai-client";
 
 const IMAGE_STYLES = {
   product_showcase: "Professional Product Showcase",
@@ -30,6 +32,25 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
+
+  const providerSetting = await prisma.setting.findUnique({ where: { key: "ai_provider" } });
+  const provider = (providerSetting?.value === "openai" ? "openai" : "gemini") as "gemini" | "openai";
+
+  const openaiKeySetting = await prisma.setting.findUnique({ where: { key: "openai_api_key" } });
+  const openaiApiKey = openaiKeySetting?.value || "";
+
+  if (provider === "openai" && !openaiApiKey)
+    return NextResponse.json(
+      { error: "OpenAI API key not configured. Set it in Settings." },
+      { status: 400 },
+    );
+
+  const aiConfig: AIConfig = {
+    provider,
+    geminiApiKey: apiKey,
+    openaiApiKey,
+    responseFormat: "json",
+  };
 
   const styleName =
     IMAGE_STYLES[style as keyof typeof IMAGE_STYLES] ||
@@ -79,29 +100,13 @@ export async function POST(req: NextRequest) {
   `;
 
   try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: systemPrompt }] }],
-          generationConfig: { responseMimeType: "application/json" },
-        }),
-        cache: "no-store" as RequestCache,
-      },
-    );
-
-    if (!res.ok) {
-      const err = await res.json();
-      return NextResponse.json(
-        { error: err.error?.message || "Gemini API error" },
-        { status: res.status },
-      );
+    let rawText: string;
+    try {
+      rawText = await generateText(systemPrompt, aiConfig);
+    } catch (aiErr: unknown) {
+      const msg = aiErr instanceof Error ? aiErr.message : "AI error";
+      return NextResponse.json({ error: msg }, { status: 500 });
     }
-
-    const data = await res.json();
-    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
     const cleaned = rawText.replace(/```json|```/g, "").trim();
 
     let parsed: { variations?: Record<string, unknown>[] };
