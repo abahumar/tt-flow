@@ -676,20 +676,18 @@ export default function GalleryPage() {
                           <Send className="h-4 w-4" />
                         )}
                       </button>
-                      {video.videoType === "combined" && (
-                        <button
-                          onClick={() => handlePostToTiktok(video)}
-                          disabled={postingTiktok.has(video.id)}
-                          title="Post to TikTok"
-                          className="rounded-full bg-gray-900 p-2 text-white shadow-lg transition-transform hover:scale-110 disabled:opacity-50"
-                        >
-                          {postingTiktok.has(video.id) ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Upload className="h-4 w-4" />
-                          )}
-                        </button>
-                      )}
+                      <button
+                        onClick={() => handlePostToTiktok(video)}
+                        disabled={postingTiktok.has(video.id)}
+                        title="Post to TikTok"
+                        className="rounded-full bg-gray-900 p-2 text-white shadow-lg transition-transform hover:scale-110 disabled:opacity-50"
+                      >
+                        {postingTiktok.has(video.id) ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Upload className="h-4 w-4" />
+                        )}
+                      </button>
                       <button
                         onClick={() => handleDeleteVideo(video)}
                         disabled={deleting.has(video.id)}
@@ -865,20 +863,18 @@ export default function GalleryPage() {
                   <Send className="h-4 w-4" />
                 )}
               </button>
-              {previewVideo.videoType === "combined" && (
-                <button
-                  onClick={() => handlePostToTiktok(previewVideo)}
-                  disabled={postingTiktok.has(previewVideo.id)}
-                  title="Post to TikTok"
-                  className="flex items-center justify-center gap-2 rounded-lg bg-gray-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-600 disabled:opacity-50"
-                >
-                  {postingTiktok.has(previewVideo.id) ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Upload className="h-4 w-4" />
-                  )}
-                </button>
-              )}
+              <button
+                onClick={() => handlePostToTiktok(previewVideo)}
+                disabled={postingTiktok.has(previewVideo.id)}
+                title="Post to TikTok"
+                className="flex items-center justify-center gap-2 rounded-lg bg-gray-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-600 disabled:opacity-50"
+              >
+                {postingTiktok.has(previewVideo.id) ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4" />
+                )}
+              </button>
               <button
                 onClick={() => handleDeleteVideo(previewVideo)}
                 disabled={deleting.has(previewVideo.id)}
