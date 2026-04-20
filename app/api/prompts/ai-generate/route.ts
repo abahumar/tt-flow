@@ -375,7 +375,7 @@ export async function POST(req: NextRequest) {
     const genreInst =
       GENRE_INSTRUCTIONS[videoType] || `GENRE: ${videoType.toUpperCase()}`;
     const dialogInst = includeDialog
-      ? `Include dialog in casual Bahasa Melayu for each scene. MUST be 8-22 words per scene (minimum 8 words — shorter dialog causes video generation errors). ${DIALOG_TONE_SANTAI}\n${getAvatarPronounRule(avatarId)}`
+      ? `Include dialog in casual Bahasa Melayu for each scene. MUST be 8-22 words per scene (minimum 8 words — shorter dialog causes video generation errors). PROMOTER TONE — speak directly TO the audience using "korang", not personal testimony. ${DIALOG_TONE_SANTAI}\n${getAvatarPronounRule(avatarId)}`
       : "NO DIALOG REQUIRED.";
     const englishDialogInst = includeEnglishDialog
       ? 'Also include "dialog_english" field with English translation.'
@@ -653,7 +653,7 @@ All string fields must be plain strings (never objects or arrays).
   const dialogLogic = `
     DIALOGUE STRUCTURE: Strictly follow [HOOK] + [CONTENT] + [CTA].
     CRITICAL: Every scene dialog MUST be 8-22 words. Dialog shorter than 8 words will cause video generation to fail.
-    ${includeDialog ? '1. MALAY ("dialog"): Soft Selling, Friendly. Must be a single string. 8-22 words per scene.' : ""}
+    ${includeDialog ? '1. MALAY ("dialog"): Promoter style — direct, enthusiastic, speak TO the audience using "korang". Must be a single string. 8-22 words per scene.' : ""}
     ${includeEnglishDialog ? '2. ENGLISH ("dialog_english"): Translated version. Must be a single string.' : ""}
     ${!includeDialog && !includeEnglishDialog ? "NO DIALOG REQUIRED." : ""}
     ${santaiTone}
