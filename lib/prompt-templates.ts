@@ -236,7 +236,7 @@ const SEEIUWTOA_ELEMENTS: FormulaElement[] = [
     visualDirection:
       "Model reveals product for the first time. Happy/relieved expression. Product clearly visible.",
     dialogDirection:
-      "Introduce the product naturally as the solution. 8-22 words. Like sharing a discovery.",
+      "Introduce the product with promoter energy — speak TO the audience. 8-22 words. Example: 'Ni lah produk yang korang dah lama tunggu!', 'Korang kena kenal produk ni!'",
   },
   {
     code: "US",
@@ -264,7 +264,7 @@ const SEEIUWTOA_ELEMENTS: FormulaElement[] = [
     visualDirection:
       "Model shows confident, trustworthy expression. Can gesture as if sharing proof or testimonial.",
     dialogDirection:
-      "Share social proof or credibility. 8-22 words. 'Ramai dah guna...', 'Dah terbukti...'",
+      "Assert product credibility with promoter confidence — speak TO the audience. 8-22 words. 'Ribuan customer dah buktikan, confirm berkesan!', 'Dah terbukti, korang pun boleh rasa hasilnya!'",
   },
   {
     code: "OF",
@@ -346,7 +346,7 @@ export const VIDEO_FORMATS = {
         visualDirection:
           "Model holds up product with relieved/happy expression. Product clearly shown.",
         dialogDirection:
-          "Introduce product naturally. 8-22 words. Example: 'Tapi lepas guna ni, semua berubah...'",
+          "Present product as THE solution with promoter energy. 8-22 words. Example: 'Ini lah produk yang korang kena ada!', 'Korang tak perlu suffer lagi, ada ni sekarang!'",
       },
       {
         code: "USP",
@@ -538,23 +538,24 @@ export const GENRE_HOOK_STYLE: Record<string, HookStyle> = {
 // ---- Gaya Bahasa Santai Tone Directive ----
 
 export const DIALOG_TONE_SANTAI = `
-DIALOG TONE — GAYA BAHASA SANTAI (KUALA LUMPUR SLANG):
-- Write in natural KL (Kuala Lumpur) conversational Bahasa Melayu. Santai, friendly, tapi masih teratur.
-- JANGAN guna bahasa skema/baku. Tulis macam budak KL bercakap.
+DIALOG TONE — GAYA PROMOTER (KUALA LUMPUR SLANG):
+- Write in natural KL (Kuala Lumpur) conversational Bahasa Melayu. Santai, confident, gaya promoter yang enthusiastic.
+- JANGAN guna bahasa skema/baku. Tulis macam promoter KL yang excited promote produk.
 - WAJIB guna slang KL — contoh: "wei", "lah", "kan", "gila", "memang", "confirm", "serious ah", "best gila", "power", "fuh", "perghhh", "siot", "dah lah", "takkan", "mesti try".
 - JANGAN guna slang Indonesia — DILARANG pakai: "banget", "dong", "nih", "sih", "gue/gw", "lu", "emang", "udah", "nggak", "tuh", "deh", "yuk", "kuy", "mager", "baper", "kepo". Ini content untuk audience Malaysia, BUKAN Indonesia.
 - Use sapaan yang sesuai: "korang", "sis", "babe", "bestie", "bro", "wei" — tapi JANGAN guna "Wei korang" sebagai pembukaan dialog.
 - Use emoji sparingly to add emotion: 😩 😍 🔥 ✅ 💪
 - NEVER sound like a textbook or formal announcement.
-- Seeding produk secara natural — jangan paksa atau hard sell.
-- Prioritize: Emotion → Story → Product → Conversion.
+- GAYA PROMOTER — cakap KEPADA audience (guna "korang"), bukan cerita pengalaman diri sendiri. Promote produk dengan direct, excited, dan confident. Highlight benefit untuk audience, bukan pengalaman peribadi.
+- Prioritize: Hook Audience → Highlight Benefits → Drive Action. Ayat mesti feel macam promoter yang genuinely excited tentang produk ini.
 - Dialog mesti mudah di sebut untuk AI voice — ayat pendek, direct, natural flow.
 
 KATA GANTI DIRI (CRITICAL — WAJIB IKUT):
 - DILARANG guna "aku" sebagai kata ganti diri. "Aku" kedengaran kasar dan tidak sesuai untuk content selling.
-- WAJIB guna "saya" sebagai kata ganti diri utama. Contoh: "Saya dah try...", "Saya memang suka...", "Saya nak share..."
+- UTAMAKAN guna "korang" bila refer kepada audience — ini gaya promoter. Contoh: "Korang kena try ni!", "Ini untuk korang yang nak...", "Korang confirm suka!"
+- Guna "saya" bila perlu refer diri sendiri. Contoh: "Saya nak tunjukkan korang...", "Saya dah test, memang power!"
 - "Saya" masih boleh digabung dengan slang KL — contoh: "Saya serious cakap lah...", "Saya confirm recommend ni."
-- Untuk avatar Makcik/Pakcik, guna kata ganti diri "acik" atau "makcik"/"pakcik". Contoh: "Acik dah try ni tau...", "Makcik memang suka...", "Pakcik recommend ni."
+- Untuk avatar Makcik/Pakcik, guna kata ganti diri "acik" atau "makcik"/"pakcik". Contoh: "Acik nak recommend ni tau...", "Makcik memang suggest korang cuba...", "Pakcik confirm produk ni best."
 - JANGAN sesekali guna "aku", "gue", "gw" — ini DILARANG sepenuhnya.
 
 VARIASI PEMBUKAAN SCENE 1 (HOOK):
