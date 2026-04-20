@@ -335,14 +335,22 @@ export async function POST(req: NextRequest) {
 
   // ─── GENERATE MODE: call AI, then either preview or create job ───
 
-  // 3. Load Gemini API key
-  const apiKeySetting = await prisma.setting.findUnique({
-    where: { key: "gemini_api_key" },
-  });
-  const apiKey = apiKeySetting?.value;
-  if (!apiKey) {
+  // 3. Check AI provider key is configured
+  const providerSetting = await prisma.setting.findUnique({ where: { key: "ai_provider" } });
+  const provider = providerSetting?.value === "openai" ? "openai" : "gemini";
+  const geminiKeySetting = await prisma.setting.findUnique({ where: { key: "gemini_api_key" } });
+  const openaiKeySetting = await prisma.setting.findUnique({ where: { key: "openai_api_key" } });
+  const apiKey = geminiKeySetting?.value || "";
+  const openaiApiKey = openaiKeySetting?.value || "";
+  if (provider === "gemini" && !apiKey) {
     return NextResponse.json(
       { error: "Gemini API key not configured. Set it in Settings." },
+      { status: 400 },
+    );
+  }
+  if (provider === "openai" && !openaiApiKey) {
+    return NextResponse.json(
+      { error: "OpenAI API key not configured. Set it in Settings." },
       { status: 400 },
     );
   }
@@ -418,6 +426,7 @@ export async function POST(req: NextRequest) {
         mode: "storyline",
         videoType: preset.genre,
         apiKey,
+        openaiApiKey,
         avatarId,
         consistentMode: true,
         sceneCount,

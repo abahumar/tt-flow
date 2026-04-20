@@ -107,7 +107,9 @@ async function callOpenAIMulti(
 
   const model = "gpt-4o-mini";
   const imgNote = images.length > 0 ? ` + ${images.length} image(s)` : "";
-  console.log(`[ai-client] ▶ OpenAI (${model})${imgNote} | temp=${config.temperature ?? 1.0} | format=${config.responseFormat ?? "text"}`);
+  // GPT-4o-mini becomes unstable above 1.0 for structured JSON — cap it
+  const temperature = Math.min(config.temperature ?? 1.0, 1.0);
+  console.log(`[ai-client] ▶ OpenAI (${model})${imgNote} | temp=${temperature} | format=${config.responseFormat ?? "text"}`);
   const t0 = Date.now();
 
   const content: ContentPart[] = [{ type: "text", text: prompt }];
@@ -122,7 +124,7 @@ async function callOpenAIMulti(
   const body: Record<string, unknown> = {
     model: "gpt-4o-mini",
     messages: [{ role: "user", content }],
-    temperature: config.temperature ?? 1.0,
+    temperature,
   };
 
   if (config.responseFormat === "json") {
@@ -150,5 +152,6 @@ async function callOpenAIMulti(
   const data = await res.json();
   const text = data.choices?.[0]?.message?.content || "";
   console.log(`[ai-client] ✓ OpenAI done (${Date.now() - t0}ms) | ${text.length} chars`);
+  console.log(`[ai-client] OpenAI raw response (first 2000 chars):`, text.substring(0, 2000));
   return text;
 }

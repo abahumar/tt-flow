@@ -481,10 +481,15 @@ RULES FOR video_prompt:
 - Focus on ONE gentle action + camera framing.
 - Example: "Model gently lifts product toward camera, slight smile, static chest-up framing."
 
+LANGUAGE RULES (MANDATORY):
+- script_title, hook_title, hook_subtitle, overlay_text, variation_hook_title, variation_video_caption, tiktok_caption, tiktok_description MUST be in casual Bahasa Melayu.
+- visual_prompt_en and video_prompt MUST be in English.
+- NEVER write hook_title or tiktok_caption in English.
+
 Output JSON:
 {
-  "script_title": "Catchy viral title in casual Malay",
-  "hook_title": "Short punchy hook title for intro card (3-5 words, catchy, e.g. 'Rahsia Kulit Glowing!')",
+  "script_title": "Catchy viral title in casual Bahasa Melayu",
+  "hook_title": "REQUIRED — Short punchy hook title in casual Bahasa Melayu for intro card (3-5 words, e.g. 'Rahsia Kulit Glowing!')",
   "hook_subtitle": "Product name or tagline for intro subtitle",
   "visual_dna": "${isCustomModel || modelImageBase64 ? "Brief model context from the uploaded reference image. DO NOT describe facial features or clothing in detail — the reference image is the source of truth. Only note general vibe/energy." : "Detailed, consistent model appearance. Include: age, ethnicity, expression, vibe. If product is WEARABLE: describe the model wearing the EXACT product from the image (color, material, design). Do NOT add conflicting clothing. If product is NOT wearable: describe a suitable outfit that complements the product."}",
   "genre_style": "Genre name",
@@ -501,7 +506,7 @@ Output JSON:
       "variation_video_caption": "REQUIRED — Catchy video caption in casual Malay for THIS scene (max 100 chars, e.g. 'Tengok sendiri hasilnya!')",
       "tiktok_product_name": "Clean product name (max 30 chars)",
       "tiktok_description": "Casual Malay product description with hashtags (max 200 chars)",
-      "tiktok_caption": "Catchy casual Malay TikTok caption (max 150 chars)",
+      "tiktok_caption": "REQUIRED — Catchy TikTok caption in casual Bahasa Melayu (max 150 chars, e.g. 'Produk ni memang wajib cuba!')",
       "tiktok_hashtags": ["fyp", "tiktokshop", "relevant", "tags"]
     }
   ]
@@ -911,8 +916,9 @@ All string fields must be plain strings (never objects or arrays).
     Shop: ${product.shopName || "N/A"}
     ${GENRE_INSTRUCTIONS[videoType] || `GENRE: ${videoType.toUpperCase()}`}
 
-    Output JSON: { ${isGrokStory ? '"visual_dna": "Detailed consistent model appearance for both scenes",' : ""} "hook_title": "Short punchy hook title for intro card (3-5 words)", "hook_subtitle": "Product name or tagline", "variations": [{ "description": "Title", "image_prompt": "...", ${outputFields}${dialogFields}, "overlay_text": "Short punchy text (5-8 words) for on-screen display, NO EMOJIS, plain text only", "variation_hook_title": "REQUIRED — Short punchy hook title for THIS specific variation (3-7 words, attention-grabbing, e.g. 'Rahsia Kulit Glowing!', 'Mesti Cuba Ni!', 'Last Stock!')", "variation_video_caption": "REQUIRED — Catchy video caption in casual Malay for THIS variation (max 100 chars, engaging & scroll-stopping, e.g. 'Tengok sendiri hasilnya lepas 3 hari guna!')", "tiktok_product_name": "Clean short product name for TikTok (max 30 chars, no special characters, no SKU codes)", "tiktok_description": "Compelling casual Malay product description with hashtags (max 200 chars)", "tiktok_caption": "Catchy casual Malay TikTok post caption (max 150 chars, no hashtags)", "tiktok_hashtags": ["fyp", "tiktokshop", "relevantTag1", "relevantTag2", "relevantTag3"] }] }
-    IMPORTANT: Every variation MUST include "variation_hook_title" and "variation_video_caption" — these are REQUIRED fields, never leave them empty.
+    LANGUAGE RULES (MANDATORY): hook_title, hook_subtitle, overlay_text, variation_hook_title, variation_video_caption, tiktok_caption, tiktok_description MUST be in casual Bahasa Melayu. image_prompt and video_prompt MUST be in English. NEVER write hook_title or tiktok_caption in English.
+    Output JSON: { ${isGrokStory ? '"visual_dna": "Detailed consistent model appearance for both scenes",' : ""} "hook_title": "REQUIRED — Short punchy hook title in casual Bahasa Melayu for intro card (3-5 words, e.g. 'Rahsia Kulit Glowing!')", "hook_subtitle": "Product name or tagline in Bahasa Melayu", "variations": [{ "description": "Title", "image_prompt": "...", ${outputFields}${dialogFields}, "overlay_text": "Short punchy text in Bahasa Melayu (5-8 words) for on-screen display, NO EMOJIS, plain text only", "variation_hook_title": "REQUIRED — Short punchy hook title in casual Bahasa Melayu for THIS specific variation (3-7 words, e.g. 'Rahsia Kulit Glowing!', 'Mesti Cuba Ni!', 'Last Stock!')", "variation_video_caption": "REQUIRED — Catchy video caption in casual Bahasa Melayu for THIS variation (max 100 chars, e.g. 'Tengok sendiri hasilnya lepas 3 hari guna!')", "tiktok_product_name": "Clean short product name (max 30 chars, no special characters, no SKU codes)", "tiktok_description": "REQUIRED — Compelling casual Bahasa Melayu product description with hashtags (max 200 chars)", "tiktok_caption": "REQUIRED — Catchy TikTok caption in casual Bahasa Melayu (max 150 chars, no hashtags, e.g. 'Produk ni memang wajib cuba!')", "tiktok_hashtags": ["fyp", "tiktokshop", "relevantTag1", "relevantTag2", "relevantTag3"] }] }
+    IMPORTANT: Every variation MUST include "variation_hook_title", "variation_video_caption", and "tiktok_caption" — these are REQUIRED fields, never leave them empty.
     Generate exactly ${variantCount} variations. All string fields must be plain strings (never objects).
   `;
 
