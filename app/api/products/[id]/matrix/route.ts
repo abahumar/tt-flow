@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { generateText, type AIConfig } from "@/lib/ai-client";
 
 export const dynamic = "force-dynamic";
 
@@ -189,16 +190,34 @@ export async function POST(
     scenarios = DEFAULT_SCENARIOS.slice(0, 5);
   } else {
     // ─── Gemini mode: AI extracts structured T/RS/USP ───
-    const apiKeySetting = await prisma.setting.findUnique({
-      where: { key: "gemini_api_key" },
-    });
-    const apiKey = apiKeySetting?.value;
-    if (!apiKey) {
+    const providerSetting = await prisma.setting.findUnique({ where: { key: "ai_provider" } });
+    const provider = (providerSetting?.value === "openai" ? "openai" : "gemini") as "gemini" | "openai";
+
+    const geminiKeySetting = await prisma.setting.findUnique({ where: { key: "gemini_api_key" } });
+    const openaiKeySetting = await prisma.setting.findUnique({ where: { key: "openai_api_key" } });
+    const geminiKey = geminiKeySetting?.value || "";
+    const openaiKey = openaiKeySetting?.value || "";
+
+    if (provider === "gemini" && !geminiKey) {
       return NextResponse.json(
         { error: "Gemini API key not configured. Set it in Settings." },
         { status: 400 },
       );
     }
+    if (provider === "openai" && !openaiKey) {
+      return NextResponse.json(
+        { error: "OpenAI API key not configured. Set it in Settings." },
+        { status: 400 },
+      );
+    }
+
+    const aiConfig: AIConfig = {
+      provider,
+      geminiApiKey: geminiKey,
+      openaiApiKey: openaiKey,
+      temperature: 1.0,
+      responseFormat: "text",
+    };
 
     const prompt = `You are a marketing strategist for TikTok affiliate videos. Analyze this product and extract the "Teknik Tiga Segi" (Three-Corner Technique) matrix.
 
@@ -217,28 +236,13 @@ Write in natural Bahasa Malaysia. Be specific and relatable for Malaysian TikTok
 Return ONLY the JSON object, no markdown, no explanation.`;
 
     try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 1.0 },
-          }),
-        },
-      );
-
-      if (!res.ok) {
-        const err = await res.json();
-        return NextResponse.json(
-          { error: err.error?.message || "Gemini API error" },
-          { status: 500 },
-        );
+      let rawText: string;
+      try {
+        rawText = await generateText(prompt, aiConfig);
+      } catch (aiErr: unknown) {
+        const msg = aiErr instanceof Error ? aiErr.message : "AI error";
+        return NextResponse.json({ error: `Matrix generation failed: ${msg}` }, { status: 500 });
       }
-
-      const data = await res.json();
-      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
       // Clean and parse JSON
       const cleaned = rawText
