@@ -127,19 +127,19 @@ function pickAvatarDna(avatarId: string): string {
 
 function getAvatarPronounRule(avatarId: string): string {
   if (avatarId === "woman_malay_elder") {
-    return `KATA GANTI DIRI OVERRIDE: Guna "acik" atau "makcik" sebagai kata ganti diri (BUKAN "saya" atau "aku"). Contoh: "Acik dah try ni tau...", "Makcik memang recommend ni."`;
+    return `KATA GANTI DIRI OVERRIDE: Guna "acik" atau "makcik" sebagai kata ganti diri. PROMOTER STYLE — cakap KEPADA audience, bukan cerita pengalaman diri. Contoh BETUL: "Korang kena cuba ni, acik memang recommend!", "Makcik suggest korang grab sekarang, confirm berkesan!" — BUKAN "Acik dah try ni..." atau "Sejak makcik guna..."`;
   }
   if (avatarId === "man_malay_elder") {
-    return `KATA GANTI DIRI OVERRIDE: Guna "pakcik" sebagai kata ganti diri (BUKAN "saya" atau "aku"). Contoh: "Pakcik dah try ni tau...", "Pakcik memang recommend ni."`;
+    return `KATA GANTI DIRI OVERRIDE: Guna "pakcik" sebagai kata ganti diri. PROMOTER STYLE — cakap KEPADA audience, bukan cerita pengalaman diri. Contoh BETUL: "Korang kena try ni, pakcik confirm power!", "Pakcik suggest korang grab sekarang, memang berkesan!" — BUKAN "Pakcik dah try ni..." atau "Sejak pakcik guna..."`;
   }
   if (
     avatarId === "woman_malay_mother" ||
     avatarId === "woman_malay_homecook"
   ) {
-    return `KATA GANTI DIRI: Guna "saya" sebagai kata ganti diri. Boleh juga guna "mama" atau "ibu" bila sesuai. Contoh: "Saya as ibu memang suka ni...", "Mama confirm recommend."`;
+    return `KATA GANTI DIRI: Guna "saya" atau "mama"/"ibu" bila sesuai. PROMOTER STYLE — cakap KEPADA audience. Contoh BETUL: "Mama suggest korang cuba ni, memang power!", "Korang nak hasil terbaik? Ini lah produknya!" — BUKAN "Saya dah guna..." atau "Lepas mama pakai..."`;
   }
   if (avatarId === "man_malay_father") {
-    return `KATA GANTI DIRI: Guna "saya" sebagai kata ganti diri. Boleh juga guna "ayah" atau "papa" bila sesuai. Contoh: "Saya as ayah memang recommend ni...", "Papa confirm suka."`;
+    return `KATA GANTI DIRI: Guna "saya" atau "ayah"/"papa" bila sesuai. PROMOTER STYLE — cakap KEPADA audience. Contoh BETUL: "Ayah recommend korang grab ni sekarang!", "Korang nak yang terbaik? Ini pilihan ayah untuk korang!" — BUKAN "Saya dah cuba..." atau "Sejak ayah guna..."`;
   }
   return "";
 }

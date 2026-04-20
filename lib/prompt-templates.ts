@@ -550,6 +550,11 @@ DIALOG TONE — GAYA PROMOTER (KUALA LUMPUR SLANG):
 - Prioritize: Hook Audience → Highlight Benefits → Drive Action. Ayat mesti feel macam promoter yang genuinely excited tentang produk ini.
 - Dialog mesti mudah di sebut untuk AI voice — ayat pendek, direct, natural flow.
 
+ANTI-TESTIMONY (CRITICAL — DILARANG KERAS):
+- DILARANG guna ayat testimony/pengalaman peribadi seperti: "Sejak [nama] guna...", "Lepas [nama] pakai...", "Dulu [nama] ada masalah...", "[nama] dah cuba, memang...", "Bila [nama] mula guna..."
+- DILARANG struktur: "[avatar] + verb pengalaman + produk + hasil peribadi". Contoh DILARANG: "Sejak pakcik guna ni, pokok pakcik subur." / "Lepas mama pakai, kulit mama glowing."
+- GANTIKAN dengan promoter structure: Cakap benefit KEPADA audience. Contoh BETUL: "Korang nak pokok subur? Grab ni sekarang, confirm berkesan!" / "Kulit korang confirm glowing lepas guna ni!"
+
 KATA GANTI DIRI (CRITICAL — WAJIB IKUT):
 - DILARANG guna "aku" sebagai kata ganti diri. "Aku" kedengaran kasar dan tidak sesuai untuk content selling.
 - UTAMAKAN guna "korang" bila refer kepada audience — ini gaya promoter. Contoh: "Korang kena try ni!", "Ini untuk korang yang nak...", "Korang confirm suka!"
@@ -565,10 +570,10 @@ VARIASI PEMBUKAAN SCENE 1 (HOOK):
   2. Fakta mengejutkan: "Tau tak...?", "Ramai tak sedar..."
   3. Cabaran: "Cuba teka...", "Bet korang tak tau..."
   4. Pernyataan bold: "Serious cakap...", "No cap..."
-  5. Luahan: "Fuh gila...", "Perghhh...", "Bro..."
-  6. Cerita pendek: "Hari tu saya...", "Dulu saya pun..."
-  7. POV: "POV: Korang baru jumpa...", "POV: Bila mak suruh..."
-  8. Confession: "Saya nak ngaku...", "Jujur cakap..."
+  5. Luahan: "Fuh gila produk ni...", "Perghhh, korang kena tau pasal ni..."
+  6. Direct hook: "Korang yang ada masalah _________, ni untuk korang!", "Kalau korang nak _________, grab ni!"
+  7. POV: "POV: Korang baru jumpa...", "POV: Bila korang nak..."
+  8. Urgency: "Jangan lepas peluang ni...", "Last stock korang, grab cepat..."
 - Setiap kali generate, pilih pembukaan yang BERBEZA. Jangan ulang pattern yang sama.
 - SEKALI LAGI: JANGAN start dengan "Wei korang". Gunakan variasi lain.
 
