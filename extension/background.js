@@ -307,6 +307,18 @@ function handleMessage(message, sender, sendResponse) {
       drainScrapeQueue().then(() => sendResponse({ ok: true }));
       return true;
 
+    case "POST_GALLERY_VIDEO":
+      (async () => {
+        try {
+          const { galleryId } = payload || {};
+          await postGalleryVideo(galleryId);
+          sendResponse({ ok: true });
+        } catch (err) {
+          sendResponse({ error: err.message });
+        }
+      })();
+      return true;
+
     case "GET_CURRENT_JOB":
       fetchCurrentJob().then(sendResponse);
       return true;
@@ -1537,6 +1549,57 @@ async function pollScrapeRequests() {
 }
 
 // Scrape queue is drained on-demand via TRIGGER_SCRAPE_QUEUE message
+
+// ---- Gallery Post to TikTok ----
+async function postGalleryVideo(galleryId) {
+  console.log("[Gallery Post] Posting gallery video:", galleryId);
+
+  const tabId = await ensureTikTokStudioTab();
+  if (!tabId) throw new Error("Could not open TikTok Studio tab");
+
+  chrome.tabs.update(tabId, { active: true });
+
+  const videoResp = await fetch(`${API_BASE}/gallery/${galleryId}`);
+  if (!videoResp.ok) throw new Error("Failed to fetch gallery video");
+  const videoBlob = await videoResp.blob();
+
+  const videoBase64 = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Failed to read video blob"));
+    reader.readAsDataURL(videoBlob);
+  });
+
+  console.log(
+    `[Gallery Post] Video ready (${(videoBase64.length / 1024 / 1024).toFixed(1)}MB)`,
+  );
+
+  return new Promise((resolve, reject) => {
+    chrome.tabs.sendMessage(
+      tabId,
+      {
+        type: "POST_VIDEO",
+        payload: {
+          jobId: null,
+          videoBase64,
+          caption: "",
+          hashtags: [],
+          productName: "",
+          productUrl: "",
+          tiktokProductName: "",
+          tiktokDescription: "",
+        },
+      },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+        } else {
+          resolve(response);
+        }
+      },
+    );
+  });
+}
 
 // ---- Google Flow Tab & Job Automation ----
 

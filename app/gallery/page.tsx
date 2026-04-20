@@ -18,6 +18,7 @@ import {
   CheckSquare,
   Square,
   Combine,
+  Upload,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -73,6 +74,7 @@ export default function GalleryPage() {
   const [sendingTelegram, setSendingTelegram] = useState<Set<string>>(
     new Set(),
   );
+  const [postingTiktok, setPostingTiktok] = useState<Set<string>>(new Set());
   // Bulk select
   const [selectMode, setSelectMode] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
@@ -175,6 +177,32 @@ export default function GalleryPage() {
       alert("Failed to send video to Telegram");
     } finally {
       setSendingTelegram((prev) => {
+        const next = new Set(prev);
+        next.delete(video.id);
+        return next;
+      });
+    }
+  };
+
+  const handlePostToTiktok = async (video: GalleryVideo) => {
+    setPostingTiktok((prev) => new Set(prev).add(video.id));
+    try {
+      const extensionId = await getExtensionId();
+      if (!extensionId) {
+        alert("Extension not found. Make sure the Chrome extension is installed.");
+        return;
+      }
+      const result = await sendToExtension(extensionId, {
+        type: "POST_GALLERY_VIDEO",
+        payload: { galleryId: video.id },
+      });
+      if (result && "error" in result && result.error) {
+        alert("Failed to post: " + result.error);
+      }
+    } catch {
+      alert("Failed to post video to TikTok");
+    } finally {
+      setPostingTiktok((prev) => {
         const next = new Set(prev);
         next.delete(video.id);
         return next;
@@ -648,6 +676,20 @@ export default function GalleryPage() {
                           <Send className="h-4 w-4" />
                         )}
                       </button>
+                      {video.videoType === "combined" && (
+                        <button
+                          onClick={() => handlePostToTiktok(video)}
+                          disabled={postingTiktok.has(video.id)}
+                          title="Post to TikTok"
+                          className="rounded-full bg-gray-900 p-2 text-white shadow-lg transition-transform hover:scale-110 disabled:opacity-50"
+                        >
+                          {postingTiktok.has(video.id) ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Upload className="h-4 w-4" />
+                          )}
+                        </button>
+                      )}
                       <button
                         onClick={() => handleDeleteVideo(video)}
                         disabled={deleting.has(video.id)}
@@ -823,6 +865,20 @@ export default function GalleryPage() {
                   <Send className="h-4 w-4" />
                 )}
               </button>
+              {previewVideo.videoType === "combined" && (
+                <button
+                  onClick={() => handlePostToTiktok(previewVideo)}
+                  disabled={postingTiktok.has(previewVideo.id)}
+                  title="Post to TikTok"
+                  className="flex items-center justify-center gap-2 rounded-lg bg-gray-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-600 disabled:opacity-50"
+                >
+                  {postingTiktok.has(previewVideo.id) ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Upload className="h-4 w-4" />
+                  )}
+                </button>
+              )}
               <button
                 onClick={() => handleDeleteVideo(previewVideo)}
                 disabled={deleting.has(previewVideo.id)}
@@ -1403,4 +1459,42 @@ export default function GalleryPage() {
       )}
     </div>
   );
+}
+
+async function getExtensionId(): Promise<string | null> {
+  try {
+    const res = await fetch("/api/settings");
+    const settings = await res.json();
+    const entry = settings.find(
+      (s: { key: string; value: string }) => s.key === "extension_id",
+    );
+    return entry?.value || null;
+  } catch {
+    return null;
+  }
+}
+
+async function sendToExtension(
+  extensionId: string,
+  message: { type: string; payload?: unknown },
+): Promise<{ ok?: boolean; error?: string } | null> {
+  return new Promise((resolve) => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const c = (globalThis as any).chrome;
+      if (typeof c !== "undefined" && c.runtime?.sendMessage) {
+        c.runtime.sendMessage(
+          extensionId,
+          message,
+          (response: { ok?: boolean; error?: string } | null) => {
+            resolve(response || null);
+          },
+        );
+      } else {
+        resolve(null);
+      }
+    } catch {
+      resolve(null);
+    }
+  });
 }
