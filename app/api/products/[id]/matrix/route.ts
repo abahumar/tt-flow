@@ -189,7 +189,7 @@ export async function POST(
 
     scenarios = DEFAULT_SCENARIOS.slice(0, 5);
   } else {
-    // ─── Gemini mode: AI extracts structured T/RS/USP ───
+    // ─── AI mode: AI extracts structured T/RS/USP ───
     const providerSetting = await prisma.setting.findUnique({ where: { key: "ai_provider" } });
     const provider = (providerSetting?.value === "openai" ? "openai" : "gemini") as "gemini" | "openai";
 
@@ -262,7 +262,7 @@ Return ONLY the JSON object, no markdown, no explanation.`;
         return NextResponse.json(
           {
             error:
-              "Gemini returned insufficient data. Try again or use Parse mode.",
+              "AI returned insufficient data. Try again or use Parse mode.",
           },
           { status: 500 },
         );

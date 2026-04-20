@@ -296,7 +296,7 @@ export async function POST(req: NextRequest) {
       }
     } catch (err) {
       console.warn(
-        "[jobs] Gemini generation failed, using template defaults:",
+        "[jobs] AI generation failed, using template defaults:",
         err,
       );
     }
