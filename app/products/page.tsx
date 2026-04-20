@@ -211,6 +211,10 @@ export default function ProductsPage() {
         setBulkResult(data);
         if (data.created > 0) {
           setBulkUrls("");
+          // Trigger extension to drain the scrape queue now
+          getExtensionId().then((extensionId) => {
+            if (extensionId) sendToExtension(extensionId, { type: "TRIGGER_SCRAPE_QUEUE" });
+          });
         }
       } else {
         alert(data.error || "Bulk import failed");

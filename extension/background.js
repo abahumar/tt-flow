@@ -303,6 +303,10 @@ function handleMessage(message, sender, sendResponse) {
   const { type, payload } = message;
 
   switch (type) {
+    case "TRIGGER_SCRAPE_QUEUE":
+      drainScrapeQueue().then(() => sendResponse({ ok: true }));
+      return true;
+
     case "GET_CURRENT_JOB":
       fetchCurrentJob().then(sendResponse);
       return true;
@@ -1399,6 +1403,26 @@ async function fetchCurrentJob() {
 
 // ---- Scrape Request Queue Polling ----
 let isProcessingScrape = false;
+let isDrainingScrapeQueue = false;
+
+async function drainScrapeQueue() {
+  if (isDrainingScrapeQueue) return;
+  isDrainingScrapeQueue = true;
+  try {
+    while (true) {
+      const res = await fetch(`${API_BASE}/scrape-requests`);
+      const pending = await res.json();
+      if (!pending.length) break;
+      await pollScrapeRequests();
+      // Small gap between items
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  } catch {
+    // silent
+  } finally {
+    isDrainingScrapeQueue = false;
+  }
+}
 
 async function pollScrapeRequests() {
   if (isProcessingScrape) return;
@@ -1512,8 +1536,7 @@ async function pollScrapeRequests() {
   }
 }
 
-// Poll every 3 seconds
-setInterval(pollScrapeRequests, 3000);
+// Scrape queue is drained on-demand via TRIGGER_SCRAPE_QUEUE message
 
 // ---- Google Flow Tab & Job Automation ----
 
