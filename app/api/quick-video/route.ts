@@ -35,7 +35,7 @@ const VARIATION_ANGLES = [
   "before-after — dramatic transformation showing life without vs with the product",
   "lifestyle — aspirational day-in-my-life content where product fits naturally",
   "comparison — subtle comparison with alternatives showing why this is better",
-  "challenge — 'I tried this for 7 days' or dare-style content",
+  "challenge — dare or test-style content, e.g. 'korang berani try tak?'",
   "trending — ride a current TikTok trend format and weave the product in",
 ];
 
