@@ -311,15 +311,18 @@ export default function QuickVideoPage() {
     const text = uspEdits[productId] ?? "";
     setSavingUsp(productId);
     try {
-      await fetch(`/api/products/${productId}`, {
+      const res = await fetch(`/api/products/${productId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ miniUsps: text }),
       });
+      if (!res.ok) throw new Error("Save failed");
       setProducts((prev) =>
         prev.map((p) => (p.id === productId ? { ...p, miniUsps: text } : p)),
       );
       setUspEdits((prev) => ({ ...prev, [productId]: text }));
+    } catch {
+      // spinner cleared in finally; state not updated on failure
     } finally {
       setSavingUsp(null);
     }
@@ -329,15 +332,18 @@ export default function QuickVideoPage() {
     const text = specialInstructionEdits[productId] ?? "";
     setSavingSpecialInstruction(productId);
     try {
-      await fetch(`/api/products/${productId}`, {
+      const res = await fetch(`/api/products/${productId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ specialInstruction: text }),
       });
+      if (!res.ok) throw new Error("Save failed");
       setProducts((prev) =>
         prev.map((p) => (p.id === productId ? { ...p, specialInstruction: text } : p)),
       );
       setSpecialInstructionEdits((prev) => ({ ...prev, [productId]: text }));
+    } catch {
+      // spinner cleared in finally; state not updated on failure
     } finally {
       setSavingSpecialInstruction(null);
     }
