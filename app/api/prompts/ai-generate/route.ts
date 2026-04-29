@@ -46,24 +46,24 @@ const PLATFORM_LOGICS: Record<string, (duration: number) => string> = {
 
 const AVATAR_DNA: Record<string, string[]> = {
   woman_malay_hijab: [
-    "A friendly 25-year-old Malay woman with a warm smile. Natural makeup look. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers).",
-    "A cheerful 24-year-old Malay woman with dewy skin and subtle lip tint. Sweet and approachable girl-next-door energy. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers).",
-    "A confident 27-year-old Malay woman with minimal gold jewelry. Clean, put-together modest fashion influencer vibe. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers).",
+    "A friendly 25-year-old Malay woman with a warm smile. Natural makeup look. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers).",
+    "A cheerful 24-year-old Malay woman with dewy skin and subtle lip tint. Sweet and approachable girl-next-door energy. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers).",
+    "A confident 27-year-old Malay woman with minimal gold jewelry. Clean, put-together modest fashion influencer vibe. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers).",
   ],
   woman_malay_freehair: [
-    "A trendy 20-year-old Malay woman with shoulder-length wavy hair. Energetic and approachable vibe. Hijabi with modern fashion-forward styling, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers).",
-    "A stylish 21-year-old Malay woman with long straight black hair and wispy bangs. Cool streetwear aesthetic with a playful, youthful energy. Hijabi with trendy modern look, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers).",
-    "A vibrant 19-year-old Malay woman with a messy bun and hoop earrings. Effortlessly trendy Y2K-inspired look with a fun, carefree attitude. Hijabi with edgy modern styling, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers).",
+    "A trendy 20-year-old Malay woman with shoulder-length wavy hair. Energetic and approachable vibe. Hijabi with modern fashion-forward styling, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers).",
+    "A stylish 21-year-old Malay woman with long straight black hair and wispy bangs. Cool streetwear aesthetic with a playful, youthful energy. Hijabi with trendy modern look, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers).",
+    "A vibrant 19-year-old Malay woman with a messy bun and hoop earrings. Effortlessly trendy Y2K-inspired look with a fun, carefree attitude. Hijabi with edgy modern styling, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers).",
   ],
   woman_malay_corporate: [
-    "A professional 30-year-old Malay woman with a confident posture. Sophisticated and authoritative look. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers).",
-    "A poised 28-year-old Malay woman with minimal pearl stud earrings. Sharp, ambitious corporate leader energy with a warm yet commanding presence. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers).",
-    "A polished 31-year-old Malay woman with reading glasses resting on her collar. Smart, trustworthy senior executive vibe. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers).",
+    "A professional 30-year-old Malay woman with a confident posture. Sophisticated and authoritative look. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers).",
+    "A poised 28-year-old Malay woman with minimal pearl stud earrings. Sharp, ambitious corporate leader energy with a warm yet commanding presence. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers).",
+    "A polished 31-year-old Malay woman with reading glasses resting on her collar. Smart, trustworthy senior executive vibe. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers).",
   ],
   woman_malay_elder: [
-    "A warm 50-year-old Malay makcik with a gentle motherly smile and laugh lines. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Kind and trustworthy auntie energy.",
-    "A cheerful 55-year-old Malay woman with a round friendly face and reading glasses. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Experienced, wise, and approachable.",
-    "A graceful 48-year-old Malay woman with a calm, elegant demeanor. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Mature beauty with a confident, nurturing presence.",
+    "A warm 50-year-old Malay makcik with a gentle motherly smile and laugh lines. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Kind and trustworthy auntie energy.",
+    "A cheerful 55-year-old Malay woman with a round friendly face and reading glasses. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Experienced, wise, and approachable.",
+    "A graceful 48-year-old Malay woman with a calm, elegant demeanor. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Mature beauty with a confident, nurturing presence.",
   ],
   man_malay_casual: [
     "A 26-year-old Malay man with a short textured crop haircut and a slight stubble. Wearing a fitted navy polo shirt and dark chinos. Relaxed and friendly boy-next-door vibe.",
@@ -86,19 +86,19 @@ const AVATAR_DNA: Record<string, string[]> = {
     "No human model. Display the product against a clean gradient background with geometric props and soft fabric draping. Minimalist editorial product photography style.",
   ],
   woman_malay_student: [
-    "A fresh-faced 20-year-old Malay university student with a bright curious smile. Hijabi with a sporty casual style, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Youthful Gen Z energy, backpack-and-campus vibe.",
-    "A bubbly 19-year-old Malay girl with round glasses and a playful grin. Hijabi with a cute oversized hoodie look, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Student budget-queen energy.",
-    "A trendy 21-year-old Malay student with a minimalist aesthetic. Hijabi with clean pastel tones, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Smart, study-focused TikTok creator vibe.",
+    "A fresh-faced 20-year-old Malay university student with a bright curious smile. Hijabi with a sporty casual style, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Youthful Gen Z energy, backpack-and-campus vibe.",
+    "A bubbly 19-year-old Malay girl with round glasses and a playful grin. Hijabi with a cute oversized hoodie look, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Student budget-queen energy.",
+    "A trendy 21-year-old Malay student with a minimalist aesthetic. Hijabi with clean pastel tones, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Smart, study-focused TikTok creator vibe.",
   ],
   woman_malay_mother: [
-    "A loving 30-year-old Malay young mother with a warm, nurturing smile. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Practical and relatable busy-mom energy.",
-    "A cheerful 28-year-old Malay ibu muda with gentle eyes and a soft laugh. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Multitasking supermom vibe, always on the go.",
-    "A radiant 32-year-old Malay mother with a calm, confident demeanor. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Organized, family-first energy with a touch of style.",
+    "A loving 30-year-old Malay young mother with a warm, nurturing smile. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Practical and relatable busy-mom energy.",
+    "A cheerful 28-year-old Malay ibu muda with gentle eyes and a soft laugh. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Multitasking supermom vibe, always on the go.",
+    "A radiant 32-year-old Malay mother with a calm, confident demeanor. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Organized, family-first energy with a touch of style.",
   ],
   woman_malay_beauty: [
-    "A glamorous 24-year-old Malay beauty influencer with flawless dewy skin and soft glam makeup. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Confident beauty-guru energy with ring light glow.",
-    "A polished 22-year-old Malay beauty creator with defined brows and glossy lips. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Clean-girl aesthetic with editorial beauty vibe.",
-    "A radiant 26-year-old Malay beauty enthusiast with a natural glow-up look. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Skincare-obsessed influencer energy.",
+    "A glamorous 24-year-old Malay beauty influencer with flawless dewy skin and soft glam makeup. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Confident beauty-guru energy with ring light glow.",
+    "A polished 22-year-old Malay beauty creator with defined brows and glossy lips. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Clean-girl aesthetic with editorial beauty vibe.",
+    "A radiant 26-year-old Malay beauty enthusiast with a natural glow-up look. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Skincare-obsessed influencer energy.",
   ],
   woman_chinese_casual: [
     "A friendly 24-year-old Chinese Malaysian woman with shoulder-length straight black hair and a warm smile. Casual trendy outfit. Approachable, relatable girl-next-door energy.",
@@ -106,9 +106,9 @@ const AVATAR_DNA: Record<string, string[]> = {
     "A cheerful 26-year-old Chinese Malaysian woman with a bob cut and natural look. Effortlessly chic casual style. Warm, easygoing energy with a creative flair.",
   ],
   woman_malay_homecook: [
-    "A cheerful 35-year-old Malay suri rumah with a warm maternal smile, wearing a simple apron over her outfit. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Homely, kitchen-expert energy.",
-    "A skilled 33-year-old Malay home cook with flour-dusted apron and bright eyes. Hijabi, wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Passionate foodie-mom vibe.",
-    "A creative 30-year-old Malay woman in a cozy kitchen setting with neat hijab. Wearing inner sleeve stop below the wrist, and socks. Full modest coverage (no skin visible except face and fingers). Suri rumah content creator energy, always sharing resepi viral.",
+    "A cheerful 35-year-old Malay suri rumah with a warm maternal smile, wearing a simple apron over her outfit. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Homely, kitchen-expert energy.",
+    "A skilled 33-year-old Malay home cook with flour-dusted apron and bright eyes. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Passionate foodie-mom vibe.",
+    "A creative 30-year-old Malay woman in a cozy kitchen setting with neat hijab. Wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Suri rumah content creator energy, always sharing resepi viral.",
   ],
   man_malay_father: [
     "A responsible 32-year-old Malay young father with a short neat haircut and trimmed beard. Wearing a casual button-up shirt. Warm, dependable dad energy with a gentle smile.",
@@ -116,9 +116,9 @@ const AVATAR_DNA: Record<string, string[]> = {
     "A strong 34-year-old Malay father with a well-groomed beard and calm confident demeanor. Smart-casual polo shirt. Protective, reliable family-man energy.",
   ],
   couple_malay: [
-    "A sweet Malay couple in their mid-20s. The woman is hijabi with inner sleeve stop below the wrist, socks, full modest coverage (no skin visible except face and fingers). The man has a neat haircut and trimmed beard. Matching casual outfits. Wholesome, in-love couple energy.",
-    "An adorable Malay couple, both 26. She wears a pastel hijab with full modest coverage, inner sleeve below wrist, socks. He has a textured crop and clean-shaven face. Coordinated earth-tone outfits. Sweet Instagram-couple aesthetic.",
-    "A trendy Malay couple in their late 20s. She is hijabi with full modest coverage, inner sleeve below wrist, socks. He sports a buzz cut with subtle stubble. Stylish streetwear-coordinated look. Fun, adventurous couple vibes.",
+    "A sweet Malay couple in their mid-20s. The woman is hijabi with inner sleeve stop below the wrist, full modest coverage (no skin visible except face and fingers). The man has a neat haircut and trimmed beard. Matching casual outfits. Wholesome, in-love couple energy.",
+    "An adorable Malay couple, both 26. She wears a pastel hijab with full modest coverage, inner sleeve below wrist. He has a textured crop and clean-shaven face. Coordinated earth-tone outfits. Sweet Instagram-couple aesthetic.",
+    "A trendy Malay couple in their late 20s. She is hijabi with full modest coverage, inner sleeve below wrist. He sports a buzz cut with subtle stubble. Stylish streetwear-coordinated look. Fun, adventurous couple vibes.",
   ],
   hands_only: [
     "No face visible. Close-up of well-manicured feminine hands interacting with the product. Clean, aesthetic background. Satisfying ASMR-style product showcase.",
@@ -232,6 +232,12 @@ export async function POST(req: NextRequest) {
     productImage = null, // filename from /api/upload (for sending product image to AI provider)
     modelImage = null, // filename from /api/upload (for sending model face image to AI provider)
     specialInstruction = "",
+    visualInstruction = "", // appended verbatim to every image_prompt
+    // Mini format saved USPs
+    miniUsp1 = "",
+    miniUsp2 = "",
+    // Non-mini format USP hint
+    uspHint = "",
     // Quick Video variation params
     variationSeed = "",
     hookStyleOverride = "",
@@ -667,7 +673,16 @@ All string fields must be plain strings (never objects or arrays).
   // --- DIALOG LOGIC ---
   const santaiTone = videoFormat && includeDialog ? DIALOG_TONE_SANTAI : "";
   const pronounRule = includeDialog ? getAvatarPronounRule(avatarId) : "";
-  const dialogLogic = `
+  const dialogLogic = videoFormat === "mini"
+    ? `
+    DIALOGUE STRUCTURE: Follow the scene-level instructions exactly — each scene has its own beat structure.
+    ${includeDialog ? '1. MALAY ("dialog"): Promoter style — direct, enthusiastic, speak TO the audience using "korang". Must be a single string.' : ""}
+    ${includeEnglishDialog ? '2. ENGLISH ("dialog_english"): Translated version. Must be a single string.' : ""}
+    ${!includeDialog && !includeEnglishDialog ? "NO DIALOG REQUIRED." : ""}
+    ${santaiTone}
+    ${pronounRule}
+    `
+    : `
     DIALOGUE STRUCTURE: Strictly follow [HOOK] + [CONTENT] + [CTA].
     CRITICAL: Every scene dialog MUST be 8-22 words. Dialog shorter than 8 words will cause video generation to fail.
     ${includeDialog ? '1. MALAY ("dialog"): Promoter style — direct, enthusiastic, speak TO the audience using "korang". Must be a single string. 8-22 words per scene.' : ""}
@@ -690,6 +705,7 @@ All string fields must be plain strings (never objects or arrays).
   let variantCount: number;
 
   const avatarDna = pickAvatarDna(avatarId);
+  const isMiniConsistent = videoFormat === "mini" && consistentMode;
 
   if (mode === "storyline") {
     variantCount = consistentMode ? sceneCount : imageCount;
@@ -701,11 +717,22 @@ All string fields must be plain strings (never objects or arrays).
       const modelInstruction = modelDesc || avatarDna;
       const hasModelImage = !!modelDesc;
       const hasBgImage = !!backgroundDesc;
+      // True when BOTH product image AND model/avatar image are uploaded as Flow references
+      const hasBothImages = hasModelImage && !!productImageBase64;
+
+      const imagePrefix = hasBothImages
+        ? "From the images uploaded, accurate scale, no alter, no redesign."
+        : "From the image uploaded, accurate scale, no alter, no redesign.";
 
       const modelRule = hasModelImage
-        ? `IMPORTANT — MODEL REFERENCE IMAGE IS UPLOADED:
-        The model image is ALREADY uploaded as a visual reference. The AI image generator will USE it directly.
-        DO NOT re-describe the model's appearance (face, hair, clothing, hijab, skin tone, etc.).
+        ? `IMPORTANT — REFERENCE IMAGES UPLOADED TO FLOW:
+        ${hasBothImages
+          ? `TWO reference images have been uploaded:
+        - Image 1 (PRODUCT): The exact product to feature in every scene. DO NOT redesign, recolor, or replace it.
+        - Image 2 (MODEL/AVATAR): The exact person to use as the model in every scene. DO NOT re-describe their face, skin, hair, hijab, or clothing.
+        The AI image generator (Google Flow) will receive BOTH uploaded images as references.`
+          : `One reference image (MODEL/AVATAR) has been uploaded as a visual reference.`}
+        DO NOT re-describe the model's appearance in image_prompt — the reference image IS the source of truth.
         Model context (for your understanding only, DO NOT put in prompts): "${modelInstruction}"`
         : `MODEL/AVATAR TO USE IN ALL PROMPTS: ${modelInstruction}
         CRITICAL: You MUST describe this exact model in every image_prompt. Include their appearance details (age, ethnicity, clothing, hijab if applicable).
@@ -717,14 +744,20 @@ All string fields must be plain strings (never objects or arrays).
         Background context (for your understanding only, DO NOT put in prompts): "${bgInstruction}"`
         : `No background reference image. Describe a suitable background/setting in each image_prompt.`;
 
-      const imagePromptExample = hasModelImage
+      const imagePromptExample = hasBothImages
         ? `Example good image_prompt:
-        "From the image uploaded, accurate scale, no alter, no redesign. Model holds the product casually in her right hand, positioned slightly to the front. Static chest-up framing, centered, warm smile."
+        "${imagePrefix} The model holds the product in her right hand, warm smile, looking at camera. Static chest-up framing, 9:16 vertical."
+
+        Example BAD image_prompt (DO NOT DO THIS — re-describes what's already in the reference images):
+        "${imagePrefix} A 25-year-old Malay woman with warm brown skin, wearing a light beige hijab, holds a [product description]..." — NEVER re-describe the model or product appearance.`
+        : hasModelImage
+        ? `Example good image_prompt:
+        "${imagePrefix} Model holds the product casually in her right hand, positioned slightly to the front. Static chest-up framing, centered, warm smile."
 
         Example BAD image_prompt (DO NOT DO THIS):
-        "From the image uploaded... A friendly 25-year-old Malay woman with a warm smile, wearing a stylish light beige chiffon hijab... stands in a clean minimalist studio background with light grey concrete texture wall..."`
+        "${imagePrefix} A friendly 25-year-old Malay woman with a warm smile, wearing a stylish light beige chiffon hijab... stands in a clean minimalist studio background with light grey concrete texture wall..."`
         : `Example good image_prompt:
-        "From the image uploaded, accurate scale, no alter, no redesign. ${modelInstruction} holds the product casually in her right hand, positioned slightly to the front. Static chest-up framing, centered, warm smile."`;
+        "${imagePrefix} ${modelInstruction} holds the product casually in her right hand, positioned slightly to the front. Static chest-up framing, centered, warm smile."`;
 
       promptStrategy = `
         CONSISTENT VIDEO STUDIO MODE (${sceneCount} SCENES):
@@ -736,7 +769,11 @@ All string fields must be plain strings (never objects or arrays).
         ${bgRule}
 
         IMAGE PROMPT RULES:
-        Each image_prompt MUST start with: "From the image uploaded, accurate scale, no alter, no redesign."
+        Each image_prompt MUST start with: "${imagePrefix}"
+        ${hasBothImages ? `CRITICAL — BOTH product and model images are uploaded references. Your image_prompt MUST NOT re-describe either:
+        - DO NOT describe the product's appearance (color, packaging, label, shape) — it's in reference image 1.
+        - DO NOT describe the model's face, skin, hair, hijab, or clothing — it's in reference image 2.
+        - ONLY describe: pose, expression, camera framing, and how the model interacts with the product.` : ""}
         Then describe:
         ${hasModelImage ? "- How the model interacts with the product (holding, showing, using, etc.)" : "- The model (using the exact avatar description above) and how they interact with the product"}
         - The model's pose and expression (smiling, looking at camera, looking at product, etc.)
@@ -744,6 +781,7 @@ All string fields must be plain strings (never objects or arrays).
         - Product position relative to the model (in right hand, on table, held up to camera, etc.)
         ${hasBgImage ? "DO NOT describe what the background looks like." : "- A suitable background/setting for the scene."}
         Keep it focused on pose + product interaction + camera angle.
+        ${specialInstruction ? `SPECIAL INSTRUCTION — MUST BE FOLLOWED IN EVERY image_prompt WITHOUT EXCEPTION: ${specialInstruction}` : ""}
 
         ${imagePromptExample}
 
@@ -780,7 +818,7 @@ All string fields must be plain strings (never objects or arrays).
           .map(
             (s) => `${s.sceneNumber}. SCENE ${s.sceneNumber} (${s.label}):
            VISUAL: ${s.visualDirection}
-           DIALOG: ${s.dialogDirection}`,
+           DIALOG: ${s.dialogDirection}${s.videoPromptDirection ? `\n           VIDEO MOTION: ${s.videoPromptDirection}` : ""}`,
           )
           .join("\n        ")}
 
@@ -797,6 +835,15 @@ All string fields must be plain strings (never objects or arrays).
         }
 
         ONLY vary across scenes: pose, product interaction, camera angle, expression, and simple action.
+
+        ${isMiniConsistent ? `
+        FACE & CLOTHING CONSISTENCY (CRITICAL for Mini 2-scene format):
+        - Output a "visual_dna" field at JSON root BEFORE "variations".
+        - visual_dna = 1-2 sentences describing the model EXACTLY: estimated age, face features, hijab style/color OR hair, clothing color and cut, any accessories.
+        - Example: "A confident 27-year-old Malay woman with warm brown eyes and a light beige chiffon hijab pinned neatly. She wears a sage green baju kurung with simple pearl earrings."
+        - BOTH image_prompts MUST include this visual_dna description verbatim after the "${imagePrefix}" prefix.
+        - The model's face, hijab, and clothing MUST BE IDENTICAL across Scene 1 and Scene 2.
+        - ONLY vary: pose, expression, product interaction, camera angle.` : ""}
       `;
     } else if (platform === "flow") {
       promptStrategy = `
@@ -885,6 +932,16 @@ All string fields must be plain strings (never objects or arrays).
   const avatarInstruction =
     avatarId === "product_only"
       ? `MODEL/AVATAR: ${avatarDna}`
+      : modelDesc
+      ? `MODEL REFERENCE IMAGE UPLOADED — USE SPLIT FIELDS (NOT image_prompt):
+    The model's appearance is defined by the uploaded reference image. You do NOT know what they look like — do NOT invent or describe their face, age, hair, skin, hijab, clothing, or ethnicity.
+    OUTPUT FOUR SEPARATE FIELDS per variation INSTEAD of "image_prompt":
+    • "pose_action" — ONLY the physical action: what the model does with the product. Use action verbs. Max 15 words. FORBIDDEN: any appearance word (young, man, woman, hair, skin, wearing, dressed, etc.)
+    • "expression" — ONLY the facial expression. e.g. "warm smile", "confident eye contact", "slight raised eyebrow". Max 6 words.
+    • "camera_framing" — ONLY camera angle and framing. e.g. "Static chest-up framing, 9:16 vertical", "Close-up hands detail shot".
+    • "background_setting" — ONLY the scene background. e.g. "casual home setting, soft warm lighting", "minimalist studio, white background".
+    The server prepends "From the images uploaded, accurate scale, no alter, no redesign." automatically.
+    Model context (for your understanding ONLY — DO NOT output this in any field): ${modelDesc}`
       : `MODEL/AVATAR (MUST USE IN ALL PROMPTS): The subject/model in every scene is — ${avatarDna}
     CRITICAL: ALWAYS describe this exact model in both image_prompt and scene. NEVER change the model's appearance across variations.`;
 
@@ -913,17 +970,23 @@ All string fields must be plain strings (never objects or arrays).
       3. Focus on product interaction: holding, applying, demonstrating.
     ${dialogLogic}
     ${specialInstruction ? `SPECIAL INSTRUCTION (MUST FOLLOW): ${specialInstruction}` : ""}
-    ${variationSeed ? `VARIATION SEED (MUST FOLLOW — this determines the creative direction for THIS generation): Focus on a ${variationSeed}. Make the hook, dialog, poses, and overall vibe reflect this angle. DO NOT default to generic content — commit fully to this creative direction.` : ""}
+    ${variationSeed ? `VARIATION SEED (MUST FOLLOW — this determines the creative direction for THIS generation): Focus on a ${variationSeed}. Make the hook, dialog, poses, and overall vibe reflect this angle. DO NOT default to generic content — commit fully to this creative direction.${videoFormat === "mini" ? " NOTE: For mini format, the variation angle applies ONLY to Scene 1's hook and image direction. Scene 2 dialog is fixed: sentence 1 = product benefit, sentence 2 = CTA. Do NOT apply the variation angle to Scene 2 dialog." : ""}` : ""}
+    ${uspHint ? `KEY BENEFITS (MUST WEAVE IN): ${uspHint}. Naturally incorporate these specific benefits into the dialog and scene descriptions across the video — do not list them robotically, make them feel organic and conversational.` : ""}
     Task: ${promptStrategy}
 
     CRITICAL RULE — PAIRED IMAGE + VIDEO PROMPTS:
-    For EACH variation, generate TWO prompts that share the SAME scene:
+    For EACH variation, generate prompts that share the SAME scene:
 
-    1. "image_prompt": Describes the FIRST FRAME / STARTING FRAME of the video as a STATIC image.
-       - Same scene, same camera angle, same composition as the video — but frozen (no motion).
+    ${modelDesc ? `1. SPLIT IMAGE FIELDS (replaces "image_prompt" entirely):
+       Output exactly these 4 fields — no other image description field:
+       • "pose_action": action verb + product interaction only (NO appearance words)
+       • "expression": emotion/expression only (NO appearance words)
+       • "camera_framing": framing only
+       • "background_setting": background/setting only${specialInstruction ? `\n       SPECIAL INSTRUCTION — apply to background_setting: ${specialInstruction}` : ""}
+       DO NOT output a field called "image_prompt" at all.` : `1. "image_prompt": Describes the FIRST FRAME / STARTING FRAME of the video as a STATIC image.
+       - Must start with: "${modelImageBase64 && productImageBase64 ? "From the images uploaded, accurate scale, no alter, no redesign." : "From the image uploaded, accurate scale, no alter, no redesign."}"
        - Must include: subject position, product placement, background, camera framing.
-       - Must start with: "From the image uploaded, accurate scale, no alter, no redesign."
-       - This image will be used as the reference/starting frame for the AI video generator.
+       - This image will be used as the reference/starting frame for the AI video generator.${specialInstruction ? `\n       - SPECIAL INSTRUCTION (MUST APPLY TO EVERY image_prompt): ${specialInstruction}` : ""}`}
 
     2. ${consistentMode || isGrokStory ? '"video_prompt": A single SHORT sentence describing the subtle motion from the first frame.' : '"scene" + "camera" + "action": The VIDEO prompt that animates from that first frame.\n       - Describes the motion, camera movement, and actions that happen AFTER the first frame.\n       - Must be consistent with the image_prompt (same scene, same setup).'}
 
@@ -934,11 +997,18 @@ All string fields must be plain strings (never objects or arrays).
     ${GENRE_INSTRUCTIONS[videoType] || `GENRE: ${videoType.toUpperCase()}`}
 
     LANGUAGE RULES (MANDATORY): hook_title, hook_subtitle, overlay_text, variation_hook_title, variation_video_caption, tiktok_caption, tiktok_description MUST be in casual Bahasa Melayu. image_prompt and video_prompt MUST be in English. NEVER write hook_title or tiktok_caption in English.
-    Output JSON: { ${isGrokStory ? '"visual_dna": "Detailed consistent model appearance for both scenes",' : ""} "hook_title": "REQUIRED — Short punchy hook title (${hookTitleStyle} format, 3-5 words). THIS CALL examples: '${hookTitleExamples}' — use as style reference only, do NOT copy directly.", "hook_subtitle": "Product name or tagline in Bahasa Melayu", "variations": [{ "description": "Title", "image_prompt": "...", ${outputFields}${dialogFields}, "overlay_text": "Short punchy text in Bahasa Melayu (5-8 words) for on-screen display, NO EMOJIS, plain text only", "variation_hook_title": "REQUIRED — Short punchy hook title for THIS specific variation (${hookTitleStyle} format, 3-7 words). THIS CALL examples: '${hookTitleExamples}' — use as style reference only, do NOT copy directly.", "variation_video_caption": "REQUIRED — Catchy video caption in casual Bahasa Melayu for THIS variation (max 100 chars, e.g. 'Tengok sendiri hasilnya lepas 3 hari guna!')", "tiktok_product_name": "Clean short product name (max 30 chars, no special characters, no SKU codes)", "tiktok_description": "REQUIRED — Compelling casual Bahasa Melayu product description with hashtags (max 200 chars)", "tiktok_caption": "REQUIRED — Catchy TikTok caption (${captionStyle} style, max 150 chars, no hashtags). THIS CALL examples: '${captionExamples}' — use as style reference only, do NOT copy directly.", "tiktok_hashtags": ["fyp", "tiktokshop", "relevantTag1", "relevantTag2", "relevantTag3"] }] }
-    CTA DIALOG OVERRIDE (applies to ALL AC/CTA scenes this call):
+    Output JSON: { ${isGrokStory || isMiniConsistent ? '"visual_dna": "1-2 sentences describing the model EXACTLY: age, face features, hijab style/color, clothing color and style, accessories — copy this into BOTH image_prompts",' : ""} "hook_title": "REQUIRED — Short punchy hook title (${hookTitleStyle} format, 3-5 words). THIS CALL examples: '${hookTitleExamples}' — use as style reference only, do NOT copy directly.", "hook_subtitle": "Product name or tagline in Bahasa Melayu", "variations": ${videoFormat === "mini" && includeDialog
+      ? `[{ "description": "Scene 1", ${modelDesc ? `"pose_action": "action verb + product (NO appearance words)", "expression": "facial expression only", "camera_framing": "framing only", "background_setting": "background only"` : `"image_prompt": "..."`}, ${outputFields}, "dialog_hook": "ONE sentence — audience pain-point, speak to korang, max 10 words", "dialog_usp1": "${miniUsp1 ? `Rephrase this exact benefit into ONE natural Malay sentence, max 10 words: "${miniUsp1}"` : "ONE sentence — state the benefit directly: what the product does or contains. No teaser, no 'rahsia', no first-person. Start with the product name or its feature. Max 10 words. Example: 'Formula NPK dia galakkan akar kuat, pucuk baru terus naik!'"}", "overlay_text": "3-4 word hook ending with ?", "variation_hook_title": "REQUIRED", "variation_video_caption": "REQUIRED", "tiktok_product_name": "...", "tiktok_description": "REQUIRED", "tiktok_caption": "REQUIRED", "tiktok_hashtags": ["fyp"] }, { "description": "Scene 2", ${modelDesc ? `"pose_action": "action verb + product (NO appearance words)", "expression": "facial expression only", "camera_framing": "framing only", "background_setting": "background only"` : `"image_prompt": "..."`}, ${outputFields}, "dialog_usp2": "${miniUsp2 ? `Rephrase this exact benefit into ONE natural Malay sentence, max 10 words: "${miniUsp2}"` : "ONE sentence — state a second benefit directly: different from dialog_usp1, what else the product does or contains. No teaser, no 'rahsia', no question mark. Start with the product name or its feature. Max 10 words. Example: 'Bahan organik dia selamat, tiada kimia berbahaya langsung.'"}", "dialog_cta": "ONE sentence — call to action, starts with Jom/Grab/Order/Dapatkan, max 10 words", "overlay_text": "2-3 word CTA", "variation_hook_title": "REQUIRED", "variation_video_caption": "REQUIRED", "tiktok_product_name": "...", "tiktok_description": "REQUIRED", "tiktok_caption": "REQUIRED", "tiktok_hashtags": ["fyp"] }]`
+      : `[{ "description": "Title", ${modelDesc ? `"pose_action": "action verb + product (NO appearance words, max 15 words)", "expression": "facial expression (max 6 words)", "camera_framing": "camera angle and framing", "background_setting": "scene background"` : `"image_prompt": "..."`}, ${outputFields}${dialogFields}, "overlay_text": "Short punchy text in Bahasa Melayu (5-8 words) for on-screen display, NO EMOJIS, plain text only", "variation_hook_title": "REQUIRED — Short punchy hook title for THIS specific variation (${hookTitleStyle} format, 3-7 words). THIS CALL examples: '${hookTitleExamples}' — use as style reference only, do NOT copy directly.", "variation_video_caption": "REQUIRED — Catchy video caption in casual Bahasa Melayu for THIS variation (max 100 chars, e.g. 'Tengok sendiri hasilnya lepas 3 hari guna!')", "tiktok_product_name": "Clean short product name (max 30 chars, no special characters, no SKU codes)", "tiktok_description": "REQUIRED — Compelling casual Bahasa Melayu product description with hashtags (max 200 chars)", "tiktok_caption": "REQUIRED — Catchy TikTok caption (${captionStyle} style, max 150 chars, no hashtags). THIS CALL examples: '${captionExamples}' — use as style reference only, do NOT copy directly.", "tiktok_hashtags": ["fyp", "tiktokshop", "relevantTag1", "relevantTag2", "relevantTag3"] }]`} }
+    ${videoFormat === "mini"
+      ? `MINI FORMAT: Use the exact field names from the output schema — they tell you what to write.
+    Scene 1: "dialog_hook" = hook sentence. "dialog_usp1" = product benefit 1 sentence.
+    Scene 2: "dialog_usp2" = product benefit 2 sentence (declarative, no question mark). "dialog_cta" = CTA sentence (Jom/Grab/Order).
+    Each field = ONE sentence, max 10 words. Do not put two sentences in one field.`
+      : `CTA DIALOG OVERRIDE (applies to ALL AC/CTA scenes this call):
     Dialog MUST be 8-22 words. FORBIDDEN: 'Harga Promosi', 'Cek Link'.
     THIS CALL style examples: '${ctaExamples}'
-    Use these as tone/structure reference only — do NOT copy them directly. Generate fresh dialog matching the product and scene context.
+    Use these as tone/structure reference only — do NOT copy them directly. Generate fresh dialog matching the product and scene context.`}
     IMPORTANT: Every variation MUST include "variation_hook_title", "variation_video_caption", and "tiktok_caption" — these are REQUIRED fields, never leave them empty.
     Generate exactly ${variantCount} variations. All string fields must be plain strings (never objects).
   `;
@@ -949,10 +1019,19 @@ All string fields must be plain strings (never objects or arrays).
         `[ai-generate/paired] Sending product image to ${provider} for analysis`,
       );
     }
+    if (modelImageBase64) {
+      console.log(
+        `[ai-generate/paired] Model/avatar image loaded — passed to Flow as reference only, NOT sent to ${provider} for prompt generation`,
+      );
+    }
 
     let rawText: string;
     try {
       const callConfig: AIConfig = { ...aiConfig, temperature: temperature > 0 ? temperature : undefined, responseFormat: "json" };
+      // Only send the product image to the AI — NOT the model/avatar image.
+      // When Gemini sees the avatar image it describes it in image_prompt despite instructions.
+      // Flow receives the avatar reference image directly; Gemini only needs to generate
+      // pose/action/expression/framing — not describe what the model looks like.
       if (productImageBase64) {
         rawText = await generateTextWithImage(systemPrompt, productImageBase64, productImageMime, callConfig);
       } else {
@@ -1008,7 +1087,11 @@ All string fields must be plain strings (never objects or arrays).
 
     const variations = (parsed.variations || []).map(
       (v: Record<string, unknown>, i: number) => {
-        const dialogMy = stringify(v.dialog);
+        const dialogMy = videoFormat === "mini" && includeDialog
+          ? i === 0
+            ? [stringify(v.dialog_hook), stringify(v.dialog_usp1)].filter(Boolean).join(" ")
+            : [stringify(v.dialog_usp2), stringify(v.dialog_cta)].filter(Boolean).join(" ")
+          : stringify(v.dialog);
         const dialogEn = stringify(v.dialog_english);
         const d_my =
           includeDialog && dialogMy ? `\nDialog Malay: "${dialogMy}"` : "";
@@ -1039,9 +1122,27 @@ All string fields must be plain strings (never objects or arrays).
           );
         }
 
+        // Assemble imagePrompt from split fields (when custom avatar is uploaded)
+        // or fall back to direct image_prompt field
+        const assembledImagePrompt = (() => {
+          if (v.pose_action) {
+            const parts = [
+              "From the images uploaded, accurate scale, no alter, no redesign.",
+              stringify(v.pose_action).replace(/\.$/, ""),
+              stringify(v.expression).replace(/\.$/, ""),
+              stringify(v.camera_framing).replace(/\.$/, ""),
+              stringify(v.background_setting).replace(/\.$/, ""),
+            ].filter(Boolean);
+            return parts.join(". ") + ".";
+          }
+          return stringify(v.image_prompt);
+        })();
+
         return {
           description: String(v.description || `Variation ${i + 1}`),
-          imagePrompt: stringify(v.image_prompt),
+          imagePrompt: visualInstruction
+            ? `${assembledImagePrompt} ${visualInstruction}`
+            : assembledImagePrompt,
           videoPrompt: videoContent,
           hookTitle: String(
             v.variation_hook_title || v.hook_title || parsed.hook_title || "",
@@ -1065,7 +1166,7 @@ All string fields must be plain strings (never objects or arrays).
       platform,
       hookTitle: String(parsed.hook_title || ""),
       hookSubtitle: String(parsed.hook_subtitle || ""),
-      ...(isGrokStory
+      ...(isGrokStory || isMiniConsistent
         ? {
             visualDna: String(
               (parsed as Record<string, unknown>).visual_dna || "",
