@@ -971,7 +971,7 @@ All string fields must be plain strings (never objects or arrays).
     ${dialogLogic}
     ${specialInstruction ? `SPECIAL INSTRUCTION (MUST FOLLOW): ${specialInstruction}` : ""}
     ${variationSeed ? `VARIATION SEED (MUST FOLLOW — this determines the creative direction for THIS generation): Focus on a ${variationSeed}. Make the hook, dialog, poses, and overall vibe reflect this angle. DO NOT default to generic content — commit fully to this creative direction.${videoFormat === "mini" ? " NOTE: For mini format, the variation angle applies ONLY to Scene 1's hook and image direction. Scene 2 dialog is fixed: sentence 1 = product benefit, sentence 2 = CTA. Do NOT apply the variation angle to Scene 2 dialog." : ""}` : ""}
-    ${uspHint ? `KEY BENEFITS (MUST WEAVE IN): ${uspHint}. Naturally incorporate these specific benefits into the dialog and scene descriptions across the video — do not list them robotically, make them feel organic and conversational.` : ""}
+    ${uspHint && videoFormat !== "mini" ? `KEY BENEFITS (MUST WEAVE IN): ${uspHint}. Naturally incorporate these specific benefits into the dialog and scene descriptions across the video — do not list them robotically, make them feel organic and conversational.` : ""}
     Task: ${promptStrategy}
 
     CRITICAL RULE — PAIRED IMAGE + VIDEO PROMPTS:
