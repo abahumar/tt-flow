@@ -489,7 +489,7 @@ export async function POST(req: NextRequest) {
                 .filter(Boolean);
               if (lines.length === 0) return {};
               const shuffled = [...lines].sort(() => Math.random() - 0.5);
-              const picked = shuffled.slice(0, Math.min(lines.length >= 3 ? 3 : 2, lines.length));
+              const picked = shuffled.slice(0, lines.length >= 3 ? 3 : lines.length);
               return {
                 uspHint: `Highlight these product benefits across the scenes: ${picked.join("; ")}`,
               };
