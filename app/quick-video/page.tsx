@@ -310,30 +310,37 @@ export default function QuickVideoPage() {
   const handleSaveUsp = async (productId: string) => {
     const text = uspEdits[productId] ?? "";
     setSavingUsp(productId);
-    await fetch(`/api/products/${productId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ miniUsps: text }),
-    });
-    setProducts((prev) =>
-      prev.map((p) => (p.id === productId ? { ...p, miniUsps: text } : p)),
-    );
-    setUspEdits((prev) => ({ ...prev, [productId]: text }));
-    setSavingUsp(null);
+    try {
+      await fetch(`/api/products/${productId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ miniUsps: text }),
+      });
+      setProducts((prev) =>
+        prev.map((p) => (p.id === productId ? { ...p, miniUsps: text } : p)),
+      );
+      setUspEdits((prev) => ({ ...prev, [productId]: text }));
+    } finally {
+      setSavingUsp(null);
+    }
   };
 
   const handleSaveSpecialInstruction = async (productId: string) => {
     const text = specialInstructionEdits[productId] ?? "";
     setSavingSpecialInstruction(productId);
-    await fetch(`/api/products/${productId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ specialInstruction: text }),
-    });
-    setProducts((prev) =>
-      prev.map((p) => (p.id === productId ? { ...p, specialInstruction: text } : p)),
-    );
-    setSavingSpecialInstruction(null);
+    try {
+      await fetch(`/api/products/${productId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ specialInstruction: text }),
+      });
+      setProducts((prev) =>
+        prev.map((p) => (p.id === productId ? { ...p, specialInstruction: text } : p)),
+      );
+      setSpecialInstructionEdits((prev) => ({ ...prev, [productId]: text }));
+    } finally {
+      setSavingSpecialInstruction(null);
+    }
   };
 
   // Sync saved miniUsps from products into uspEdits when products load or change
@@ -1076,7 +1083,7 @@ export default function QuickVideoPage() {
                   </div>
                 </div>
 
-                {/* Mini USP Editor */}
+                {/* Key Benefits / USP List Editor */}
                 <div className="border-t border-gray-100 px-4 py-2.5 space-y-1.5">
                     <div className="flex items-center justify-between">
                       <div>
