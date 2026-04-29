@@ -20,6 +20,7 @@ const DEFAULT_PRESET = {
 };
 
 const FORMAT_SCENES: Record<string, number> = {
+  mini: 2,
   super_short: 3,
   short: 4,
   complete: 5,
@@ -37,6 +38,16 @@ const VARIATION_ANGLES = [
   "comparison — subtle comparison with alternatives showing why this is better",
   "challenge — dare or test-style content, e.g. 'korang berani try tak?'",
   "trending — ride a current TikTok trend format and weave the product in",
+];
+
+// Safe seeds for mini format — excludes curiosity/testimonial/trending/challenge
+// which produce teaser/mystery/first-person content incompatible with Hook→USP1→USP2→CTA structure
+const MINI_VARIATION_ANGLES = [
+  "emotion — focus on pain points, feelings, and emotional transformation",
+  "urgency — create FOMO, scarcity, and 'buy now before it's gone' energy",
+  "before-after — dramatic transformation showing life without vs with the product",
+  "lifestyle — aspirational day-in-my-life content where product fits naturally",
+  "comparison — subtle comparison with alternatives showing why this is better",
 ];
 
 const HOOK_STYLES = ["controversial", "curiosity", "story_based"] as const;
@@ -203,6 +214,7 @@ export async function POST(req: NextRequest) {
     modelImage = "",
     preview = false,
     editedContent,
+    specialInstruction: bodySpecialInstruction = "",
   } = body;
 
   if (!productId) {
@@ -268,6 +280,13 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Resolve product image: custom uploaded takes priority, then scraped catalog URL
+  let productImages: string[] = [];
+  try {
+    productImages = JSON.parse(product.images || "[]");
+  } catch {}
+  const effectiveProductImage = customImage || productImages[0] || "";
+
   // ─── CONFIRM MODE: editedContent provided → skip AI, create job from edited data ───
   if (editedContent) {
     const {
@@ -296,7 +315,7 @@ export async function POST(req: NextRequest) {
         tiktokCaption || "",
         variations,
         referenceImages,
-        customImage,
+        effectiveProductImage,
       );
 
       const jobData = await jobRes.json();
@@ -408,11 +427,11 @@ export async function POST(req: NextRequest) {
       matrixPhase = next.phase;
     } else {
       // All combos exhausted — fallback to random
-      variationSeed = pickRandom(VARIATION_ANGLES);
+      variationSeed = pickRandom(preset.format === "mini" ? MINI_VARIATION_ANGLES : VARIATION_ANGLES);
       hookStyleOverride = pickRandom(HOOK_STYLES);
     }
   } else {
-    variationSeed = pickRandom(VARIATION_ANGLES);
+    variationSeed = pickRandom(preset.format === "mini" ? MINI_VARIATION_ANGLES : VARIATION_ANGLES);
     hookStyleOverride = pickRandom(HOOK_STYLES);
   }
 
@@ -445,7 +464,49 @@ export async function POST(req: NextRequest) {
         // Quick Video variation params
         variationSeed,
         hookStyleOverride,
-        temperature: preset.temperature ?? 1.5,
+        temperature: preset.format === "mini" ? 0.7 : (preset.temperature ?? 1.5),
+        // Mini format USPs — parse list, pick 2 randomly as strict schema fields
+        ...(preset.format === "mini" && product.miniUsps
+          ? (() => {
+              const lines = product.miniUsps
+                .split("\n")
+                .map((l: string) => l.trim())
+                .filter(Boolean);
+              if (lines.length >= 2) {
+                const shuffled = [...lines].sort(() => Math.random() - 0.5);
+                return { miniUsp1: shuffled[0], miniUsp2: shuffled[1] };
+              }
+              if (lines.length === 1) return { miniUsp1: lines[0], miniUsp2: "" };
+              return {};
+            })()
+          : {}),
+        // Non-mini format USPs — inject as soft context hint
+        ...(preset.format !== "mini" && product.miniUsps
+          ? (() => {
+              const lines = product.miniUsps
+                .split("\n")
+                .map((l: string) => l.trim())
+                .filter(Boolean);
+              if (lines.length === 0) return {};
+              const shuffled = [...lines].sort(() => Math.random() - 0.5);
+              const picked = shuffled.slice(0, Math.min(lines.length >= 3 ? 3 : 2, lines.length));
+              return {
+                uspHint: `Highlight these product benefits across the scenes: ${picked.join("; ")}`,
+              };
+            })()
+          : {}),
+        // Mini-format dialog schema instruction (prompt-only, never appended to image_prompt)
+        ...(preset.format === "mini"
+          ? {
+              specialInstruction:
+                "Follow the output schema field names — they define the content. " +
+                "dialog_hook = audience pain-point hook sentence. dialog_usp1 = specific product benefit 1 sentence. " +
+                "dialog_usp2 = specific product benefit 2 sentence (declarative, no question mark). dialog_cta = CTA sentence (Jom/Grab/Order now). " +
+                "Each field = ONE sentence, max 10 words.",
+            }
+          : {}),
+        // User visual instruction — appended verbatim to every image_prompt
+        ...(bodySpecialInstruction ? { visualInstruction: bodySpecialInstruction } : {}),
       }),
     });
 
@@ -504,7 +565,7 @@ export async function POST(req: NextRequest) {
       variations[0]?.tiktokCaption || "",
       variations,
       referenceImages,
-      customImage,
+      effectiveProductImage,
     );
 
     const jobData = await jobRes.json();
