@@ -33,6 +33,8 @@ interface Product {
   usp: string;
   targetAudience: string;
   avatarId: string;
+  miniUsps: string;
+  specialInstruction: string;
 }
 
 interface QuickResult {
@@ -158,12 +160,14 @@ const GENRES: Record<string, string> = {
 };
 
 const FORMATS: Record<string, string> = {
+  mini: "🔥 Mini (8s+8s) — 2 scenes",
   super_short: "⚡ Super Short (8s) — 3 scenes",
   short: "🎬 Short (20s) — 4 scenes",
   complete: "🎥 Complete (40s) — 5 scenes",
 };
 
 const FORMAT_SCENES: Record<string, number> = {
+  mini: 2,
   super_short: 3,
   short: 4,
   complete: 5,
@@ -203,6 +207,12 @@ export default function QuickVideoPage() {
 
   // Avatar images from Settings
   const [avatarImages, setAvatarImages] = useState<Record<string, string>>({});
+
+  // Mini USP editor state per product
+  const [uspEdits, setUspEdits] = useState<Record<string, string>>({});
+  const [savingUsp, setSavingUsp] = useState<string | null>(null);
+  const [specialInstructionEdits, setSpecialInstructionEdits] = useState<Record<string, string>>({});
+  const [savingSpecialInstruction, setSavingSpecialInstruction] = useState<string | null>(null);
 
   const uploadFile = async (file: File): Promise<string> => {
     const formData = new FormData();
@@ -277,6 +287,15 @@ export default function QuickVideoPage() {
     const prods = await res.json();
     setProducts(prods);
     setLoading(false);
+    // Seed USP and special instruction edit state from saved product values
+    const initialUsps: Record<string, string> = {};
+    const initialInstructions: Record<string, string> = {};
+    for (const p of prods) {
+      initialUsps[p.id] = p.miniUsps || "";
+      initialInstructions[p.id] = p.specialInstruction || "";
+    }
+    setUspEdits(initialUsps);
+    setSpecialInstructionEdits(initialInstructions);
     // Load matrices for all products
     for (const p of prods) {
       fetch(`/api/products/${p.id}/matrix`)
@@ -287,6 +306,50 @@ export default function QuickVideoPage() {
         .catch(() => {});
     }
   }, []);
+
+  const handleSaveUsp = async (productId: string) => {
+    const text = uspEdits[productId] ?? "";
+    setSavingUsp(productId);
+    await fetch(`/api/products/${productId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ miniUsps: text }),
+    });
+    setProducts((prev) =>
+      prev.map((p) => (p.id === productId ? { ...p, miniUsps: text } : p)),
+    );
+    setUspEdits((prev) => ({ ...prev, [productId]: text }));
+    setSavingUsp(null);
+  };
+
+  const handleSaveSpecialInstruction = async (productId: string) => {
+    const text = specialInstructionEdits[productId] ?? "";
+    setSavingSpecialInstruction(productId);
+    await fetch(`/api/products/${productId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ specialInstruction: text }),
+    });
+    setProducts((prev) =>
+      prev.map((p) => (p.id === productId ? { ...p, specialInstruction: text } : p)),
+    );
+    setSavingSpecialInstruction(null);
+  };
+
+  // Sync saved miniUsps from products into uspEdits when products load or change
+  useEffect(() => {
+    setUspEdits((prev) => {
+      const updated = { ...prev };
+      let changed = false;
+      for (const p of products) {
+        if (p.miniUsps && !updated[p.id]) {
+          updated[p.id] = p.miniUsps;
+          changed = true;
+        }
+      }
+      return changed ? updated : prev;
+    });
+  }, [products]);
 
   const handleGenerateMatrix = async (
     productId: string,
@@ -388,6 +451,7 @@ export default function QuickVideoPage() {
           customImage: customImages[productId]?.filename || "",
           modelImage: modelFilename || "",
           preview: true,
+          specialInstruction: specialInstructionEdits[productId]?.trim() || undefined,
         }),
       });
       const data = await res.json();
@@ -1012,6 +1076,82 @@ export default function QuickVideoPage() {
                   </div>
                 </div>
 
+                {/* Mini USP Editor */}
+                <div className="border-t border-gray-100 px-4 py-2.5 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] font-semibold text-orange-600">
+                          🔥 Key Benefits / USP List
+                        </span>
+                        <span className="ml-1.5 text-[9px] text-gray-400">one per line — AI picks 2–3 to highlight</span>
+                      </div>
+                      <button
+                        onClick={() => handleSaveUsp(p.id)}
+                        disabled={savingUsp === p.id}
+                        className="flex items-center gap-1 rounded bg-orange-500 px-2 py-0.5 text-[9px] font-semibold text-white hover:bg-orange-600 disabled:opacity-50"
+                      >
+                        {savingUsp === p.id ? (
+                          <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                        ) : (
+                          <Check className="h-2.5 w-2.5" />
+                        )}
+                        {savingUsp === p.id ? "Saving..." : "Save"}
+                      </button>
+                    </div>
+                    <textarea
+                      value={uspEdits[p.id] ?? ""}
+                      onChange={(e) =>
+                        setUspEdits((prev) => ({ ...prev, [p.id]: e.target.value }))
+                      }
+                      rows={4}
+                      placeholder={"Tulis setiap USP/Benefit dalam satu baris\nContoh: Tekstur ringan, cepat serap\nContoh: Selamat untuk kulit sensitif\nContoh: Kesan nampak dalam 3 hari"}
+                      className="w-full rounded border border-gray-200 px-2 py-1.5 text-[11px] leading-relaxed focus:border-orange-300 focus:outline-none resize-none"
+                    />
+                    {p.miniUsps && (
+                      <p className="text-[9px] text-green-600">
+                        ✓ {p.miniUsps.split("\n").filter((l) => l.trim()).length} benefits saved — AI picks 2–3 per generation
+                      </p>
+                    )}
+                  </div>
+
+                {/* Special Instruction (per product) */}
+                <div className="border-t border-gray-100 px-4 py-2.5 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-semibold text-purple-600">
+                        Special Instruction
+                      </span>
+                      <span className="ml-1.5 text-[9px] text-gray-400">AI will follow this for every generation</span>
+                    </div>
+                    <button
+                      onClick={() => handleSaveSpecialInstruction(p.id)}
+                      disabled={savingSpecialInstruction === p.id}
+                      className="flex items-center gap-1 rounded bg-purple-500 px-2 py-0.5 text-[9px] font-semibold text-white hover:bg-purple-600 disabled:opacity-50"
+                    >
+                      {savingSpecialInstruction === p.id ? (
+                        <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                      ) : (
+                        <Check className="h-2.5 w-2.5" />
+                      )}
+                      {savingSpecialInstruction === p.id ? "Saving..." : "Save"}
+                    </button>
+                  </div>
+                  <textarea
+                    value={specialInstructionEdits[p.id] ?? ""}
+                    onChange={(e) =>
+                      setSpecialInstructionEdits((prev) => ({ ...prev, [p.id]: e.target.value }))
+                    }
+                    rows={2}
+                    placeholder="e.g. Do not tuck in the shirt. Model must face left."
+                    className="w-full rounded border border-gray-200 px-2 py-1.5 text-[11px] leading-relaxed placeholder-gray-400 focus:border-purple-300 focus:outline-none resize-none"
+                  />
+                  {p.specialInstruction && (
+                    <p className="text-[9px] text-green-600">
+                      ✓ Instruction saved
+                    </p>
+                  )}
+                </div>
+
                 {/* Preview Edit Panel */}
                 {previews[p.id] && !result && (
                   <div className="space-y-2.5 border-t border-blue-200 bg-blue-50 px-4 py-3">
@@ -1070,38 +1210,76 @@ export default function QuickVideoPage() {
                       />
                     </div>
 
-                    {/* Overlay Texts per Scene */}
-                    <div>
-                      <label className="mb-0.5 block text-[10px] font-medium text-blue-600">
-                        Scene Captions
+                    {/* Per-Scene Editor */}
+                    <div className="space-y-2">
+                      <label className="block text-[10px] font-medium text-blue-600">
+                        Scenes ({previews[p.id].variations?.length ?? 0})
                       </label>
-                      {previews[p.id].variations.map((v, i) => (
-                        <div key={i} className="mt-1 flex items-center gap-1.5">
-                          <span className="w-4 shrink-0 text-[9px] font-bold text-blue-400">
-                            {i + 1}
+                      {(previews[p.id].variations ?? []).length === 0 && (
+                        <p className="text-[10px] text-gray-400 italic">No scenes generated.</p>
+                      )}
+                      {(previews[p.id].variations ?? []).map((v, i) => (
+                        <div
+                          key={i}
+                          className="rounded-lg border border-blue-200 bg-white p-2.5 space-y-1.5"
+                        >
+                          <span className="text-[9px] font-bold uppercase tracking-wider text-blue-500">
+                            Scene {i + 1}
                           </span>
-                          <input
-                            type="text"
-                            value={v.overlayText || ""}
-                            onChange={(e) => {
-                              const newVariations = [
-                                ...previews[p.id].variations,
-                              ];
-                              newVariations[i] = {
-                                ...newVariations[i],
-                                overlayText: e.target.value,
-                              };
-                              setPreviews((prev) => ({
-                                ...prev,
-                                [p.id]: {
-                                  ...prev[p.id],
-                                  variations: newVariations,
-                                },
-                              }));
-                            }}
-                            placeholder={`Scene ${i + 1} overlay`}
-                            className="flex-1 rounded border border-blue-100 bg-white px-2 py-1 text-[11px] focus:border-blue-300 focus:outline-none"
-                          />
+
+                          {/* Overlay */}
+                          <div>
+                            <label className="mb-0.5 block text-[9px] font-medium text-gray-500">
+                              Caption Overlay
+                            </label>
+                            <input
+                              type="text"
+                              value={v.overlayText || ""}
+                              onChange={(e) => {
+                                const next = [...(previews[p.id].variations ?? [])];
+                                next[i] = { ...next[i], overlayText: e.target.value };
+                                setPreviews((prev) => ({ ...prev, [p.id]: { ...prev[p.id], variations: next } }));
+                              }}
+                              placeholder="On-screen caption"
+                              className="w-full rounded border border-gray-200 px-2 py-1 text-[11px] focus:border-blue-300 focus:outline-none"
+                            />
+                          </div>
+
+                          {/* Image Prompt */}
+                          <div>
+                            <label className="mb-0.5 block text-[9px] font-medium text-gray-500">
+                              Image Prompt
+                            </label>
+                            <textarea
+                              value={v.imagePrompt || ""}
+                              onChange={(e) => {
+                                const next = [...(previews[p.id].variations ?? [])];
+                                next[i] = { ...next[i], imagePrompt: e.target.value };
+                                setPreviews((prev) => ({ ...prev, [p.id]: { ...prev[p.id], variations: next } }));
+                              }}
+                              rows={3}
+                              placeholder="Image generation prompt"
+                              className="w-full rounded border border-gray-200 px-2 py-1 text-[11px] leading-relaxed focus:border-blue-300 focus:outline-none"
+                            />
+                          </div>
+
+                          {/* Video Prompt */}
+                          <div>
+                            <label className="mb-0.5 block text-[9px] font-medium text-gray-500">
+                              Video Prompt
+                            </label>
+                            <textarea
+                              value={v.videoPrompt || ""}
+                              onChange={(e) => {
+                                const next = [...(previews[p.id].variations ?? [])];
+                                next[i] = { ...next[i], videoPrompt: e.target.value };
+                                setPreviews((prev) => ({ ...prev, [p.id]: { ...prev[p.id], variations: next } }));
+                              }}
+                              rows={2}
+                              placeholder="Motion description"
+                              className="w-full rounded border border-gray-200 px-2 py-1 text-[11px] leading-relaxed focus:border-blue-300 focus:outline-none"
+                            />
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1124,7 +1302,7 @@ export default function QuickVideoPage() {
                       ) : (
                         <Check className="h-3.5 w-3.5" />
                       )}
-                      {confirming === p.id ? "Queuing..." : "Confirm & Queue"}
+                      {confirming === p.id ? "Queuing..." : "Queue Video"}
                     </button>
                   </div>
                 )}
