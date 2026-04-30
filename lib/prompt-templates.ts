@@ -197,6 +197,7 @@ export interface FormulaElement {
   purpose: string;
   visualDirection: string;
   dialogDirection: string;
+  videoPromptDirection?: string;
 }
 
 const SEEIUWTOA_ELEMENTS: FormulaElement[] = [
@@ -264,7 +265,7 @@ const SEEIUWTOA_ELEMENTS: FormulaElement[] = [
     visualDirection:
       "Model shows confident, trustworthy expression. Can gesture as if sharing proof or testimonial.",
     dialogDirection:
-      "Assert product credibility with promoter confidence — speak TO the audience. 8-22 words. 'Ribuan customer dah buktikan, confirm berkesan!', 'Dah terbukti, korang pun boleh rasa hasilnya!'",
+      "Assert product credibility with promoter confidence — speak TO the audience. 8-22 words. 'Ribuan customer dah buktikan, memang berkesan!', 'Dah terbukti, korang pun boleh rasa hasilnya!'",
   },
   {
     code: "OF",
@@ -282,11 +283,52 @@ const SEEIUWTOA_ELEMENTS: FormulaElement[] = [
     visualDirection:
       "Model presents product directly to camera. Big warm smile, inviting expression. Product very prominent.",
     dialogDirection:
-      "CTA closing line. MUST be 8-22 words. FORBIDDEN phrases: 'Harga Promosi', 'Cek Link'. Examples: 'Jom grab sekarang, korang memang tak akan menyesal percaya cakap aku!', 'Serious best gila, cepat grab sebelum habis stok tau!', 'Mesti try ni, confirm korang suka lepas guna!'. Must feel natural and complete.",
+      "CTA closing line. MUST be 8-22 words. FORBIDDEN phrases: 'Harga Promosi', 'Cek Link'. Examples: 'Jom grab sekarang, korang memang tak akan menyesal percaya cakap aku!', 'Serious best gila, cepat grab sebelum habis stok tau!', 'Mesti try ni, memang korang suka lepas guna!'. Must feel natural and complete.",
   },
 ];
 
 export const VIDEO_FORMATS = {
+  mini: {
+    id: "mini",
+    name: "🔥 Mini (8s+8s)",
+    duration: "16s",
+    description: "[Hook → USP 1] + [USP 2 → CTA]",
+    suggestedScenes: 2,
+    elements: [
+      {
+        code: "HOOK_USP1",
+        name: "Hook + USP 1",
+        purpose: "SCENE 1 ONLY — 8s clip. Beat 1 (0-4s): Hook. Beat 2 (4-8s): USP/Benefit 1. THIS IS NOT SCENE 2.",
+        visualDirection:
+          "SCENE 1 IMAGE: Hook frame. Model shows a relatable emotional reaction — worried, frustrated, or curious expression. " +
+          "If the product naturally fits the hook (e.g. model already holding it while looking concerned), include it. " +
+          "If the hook is stronger without the product (problem-first), leave hands empty. " +
+          "Either way: close-up chest-up framing. When product IS included, it must match the uploaded reference image exactly — same packaging, label, colors, shape.",
+        dialogDirection:
+          "SCENE 1: Output two separate fields. " +
+          "dialog_1 = Hook: one sentence, audience pain point, speak to 'korang', max 10 words. " +
+          "dialog_2 = USP Benefit 1: one sentence, what the product specifically does, max 10 words. " +
+          "OVERLAY TEXT: 3-4 word hook ending with '?' — e.g. 'Pokok Tak Naik?'",
+        videoPromptDirection:
+          "Animate only what is already visible in the starting image — if product is in hand, a gentle lift or slow turn toward camera; if no product, an emotional shift from worried to knowing smile. NEVER introduce or materialize any object not already present in the image. Subtle natural sway, static chest-up framing.",
+      },
+      {
+        code: "USP2_AC",
+        name: "USP 2 + CTA",
+        purpose: "SCENE 2 ONLY — 8s clip. Beat 1 (0-4s): USP/Benefit 2. Beat 2 (4-8s): Call to Action. THIS IS NOT SCENE 1.",
+        visualDirection:
+          "SCENE 2 IMAGE: Model holding the product from the uploaded reference image prominently — same packaging, label, colors, shape as the reference. " +
+          "Model points confidently at product or demonstrates a specific feature. Engaged, enthusiastic expression. Medium-to-close chest-up shot, product very prominent.",
+        dialogDirection:
+          "SCENE 2: Output two separate fields. " +
+          "dialog_1 = USP Benefit 2: one sentence, a specific product benefit different from Scene 1, no question mark, max 10 words. " +
+          "dialog_2 = CTA: one sentence, tell audience to buy/grab/order now, max 10 words. " +
+          "OVERLAY TEXT: 2-3 word CTA — e.g. 'Grab Sekarang!'",
+        videoPromptDirection:
+          "Model holds product steady and points at its label or key feature with enthusiasm, then smoothly brings product beside face ending with a warm direct smile at camera. No raising motion. Static chest-up framing throughout.",
+      },
+    ] as FormulaElement[],
+  },
   super_short: {
     id: "super_short",
     name: "⚡ Super Short (8s)",
@@ -392,6 +434,9 @@ export type VideoFormatId = keyof typeof VIDEO_FORMATS;
 
 // Scene groupings: how elements map to scenes for each format + scene count
 const FORMAT_SCENE_MAPPINGS: Record<string, string[][]> = {
+  // Mini: always 2 scenes (each 8s with 2 beats)
+  mini_2: [["HOOK_USP1"], ["USP2_AC"]],
+
   // Super Short: always 3 scenes, 1:1
   super_short_3: [["HOOK"], ["USP"], ["AC"]],
 
@@ -439,6 +484,7 @@ export interface SceneInstruction {
   elements: FormulaElement[];
   visualDirection: string;
   dialogDirection: string;
+  videoPromptDirection?: string;
 }
 
 export function getFormatSceneInstructions(
@@ -480,6 +526,12 @@ function buildSceneInstructions(
     const dialogDirection = matchedElements
       .map((e) => e.dialogDirection)
       .join(" ");
+    const videoPromptParts = matchedElements
+      .map((e) => e.videoPromptDirection)
+      .filter((v): v is string => !!v);
+    const videoPromptDirection = videoPromptParts.length > 0
+      ? videoPromptParts.join(" ")
+      : undefined;
 
     return {
       sceneNumber: i + 1,
@@ -487,6 +539,7 @@ function buildSceneInstructions(
       elements: matchedElements,
       visualDirection,
       dialogDirection,
+      videoPromptDirection,
     };
   });
 }
@@ -541,7 +594,7 @@ export const DIALOG_TONE_SANTAI = `
 DIALOG TONE — GAYA PROMOTER (KUALA LUMPUR SLANG):
 - Write in natural KL (Kuala Lumpur) conversational Bahasa Melayu. Santai, confident, gaya promoter yang enthusiastic.
 - JANGAN guna bahasa skema/baku. Tulis macam promoter KL yang excited promote produk.
-- WAJIB guna slang KL — contoh: "wei", "lah", "kan", "gila", "memang", "confirm", "serious ah", "best gila", "power", "fuh", "perghhh", "siot", "dah lah", "takkan", "mesti try".
+- WAJIB guna slang KL — contoh: "wei", "lah", "kan", "gila", "memang", "serious ah", "best gila", "power", "fuh", "perghhh", "siot", "dah lah", "takkan", "mesti try".
 - JANGAN guna slang Indonesia — DILARANG pakai: "banget", "dong", "nih", "sih", "gue/gw", "lu", "emang", "udah", "nggak", "tuh", "deh", "yuk", "kuy", "mager", "baper", "kepo". Ini content untuk audience Malaysia, BUKAN Indonesia.
 - Use sapaan yang sesuai: "korang", "sis", "babe", "bestie", "bro", "wei" — tapi JANGAN guna "Wei korang" sebagai pembukaan dialog.
 - Use emoji sparingly to add emotion: 😩 😍 🔥 ✅ 💪
@@ -553,14 +606,14 @@ DIALOG TONE — GAYA PROMOTER (KUALA LUMPUR SLANG):
 ANTI-TESTIMONY (CRITICAL — DILARANG KERAS):
 - DILARANG guna ayat testimony/pengalaman peribadi seperti: "Sejak [nama] guna...", "Lepas [nama] pakai...", "Dulu [nama] ada masalah...", "[nama] dah cuba, memang...", "Bila [nama] mula guna..."
 - DILARANG struktur: "[avatar] + verb pengalaman + produk + hasil peribadi". Contoh DILARANG: "Sejak pakcik guna ni, pokok pakcik subur." / "Lepas mama pakai, kulit mama glowing."
-- GANTIKAN dengan promoter structure: Cakap benefit KEPADA audience. Contoh BETUL: "Korang nak pokok subur? Grab ni sekarang, confirm berkesan!" / "Kulit korang confirm glowing lepas guna ni!"
+- GANTIKAN dengan promoter structure: Cakap benefit KEPADA audience. Contoh BETUL: "Korang nak pokok subur? Grab ni sekarang, memang berkesan!" / "Kulit korang memang glowing lepas guna ni!"
 
 KATA GANTI DIRI (CRITICAL — WAJIB IKUT):
 - DILARANG guna "aku" sebagai kata ganti diri. "Aku" kedengaran kasar dan tidak sesuai untuk content selling.
-- UTAMAKAN guna "korang" bila refer kepada audience — ini gaya promoter. Contoh: "Korang kena try ni!", "Ini untuk korang yang nak...", "Korang confirm suka!"
+- UTAMAKAN guna "korang" bila refer kepada audience — ini gaya promoter. Contoh: "Korang kena try ni!", "Ini untuk korang yang nak...", "Korang memang suka ni!"
 - Guna "saya" bila perlu refer diri sendiri. Contoh: "Saya nak tunjukkan korang...", "Saya dah test, memang power!"
-- "Saya" masih boleh digabung dengan slang KL — contoh: "Saya serious cakap lah...", "Saya confirm recommend ni."
-- Untuk avatar Makcik/Pakcik, guna kata ganti diri "acik" atau "makcik"/"pakcik". Contoh: "Acik nak recommend ni tau...", "Makcik memang suggest korang cuba...", "Pakcik confirm produk ni best."
+- "Saya" masih boleh digabung dengan slang KL — contoh: "Saya serious cakap lah...", "Saya memang recommend ni."
+- Untuk avatar Makcik/Pakcik, guna kata ganti diri "acik" atau "makcik"/"pakcik". Contoh: "Acik nak recommend ni tau...", "Makcik memang suggest korang cuba...", "Pakcik memang sokong produk ni."
 - JANGAN sesekali guna "aku", "gue", "gw" — ini DILARANG sepenuhnya.
 
 VARIASI PEMBUKAAN SCENE 1 (HOOK):
@@ -673,7 +726,7 @@ export const HOOK_TITLE_POOL = [
   "Korang Mesti Try Ni!",
   "Serious Best Gila Ni!",
   "Ini Lah Yang Korang Nak!",
-  "Confirm Korang Suka!",
+  "Memang Korang Suka Ni!",
   "Memang Berbaloi Weh!",
   "Korang Kena Cuba Ni!",
   "Produk Ni Memang Gempak!",
@@ -683,7 +736,7 @@ export const HOOK_TITLE_POOL = [
   "1 Produk 5 Manfaat!",
   "2 Minggu Dah Nampak!",
   "Dah 10K Orang Cuba!",
-  "5 Star Confirm!",
+  "5 Star Memang Power!",
   // urgency
   "Last Stok Alert!",
   "Grab Sebelum Habis!",
@@ -717,20 +770,20 @@ export const DIALOG_CTA_POOL = [
   "Kalau korang nak hasil terbaik, grab ni sekarang jugak!",
   "Power gila produk ni, korang kena try sendiri baru tahu!",
   "Ni peluang korang, jangan lepas, grab selagi ada stok!",
-  "Saya recommend ni, korang cuba dulu confirm korang suka!",
+  "Saya recommend ni, korang cuba dulu memang korang suka!",
   "Korang rugi kalau tak try, serious best gila produk ni!",
   "Fuh memang power, korang kena ada ni dalam hidup korang!",
   "Tak perlu fikir panjang, grab je dulu tau!",
   "Memang worth it, korang grab sekarang sebelum stock habis!",
   "Korang yang tengah tengok ni, ni sign untuk korang grab!",
   "Last chance ni, korang grab sebelum menyesal nanti tau!",
-  "Serious tak rugi pun, grab sekarang confirm korang happy!",
+  "Serious tak rugi pun, grab sekarang korang memang happy!",
   "Kalau korang nak upgrade, start dengan produk ni sekarang!",
-  "Jom sama-sama try, memang confirm korang tak akan kecewa!",
+  "Jom sama-sama try, memang korang tak akan kecewa!",
   "Korang kena ada ni, grab sekarang jangan lepas peluang!",
   "Best gila, korang grab cepat sebelum habis stok tau!",
   "Ni untuk korang yang nak yang terbaik, grab sekarang!",
-  "Korang tengok dulu, pastu confirm terus nak grab jugak!",
+  "Korang tengok dulu, pastu terus nak grab jugak!",
 ] as const;
 
 export const TIKTOK_CAPTION_POOL = [
@@ -753,7 +806,7 @@ export const TIKTOK_CAPTION_POOL = [
   "Korang tengah tengok sign untuk grab ni sekarang!",
   "Kalau rasa nak upgrade hidup korang, start dengan ni!",
   "Fuh perghhh, korang kena tengok ni sampai habis!",
-  "Tak percaya? Cuba dulu, korang confirm nak lagi!",
+  "Tak percaya? Cuba dulu, korang mesti nak lagi!",
 ] as const;
 
 export const HOOK_TITLE_STYLES = [

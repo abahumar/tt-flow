@@ -17,7 +17,9 @@ model Product {
   shopName       String     @default("")
   usp            String     @default("") // Unique Selling Proposition — key benefits/features
   targetAudience String     @default("") // Target audience description
-  avatarId       String     @default("") // avatar for Quick Video (e.g. woman_malay_hijab)
+  miniUsps            String     @default("") // Mini format — USP list, one per line; 2 picked randomly per generation
+  avatarId            String     @default("") // avatar for Quick Video (e.g. woman_malay_hijab)
+  specialInstruction  String     @default("") // Per-product AI instruction (e.g. "do not tuck in the shirt")
   videoReady     Boolean    @default(false) // marked for video creation
   scrapedAt      DateTime   @default(now())
   createdAt      DateTime   @default(now())

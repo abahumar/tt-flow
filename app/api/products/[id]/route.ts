@@ -17,6 +17,8 @@ export async function PATCH(
   if (body.description !== undefined)
     data.description = String(body.description);
   if (body.avatarId !== undefined) data.avatarId = String(body.avatarId);
+  if (body.miniUsps !== undefined) data.miniUsps = String(body.miniUsps);
+  if (body.specialInstruction !== undefined) data.specialInstruction = String(body.specialInstruction);
 
   const product = await prisma.product.update({
     where: { id },

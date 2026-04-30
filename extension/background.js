@@ -2855,7 +2855,11 @@ async function processImageGeneration(job) {
   let customProductImageDataUrl = null;
   if (job.referenceImage) {
     try {
-      const imgRes = await fetch(`${API_BASE}/upload/${job.referenceImage}`);
+      // Handle both local filenames (/api/upload/[name]) and external URLs (http/https)
+      const imgUrl = job.referenceImage.startsWith("http")
+        ? job.referenceImage
+        : `${API_BASE}/upload/${job.referenceImage}`;
+      const imgRes = await fetch(imgUrl);
       if (imgRes.ok) {
         const blob = await imgRes.blob();
         customProductImageDataUrl = await new Promise((resolve) => {
@@ -3194,7 +3198,11 @@ async function processMultiSceneJob(job, scenePrompts) {
   let customProductImageDataUrl = null;
   if (job.referenceImage) {
     try {
-      const imgRes = await fetch(`${API_BASE}/upload/${job.referenceImage}`);
+      // Handle both local filenames (/api/upload/[name]) and external URLs (http/https)
+      const imgUrl = job.referenceImage.startsWith("http")
+        ? job.referenceImage
+        : `${API_BASE}/upload/${job.referenceImage}`;
+      const imgRes = await fetch(imgUrl);
       if (imgRes.ok) {
         const blob = await imgRes.blob();
         customProductImageDataUrl = await new Promise((resolve) => {
