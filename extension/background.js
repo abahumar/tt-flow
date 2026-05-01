@@ -207,9 +207,13 @@ async function checkJobTimeouts() {
         if (elapsed > timeout) {
           // Skip if this job is currently being actively processed
           // (it might be about to complete — avoid race with completion handler)
-          if (processingJobId === job.id) {
+          const activeJobIds = new Set();
+          for (const [, s] of activeSlots) {
+            if (s.jobId) activeJobIds.add(s.jobId);
+          }
+          if (activeJobIds.has(job.id)) {
             console.log(
-              `[TikTok Flow] Job ${job.id} exceeded timeout but is actively processing — skipping timeout (will check next cycle)`,
+              `[TikTok Flow] Job ${job.id} exceeded timeout but is actively processing in a slot — skipping timeout`,
             );
             continue;
           }
@@ -1966,6 +1970,24 @@ const contentScriptActiveJobs = new Set();
 // Only one image-only job at a time (sequential gating)
 let isProcessingImageOnly = false;
 
+// Posting mutex — only one job posts at a time (shares TikTok Studio/Shop tabs)
+let isPosting = false;
+
+async function acquirePostingLock(reason) {
+  if (isPosting) {
+    console.log(`[TikTok Flow] Posting lock denied (${reason}): already posting`);
+    return false;
+  }
+  isPosting = true;
+  console.log(`[TikTok Flow] Posting lock acquired: ${reason}`);
+  return true;
+}
+
+function releasePostingLock() {
+  isPosting = false;
+  console.log(`[TikTok Flow] Posting lock released`);
+}
+
 // Get tab IDs owned by all slots except the given one.
 // Used so a new slot opens its own dedicated tab instead of stealing another slot's tab.
 function getOtherSlotTabIds(mySlotId) {
@@ -2093,8 +2115,11 @@ try {
   chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === "keepAlive") {
       // This fires every ~24 seconds to prevent service worker termination
-      if (autoModeEnabled && !isPaused && !isProcessingJob) {
-        processNextJob();
+      if (autoModeEnabled && !isPaused) {
+        const availableSlots = MAX_CONCURRENT_JOBS - activeSlots.size;
+        for (let i = 0; i < availableSlots; i++) {
+          processNextJob();
+        }
       }
       // Check for timed-out jobs every alarm cycle
       checkJobTimeouts();
@@ -2136,7 +2161,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "DISABLE_AUTO_MODE") {
     autoModeEnabled = false;
     currentCustomPromptId = null;
-    forceReleaseProcessingLock("disable-auto-mode");
+    forceReleaseAllSlots("disable-auto-mode");
+    isProcessingImageOnly = false;
+    isPosting = false;
     chrome.storage.local.set({ autoModeEnabled: false, customPromptId: null });
     console.log("[TikTok Flow] Auto mode DISABLED (lock force-released)");
     sendResponse({ autoMode: false });
@@ -2154,13 +2181,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({
       autoMode: autoModeEnabled,
       paused: isPaused,
-      processing: isProcessingJob,
+      processing: activeSlots.size > 0,
+      activeSlots: activeSlots.size,
+      maxSlots: MAX_CONCURRENT_JOBS,
     });
     return true;
   }
   if (message.type === "JOB_PHASE_COMPLETE") {
-    // Content script notifies us when a phase finishes.
-    // This wakes the service worker and immediately continues processing.
     const { jobId, phase, nextStatus } = message.payload || {};
     console.log(
       "[TikTok Flow] JOB_PHASE_COMPLETE: job",
@@ -2170,55 +2197,35 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       "next",
       nextStatus,
     );
-    // Clear from content-script-active tracking (channel-closed recovery)
     contentScriptActiveJobs.delete(jobId);
-    // If lock is held (e.g. by processNextJob which triggered this phase),
-    // the phase is already being handled inline. But if the lock holder is
-    // processing THIS job, it means the content script is notifying us of
-    // completion while we're already awaiting it — handled inline.
-    // If lock is NOT held (e.g. SW restarted), pick it up immediately.
-    if (isProcessingJob) {
-      // Queue it — will be picked up when lock is released
-      if (processingJobId === jobId) {
-        console.log(
-          `[TikTok Flow] Phase complete for current job ${jobId} — handled inline`,
-        );
-      } else {
-        console.log(
-          `[TikTok Flow] Phase complete queued (lock busy with ${processingJobId})`,
-        );
-        pendingPhaseComplete = { jobId, nextStatus };
-      }
-    } else {
-      handlePhaseCompleteWithLock(jobId, nextStatus);
+
+    // Check if this job is owned by an active slot
+    const ownerSlotId = findSlotByJobId(jobId);
+    if (ownerSlotId) {
+      console.log(
+        `[TikTok Flow] Phase complete for slot ${ownerSlotId}'s job ${jobId} — handled inline`,
+      );
     }
+
+    // If no active slot is processing this job, pick it up fresh
+    if (!ownerSlotId && activeSlots.size < MAX_CONCURRENT_JOBS) {
+      handlePhaseCompleteWithSlot(jobId, nextStatus);
+    } else if (!ownerSlotId) {
+      console.log(
+        `[TikTok Flow] Phase complete queued (${activeSlots.size}/${MAX_CONCURRENT_JOBS} slots busy)`,
+      );
+      pendingPhaseCompleteQueue.push({ jobId, nextStatus });
+    }
+    // If ownerSlotId exists, the slot is already handling this job inline
+
     sendResponse({ ok: true });
     return true;
   }
 });
 
-// Wrapper that acquires lock before handling phase completion
-function handlePhaseCompleteWithLock(jobId, nextStatus) {
-  const lockId = acquireProcessingLock("phase-complete");
-  if (!lockId) {
-    console.warn(
-      "[TikTok Flow] Could not acquire lock for phase-complete, queuing",
-    );
-    pendingPhaseComplete = { jobId, nextStatus };
-    return;
-  }
-  processingJobId = jobId;
-  handlePhaseComplete(jobId, nextStatus)
-    .catch((err) =>
-      console.error("[TikTok Flow] Phase complete handler error:", err),
-    )
-    .finally(() => {
-      releaseProcessingLock(lockId);
-    });
-}
 
 // Handle phase completion — fetch the job and continue to next step
-async function handlePhaseComplete(jobId, nextStatus) {
+async function handlePhaseComplete(jobId, nextStatus, ctx) {
   console.log(
     "[TikTok Flow] handlePhaseComplete: jobId=",
     jobId,
@@ -2233,7 +2240,7 @@ async function handlePhaseComplete(jobId, nextStatus) {
       const job = await res.json();
       if (job.status === "generating_video") {
         console.log("[TikTok Flow] Starting video generation for job:", jobId);
-        await processVideoGeneration(job);
+        await processVideoGeneration(job, ctx);
       } else {
         console.warn(
           "[TikTok Flow] Job status is",
@@ -2265,7 +2272,13 @@ async function handlePhaseComplete(jobId, nextStatus) {
       });
       const res = await fetch(`${API_BASE}/jobs/${jobId}`);
       const job = await res.json();
-      await processPosting(job);
+      if (await acquirePostingLock("phase-complete-ready")) {
+        try {
+          await processPosting(job);
+        } finally {
+          releasePostingLock();
+        }
+      }
     } else {
       console.log(
         "[TikTok Flow] Auto-post disabled, job stays at ready. Will proceed to next pending job.",
@@ -2356,7 +2369,13 @@ async function processNextJob() {
     } else if (currentJob.status === "generating_video") {
       await processVideoGeneration(currentJob, { slotId, lockId });
     } else if (currentJob.status === "posting") {
-      await processPosting(currentJob);
+      if (await acquirePostingLock("posting-status")) {
+        try {
+          await processPosting(currentJob);
+        } finally {
+          releasePostingLock();
+        }
+      }
     } else if (currentJob.status === "ready") {
       const { autoPostEnabled } =
         await chrome.storage.local.get("autoPostEnabled");
@@ -2375,7 +2394,13 @@ async function processNextJob() {
         });
         const freshRes = await fetch(`${API_BASE}/jobs/${currentJob.id}`);
         const freshJob = await freshRes.json();
-        await processPosting(freshJob);
+        if (await acquirePostingLock("ready-auto-post")) {
+          try {
+            await processPosting(freshJob);
+          } finally {
+            releasePostingLock();
+          }
+        }
       }
     }
   } catch (err) {
@@ -2498,7 +2523,13 @@ async function processVideoGenerationViaGrok(job, ctx) {
             });
             const postRes = await fetch(`${API_BASE}/jobs/${job.id}`);
             const postJob = await postRes.json();
-            await processPosting(postJob);
+            if (await acquirePostingLock("grok-video-complete")) {
+              try {
+                await processPosting(postJob);
+              } finally {
+                releasePostingLock();
+              }
+            }
           }
           return;
         }
@@ -2546,11 +2577,16 @@ async function processVideoGenerationViaGrok(job, ctx) {
         });
         const freshRes = await fetch(`${API_BASE}/jobs/${job.id}`);
         const freshJob = await freshRes.json();
-        await processPosting(freshJob);
+        if (await acquirePostingLock("grok-video-complete")) {
+          try {
+            await processPosting(freshJob);
+          } finally {
+            releasePostingLock();
+          }
+        }
       }
     }
   } catch (err) {
-    console.error("[TikTok Flow] Grok video generation error:", err);
     await handleJobFailure(job.id, err.message || "Unknown Grok error", job);
   }
 }
@@ -3745,7 +3781,13 @@ async function processVideoGeneration(job, ctx) {
           });
           const freshRes = await fetch(`${API_BASE}/jobs/${job.id}`);
           const freshJob = await freshRes.json();
-          await processPosting(freshJob);
+          if (await acquirePostingLock("gallery-video-complete")) {
+            try {
+              await processPosting(freshJob);
+            } finally {
+              releasePostingLock();
+            }
+          }
         }
       }
     } catch (err) {
@@ -3855,7 +3897,13 @@ async function processVideoGeneration(job, ctx) {
         });
         const freshRes = await fetch(`${API_BASE}/jobs/${job.id}`);
         const freshJob = await freshRes.json();
-        await processPosting(freshJob);
+        if (await acquirePostingLock("video-complete")) {
+          try {
+            await processPosting(freshJob);
+          } finally {
+            releasePostingLock();
+          }
+        }
       } else {
         console.log(
           "[TikTok Flow] Auto-post disabled, job is ready for manual posting",
@@ -3870,7 +3918,7 @@ async function processVideoGeneration(job, ctx) {
 // Poll for jobs every 5 seconds when auto mode is on
 // (backup polling — primary trigger is JOB_PHASE_COMPLETE from content script)
 setInterval(() => {
-  if (autoModeEnabled && !isPaused && !isProcessingJob) {
+  if (autoModeEnabled && !isPaused && activeSlots.size < MAX_CONCURRENT_JOBS) {
     processNextJob();
   }
 }, 5000);
