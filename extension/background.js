@@ -1960,12 +1960,11 @@ function releaseProcessingSlot(slotId, lockId) {
     console.warn(`[TikTok Flow] Slot release denied: expected ${slot.lockId}, got ${lockId}`);
     return false;
   }
-  const wasProcessingAJob = slot.jobId !== null;
   activeSlots.delete(slotId);
   console.log(`[TikTok Flow] Slot released: ${slotId}, remaining: ${activeSlots.size}/${MAX_CONCURRENT_JOBS}`);
 
   // Process any queued phase-complete events
-  if (pendingPhaseCompleteQueue.length > 0) {
+  while (pendingPhaseCompleteQueue.length > 0) {
     const pending = pendingPhaseCompleteQueue.shift();
     console.log(`[TikTok Flow] Processing queued phase-complete: job ${pending.jobId}`);
     setTimeout(
@@ -1991,6 +1990,27 @@ function forceReleaseAllSlots(reason) {
   }
   activeSlots.clear();
   pendingPhaseCompleteQueue.length = 0;
+}
+
+// Stub: will be fully implemented when JOB_PHASE_COMPLETE handler is migrated (Task 9).
+// This function acquires a fresh slot and continues the job pipeline from a phase completion.
+function handlePhaseCompleteWithSlot(jobId, nextStatus) {
+  const slot = acquireProcessingSlot("phase-complete");
+  if (!slot) {
+    console.warn("[TikTok Flow] No slot available for phase-complete, re-queuing");
+    pendingPhaseCompleteQueue.push({ jobId, nextStatus });
+    return;
+  }
+  const { slotId, lockId } = slot;
+  const s = activeSlots.get(slotId);
+  if (s) s.jobId = jobId;
+  handlePhaseComplete(jobId, nextStatus, { slotId, lockId })
+    .catch((err) =>
+      console.error("[TikTok Flow] Phase complete handler error:", err),
+    )
+    .finally(() => {
+      releaseProcessingSlot(slotId, lockId);
+    });
 }
 
 // Restore auto mode state from storage on service worker startup
