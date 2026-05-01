@@ -2041,6 +2041,11 @@ function releaseProcessingSlot(slotId, lockId) {
   } else {
     console.log(`[TikTok Flow] ${slotId}: Keeping tabs open — content script still working on job ${slot.jobId}`);
   }
+
+  // Clean up orphan tabs BEFORE deleting the slot, so the slot's tabs (if kept)
+  // are still in activeTabIds and won't be mistakenly closed as orphans.
+  closeOrphanTabs();
+
   activeSlots.delete(slotId);
   console.log(`[TikTok Flow] Slot released: ${slotId}, remaining: ${activeSlots.size}/${MAX_CONCURRENT_JOBS}`);
 
@@ -2053,9 +2058,6 @@ function releaseProcessingSlot(slotId, lockId) {
       100,
     );
   }
-
-  // Clean up orphan tabs (from previous jobs whose content scripts finally finished)
-  closeOrphanTabs();
 
   // Try to fill available slots
   if (autoModeEnabled && !isPaused && activeSlots.size < MAX_CONCURRENT_JOBS) {
