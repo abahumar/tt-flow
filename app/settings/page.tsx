@@ -359,15 +359,14 @@ export default function SettingsPage() {
             Control how many video generation jobs run at the same time
           </p>
         </div>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-gray-700">
               Parallel video generation
             </p>
             <p className="text-xs text-gray-500">
-              Run 2 jobs simultaneously (one per browser tab). Default is 1 job
-              at a time. Enable this to double throughput. Requires the Chrome
-              extension to refresh its settings (~1 min).
+              Run 2 jobs at once (one per browser tab). Settings sync to
+              extension every ~1 minute.
             </p>
           </div>
           <button
@@ -381,7 +380,7 @@ export default function SettingsPage() {
                 body: JSON.stringify({ parallelJobs: newValue }),
               });
             }}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
               settings["parallelJobs"] === "2"
                 ? "bg-rose-500"
                 : "bg-gray-200"
