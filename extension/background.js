@@ -1702,40 +1702,26 @@ async function ensureGoogleFlowTab(excludeTabIds = new Set()) {
   return tabId;
 }
 
-// Get a Google Flow tab for a specific slot.
+// Get a Google Flow tab for a specific slot. Always opens a fresh tab.
 async function ensureFlowTabForSlot(slotId) {
   const slot = activeSlots.get(slotId);
   if (!slot) return null;
 
-  if (slot.flowTabId) {
-    const health = await healthCheckGoogleFlow(slot.flowTabId);
-    if (health.ok) return slot.flowTabId;
-    console.log(`[TikTok Flow] Slot ${slotId}: flow tab ${slot.flowTabId} dead, creating new one`);
-    slot.flowTabId = null;
-  }
-
-  const excludeIds = getOtherSlotTabIds(slotId);
-  const tabId = await ensureGoogleFlowTab(excludeIds);
+  // Always create a fresh tab — never reuse an old project
+  const tabId = await ensureGoogleFlowTab();
   if (tabId) {
     slot.flowTabId = tabId;
   }
   return tabId;
 }
 
-// Get a Grok tab for a specific slot.
+// Get a Grok tab for a specific slot. Always opens a fresh tab.
 async function ensureGrokTabForSlot(slotId) {
   const slot = activeSlots.get(slotId);
   if (!slot) return null;
 
-  if (slot.grokTabId) {
-    const health = await healthCheckGrok(slot.grokTabId);
-    if (health.ok) return slot.grokTabId;
-    console.log(`[TikTok Flow] Slot ${slotId}: grok tab ${slot.grokTabId} dead, creating new one`);
-    slot.grokTabId = null;
-  }
-
-  const excludeIds = getOtherSlotTabIds(slotId);
-  const tabId = await ensureGrokTab(excludeIds);
+  // Always create a fresh tab — never reuse an old session
+  const tabId = await ensureGrokTab();
   if (tabId) {
     slot.grokTabId = tabId;
   }
@@ -2028,7 +2014,7 @@ function acquireProcessingSlot(reason) {
   return { slotId, lockId };
 }
 
-// Release a processing slot.
+// Release a processing slot. Closes the slot's tabs so the next job gets a fresh one.
 function releaseProcessingSlot(slotId, lockId) {
   const slot = activeSlots.get(slotId);
   if (!slot) {
@@ -2038,6 +2024,15 @@ function releaseProcessingSlot(slotId, lockId) {
   if (slot.lockId !== lockId) {
     console.warn(`[TikTok Flow] Slot release denied: expected ${slot.lockId}, got ${lockId}`);
     return false;
+  }
+  // Close tabs owned by this slot so the next job starts fresh
+  if (slot.flowTabId) {
+    chrome.tabs.remove(slot.flowTabId).catch(() => {});
+    console.log(`[TikTok Flow] ${slotId}: Closed Flow tab ${slot.flowTabId}`);
+  }
+  if (slot.grokTabId) {
+    chrome.tabs.remove(slot.grokTabId).catch(() => {});
+    console.log(`[TikTok Flow] ${slotId}: Closed Grok tab ${slot.grokTabId}`);
   }
   activeSlots.delete(slotId);
   console.log(`[TikTok Flow] Slot released: ${slotId}, remaining: ${activeSlots.size}/${MAX_CONCURRENT_JOBS}`);
