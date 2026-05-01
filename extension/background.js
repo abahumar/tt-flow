@@ -2014,7 +2014,8 @@ function acquireProcessingSlot(reason) {
   return { slotId, lockId };
 }
 
-// Release a processing slot. Closes the slot's tabs so the next job gets a fresh one.
+// Release a processing slot. Closes the slot's tabs only if the job is truly complete
+// (not still running in a content script via channel-closed recovery).
 function releaseProcessingSlot(slotId, lockId) {
   const slot = activeSlots.get(slotId);
   if (!slot) {
@@ -2025,14 +2026,20 @@ function releaseProcessingSlot(slotId, lockId) {
     console.warn(`[TikTok Flow] Slot release denied: expected ${slot.lockId}, got ${lockId}`);
     return false;
   }
-  // Close tabs owned by this slot so the next job starts fresh
-  if (slot.flowTabId) {
-    chrome.tabs.remove(slot.flowTabId).catch(() => {});
-    console.log(`[TikTok Flow] ${slotId}: Closed Flow tab ${slot.flowTabId}`);
-  }
-  if (slot.grokTabId) {
-    chrome.tabs.remove(slot.grokTabId).catch(() => {});
-    console.log(`[TikTok Flow] ${slotId}: Closed Grok tab ${slot.grokTabId}`);
+  // Only close tabs if the job is fully complete (content script is done).
+  // If content script is still working (channel-closed recovery), keep the tab alive.
+  const jobStillRunning = slot.jobId && contentScriptActiveJobs.has(slot.jobId);
+  if (!jobStillRunning) {
+    if (slot.flowTabId) {
+      chrome.tabs.remove(slot.flowTabId).catch(() => {});
+      console.log(`[TikTok Flow] ${slotId}: Closed Flow tab ${slot.flowTabId}`);
+    }
+    if (slot.grokTabId) {
+      chrome.tabs.remove(slot.grokTabId).catch(() => {});
+      console.log(`[TikTok Flow] ${slotId}: Closed Grok tab ${slot.grokTabId}`);
+    }
+  } else {
+    console.log(`[TikTok Flow] ${slotId}: Keeping tabs open — content script still working on job ${slot.jobId}`);
   }
   activeSlots.delete(slotId);
   console.log(`[TikTok Flow] Slot released: ${slotId}, remaining: ${activeSlots.size}/${MAX_CONCURRENT_JOBS}`);
@@ -2047,11 +2054,46 @@ function releaseProcessingSlot(slotId, lockId) {
     );
   }
 
+  // Clean up orphan tabs (from previous jobs whose content scripts finally finished)
+  closeOrphanTabs();
+
   // Try to fill available slots
   if (autoModeEnabled && !isPaused && activeSlots.size < MAX_CONCURRENT_JOBS) {
     setTimeout(processNextJob, 3000);
   }
   return true;
+}
+
+// Close Flow/Grok tabs not owned by any active slot.
+// These are leftovers from completed jobs or channel-closed recoveries that finished.
+async function closeOrphanTabs() {
+  const activeTabIds = new Set();
+  for (const [, s] of activeSlots) {
+    if (s.flowTabId) activeTabIds.add(s.flowTabId);
+    if (s.grokTabId) activeTabIds.add(s.grokTabId);
+  }
+  try {
+    const flowTabs = await chrome.tabs.query({
+      url: ["https://labs.google/fx/*", "https://labs.google/flow/*"],
+    });
+    for (const tab of flowTabs) {
+      if (!activeTabIds.has(tab.id)) {
+        chrome.tabs.remove(tab.id).catch(() => {});
+        console.log(`[TikTok Flow] Closed orphan Flow tab ${tab.id}`);
+      }
+    }
+  } catch { /* ignore */ }
+  try {
+    const grokTabs = await chrome.tabs.query({
+      url: ["https://grok.com/imagine*"],
+    });
+    for (const tab of grokTabs) {
+      if (!activeTabIds.has(tab.id)) {
+        chrome.tabs.remove(tab.id).catch(() => {});
+        console.log(`[TikTok Flow] Closed orphan Grok tab ${tab.id}`);
+      }
+    }
+  } catch { /* ignore */ }
 }
 
 // Force-release ALL slots (for DISABLE_AUTO_MODE or emergency recovery)
@@ -2197,6 +2239,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       nextStatus,
     );
     contentScriptActiveJobs.delete(jobId);
+    // Clean up any orphan tabs now that this job's content script is done
+    closeOrphanTabs();
 
     // Check if this job is owned by an active slot
     const ownerSlotId = findSlotByJobId(jobId);
