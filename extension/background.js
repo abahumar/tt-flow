@@ -259,7 +259,9 @@ async function handleJobFailure(jobId, errorMessage, job) {
     }),
   });
 
-  // Proceed to next job in queue after a short delay
+  // Proceed to next job in queue after a short delay.
+  // Clean up orphan tabs so stuck/errored jobs don't block the pipeline.
+  closeOrphanTabs();
   if (autoModeEnabled && !isPaused) {
     setTimeout(processNextJob, 3000);
   }
@@ -2146,7 +2148,9 @@ chrome.storage.local.get(
         "paused=",
         isPaused,
       );
-      if (!isPaused) processNextJob();
+      if (!isPaused) {
+        for (let i = 0; i < MAX_CONCURRENT_JOBS; i++) processNextJob();
+      }
     }
   },
 );
@@ -2197,7 +2201,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       "[TikTok Flow] Auto mode ENABLED, customPromptId:",
       currentCustomPromptId,
     );
-    processNextJob();
+    // Try to fill all available slots immediately
+    for (let i = 0; i < MAX_CONCURRENT_JOBS; i++) {
+      processNextJob();
+    }
     sendResponse({ autoMode: true });
     return true;
   }
@@ -2216,7 +2223,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     isPaused = !isPaused;
     chrome.storage.local.set({ isPaused });
     console.log("[TikTok Flow] Auto mode", isPaused ? "PAUSED" : "RESUMED");
-    if (!isPaused) processNextJob();
+    if (!isPaused) {
+      for (let i = 0; i < MAX_CONCURRENT_JOBS; i++) processNextJob();
+    }
     sendResponse({ paused: isPaused });
     return true;
   }
