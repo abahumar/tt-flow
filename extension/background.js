@@ -2063,7 +2063,10 @@ function releaseProcessingSlot(slotId, lockId) {
 
   // Try to fill available slots
   if (autoModeEnabled && !isPaused && activeSlots.size < MAX_CONCURRENT_JOBS) {
+    console.log(`[TikTok Flow] Scheduling processNextJob in 3s (${activeSlots.size}/${MAX_CONCURRENT_JOBS} slots active)`);
     setTimeout(processNextJob, 3000);
+  } else {
+    console.log(`[TikTok Flow] NOT scheduling processNextJob — autoMode=${autoModeEnabled} paused=${isPaused} slots=${activeSlots.size}/${MAX_CONCURRENT_JOBS}`);
   }
   return true;
 }
@@ -2345,17 +2348,25 @@ async function handlePhaseComplete(jobId, nextStatus, ctx) {
 }
 
 async function processNextJob() {
-  if (!autoModeEnabled || isPaused) return;
+  if (!autoModeEnabled || isPaused) {
+    console.log("[TikTok Flow] processNextJob: skipped — autoMode=", autoModeEnabled, "paused=", isPaused);
+    return;
+  }
 
   const slot = acquireProcessingSlot("process-next-job");
-  if (!slot) return; // All slots busy
+  if (!slot) {
+    console.log("[TikTok Flow] processNextJob: all slots busy, retrying via poll");
+    return;
+  }
 
   const { slotId, lockId } = slot;
+  console.log(`[TikTok Flow] processNextJob: ${slotId} acquired, searching for work...`);
 
   try {
     const currentJob = await fetchCurrentJob();
 
     if (!currentJob) {
+      console.log(`[TikTok Flow] processNextJob: ${slotId} — no active job, calling start-auto...`);
       const startBody = {};
       if (currentCustomPromptId)
         startBody.customPromptId = currentCustomPromptId;
@@ -2366,7 +2377,7 @@ async function processNextJob() {
       });
       const data = await res.json();
       if (!data.id) {
-        console.log("[TikTok Flow] No jobs to process");
+        console.log(`[TikTok Flow] processNextJob: ${slotId} — start-auto returned no jobs (res.status=${res.status})`);
         return;
       }
       console.log(
