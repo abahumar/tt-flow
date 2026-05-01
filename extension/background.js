@@ -1704,31 +1704,95 @@ async function ensureGoogleFlowTab(excludeTabIds = new Set()) {
   return tabId;
 }
 
-// Get a Google Flow tab for a specific slot. Always opens a fresh tab,
-// skipping tabs owned by other active slots (don't steal their projects).
+// Get a Google Flow tab for a specific slot. Opens a fresh tab and registers
+// it in the slot IMMEDIATELY so closeOrphanTabs won't kill it during page load.
 async function ensureFlowTabForSlot(slotId) {
   const slot = activeSlots.get(slotId);
   if (!slot) return null;
 
   // Skip tabs owned by other slots — never steal an ongoing project
   const excludeIds = getOtherSlotTabIds(slotId);
-  const tabId = await ensureGoogleFlowTab(excludeIds);
+
+  // Try to find an existing (non-owned) Flow tab to reuse
+  let tabId = await findGoogleFlowTab(excludeIds);
   if (tabId) {
-    slot.flowTabId = tabId;
+    try {
+      const response = await chrome.tabs.sendMessage(tabId, { type: "PING" });
+      if (response?.status === "alive") {
+        slot.flowTabId = tabId;
+        chrome.tabs.update(tabId, { active: true });
+        return tabId;
+      }
+    } catch { /* dead tab, open new one */ }
   }
+
+  // Open a new tab — register in slot IMMEDIATELY so closeOrphanTabs protects it
+  const tab = await chrome.tabs.create({
+    url: "https://labs.google/fx/tools/flow",
+    active: true,
+  });
+  tabId = tab.id;
+  slot.flowTabId = tabId; // Protect from orphan cleanup during page load
+
+  await new Promise((resolve) => {
+    const listener = (updatedTabId, changeInfo) => {
+      if (updatedTabId === tabId && changeInfo.status === "complete") {
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
+      }
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+    setTimeout(() => {
+      chrome.tabs.onUpdated.removeListener(listener);
+      resolve();
+    }, 30000);
+  });
+
+  await new Promise((r) => setTimeout(r, 5000));
   return tabId;
 }
 
-// Get a Grok tab for a specific slot. Same isolation as Flow tabs.
+// Get a Grok tab for a specific slot. Same immediate-registration pattern.
 async function ensureGrokTabForSlot(slotId) {
   const slot = activeSlots.get(slotId);
   if (!slot) return null;
 
   const excludeIds = getOtherSlotTabIds(slotId);
-  const tabId = await ensureGrokTab(excludeIds);
+
+  let tabId = await findGrokTab(excludeIds);
   if (tabId) {
-    slot.grokTabId = tabId;
+    try {
+      const response = await chrome.tabs.sendMessage(tabId, { type: "PING" });
+      if (response?.status === "alive") {
+        slot.grokTabId = tabId;
+        chrome.tabs.update(tabId, { active: true });
+        return tabId;
+      }
+    } catch { /* dead tab */ }
   }
+
+  const tab = await chrome.tabs.create({
+    url: "https://grok.com/imagine",
+    active: true,
+  });
+  tabId = tab.id;
+  slot.grokTabId = tabId; // Protect from orphan cleanup during page load
+
+  await new Promise((resolve) => {
+    const listener = (updatedTabId, changeInfo) => {
+      if (updatedTabId === tabId && changeInfo.status === "complete") {
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
+      }
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+    setTimeout(() => {
+      chrome.tabs.onUpdated.removeListener(listener);
+      resolve();
+    }, 30000);
+  });
+
+  await new Promise((r) => setTimeout(r, 3000));
   return tabId;
 }
 
