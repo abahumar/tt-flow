@@ -1704,26 +1704,28 @@ async function ensureGoogleFlowTab(excludeTabIds = new Set()) {
   return tabId;
 }
 
-// Get a Google Flow tab for a specific slot. Always opens a fresh tab.
+// Get a Google Flow tab for a specific slot. Always opens a fresh tab,
+// skipping tabs owned by other active slots (don't steal their projects).
 async function ensureFlowTabForSlot(slotId) {
   const slot = activeSlots.get(slotId);
   if (!slot) return null;
 
-  // Always create a fresh tab — never reuse an old project
-  const tabId = await ensureGoogleFlowTab();
+  // Skip tabs owned by other slots — never steal an ongoing project
+  const excludeIds = getOtherSlotTabIds(slotId);
+  const tabId = await ensureGoogleFlowTab(excludeIds);
   if (tabId) {
     slot.flowTabId = tabId;
   }
   return tabId;
 }
 
-// Get a Grok tab for a specific slot. Always opens a fresh tab.
+// Get a Grok tab for a specific slot. Same isolation as Flow tabs.
 async function ensureGrokTabForSlot(slotId) {
   const slot = activeSlots.get(slotId);
   if (!slot) return null;
 
-  // Always create a fresh tab — never reuse an old session
-  const tabId = await ensureGrokTab();
+  const excludeIds = getOtherSlotTabIds(slotId);
+  const tabId = await ensureGrokTab(excludeIds);
   if (tabId) {
     slot.grokTabId = tabId;
   }
@@ -2030,22 +2032,8 @@ function releaseProcessingSlot(slotId, lockId) {
   }
   // Only close tabs if the job is fully complete (content script is done).
   // If content script is still working (channel-closed recovery), keep the tab alive.
-  const jobStillRunning = slot.jobId && contentScriptActiveJobs.has(slot.jobId);
-  if (!jobStillRunning) {
-    if (slot.flowTabId) {
-      chrome.tabs.remove(slot.flowTabId).catch(() => {});
-      console.log(`[TikTok Flow] ${slotId}: Closed Flow tab ${slot.flowTabId}`);
-    }
-    if (slot.grokTabId) {
-      chrome.tabs.remove(slot.grokTabId).catch(() => {});
-      console.log(`[TikTok Flow] ${slotId}: Closed Grok tab ${slot.grokTabId}`);
-    }
-  } else {
-    console.log(`[TikTok Flow] ${slotId}: Keeping tabs open — content script still working on job ${slot.jobId}`);
-  }
-
-  // Clean up orphan tabs BEFORE deleting the slot, so the slot's tabs (if kept)
-  // are still in activeTabIds and won't be mistakenly closed as orphans.
+  // Clean up orphan tabs BEFORE deleting the slot.
+  // Only closes tabs not owned by ANY active slot — never touches a slot's active project.
   closeOrphanTabs();
 
   activeSlots.delete(slotId);
