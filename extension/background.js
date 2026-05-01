@@ -2341,6 +2341,8 @@ async function processNextJob() {
         } else {
           await processImageGeneration(data, { slotId, lockId });
         }
+      } else if (data.status === "generating_video") {
+        await processVideoGeneration(data, { slotId, lockId });
       }
       return;
     }
@@ -3855,7 +3857,13 @@ async function processVideoGeneration(job, ctx) {
             });
             const postRes = await fetch(`${API_BASE}/jobs/${job.id}`);
             const postJob = await postRes.json();
-            await processPosting(postJob);
+            if (await acquirePostingLock("video-channel-recovery")) {
+              try {
+                await processPosting(postJob);
+              } finally {
+                releasePostingLock();
+              }
+            }
           }
           return;
         }
