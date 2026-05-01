@@ -1704,36 +1704,20 @@ async function ensureGoogleFlowTab(excludeTabIds = new Set()) {
   return tabId;
 }
 
-// Get a Google Flow tab for a specific slot. Opens a fresh tab and registers
-// it in the slot IMMEDIATELY so closeOrphanTabs won't kill it during page load.
+// Get a Google Flow tab for a specific slot. Always opens a brand new tab.
 async function ensureFlowTabForSlot(slotId) {
   const slot = activeSlots.get(slotId);
   if (!slot) return null;
 
-  // Skip tabs owned by other slots — never steal an ongoing project
-  const excludeIds = getOtherSlotTabIds(slotId);
-
-  // Try to find an existing (non-owned) Flow tab to reuse
-  let tabId = await findGoogleFlowTab(excludeIds);
-  if (tabId) {
-    try {
-      const response = await chrome.tabs.sendMessage(tabId, { type: "PING" });
-      if (response?.status === "alive") {
-        slot.flowTabId = tabId;
-        chrome.tabs.update(tabId, { active: true });
-        return tabId;
-      }
-    } catch { /* dead tab, open new one */ }
-  }
-
-  // Open a new tab — register in slot IMMEDIATELY so closeOrphanTabs protects it
+  // Always create a fresh tab — never reuse
   const tab = await chrome.tabs.create({
     url: "https://labs.google/fx/tools/flow",
     active: true,
   });
-  tabId = tab.id;
-  slot.flowTabId = tabId; // Protect from orphan cleanup during page load
+  const tabId = tab.id;
+  slot.flowTabId = tabId; // Register immediately before any await
 
+  // Wait for page to load
   await new Promise((resolve) => {
     const listener = (updatedTabId, changeInfo) => {
       if (updatedTabId === tabId && changeInfo.status === "complete") {
@@ -1748,35 +1732,24 @@ async function ensureFlowTabForSlot(slotId) {
     }, 30000);
   });
 
+  // Let SPA initialize
   await new Promise((r) => setTimeout(r, 5000));
+
+  console.log(`[TikTok Flow] ${slotId}: Fresh Flow tab ${tabId} ready`);
   return tabId;
 }
 
-// Get a Grok tab for a specific slot. Same immediate-registration pattern.
+// Get a Grok tab for a specific slot. Always opens a brand new tab.
 async function ensureGrokTabForSlot(slotId) {
   const slot = activeSlots.get(slotId);
   if (!slot) return null;
-
-  const excludeIds = getOtherSlotTabIds(slotId);
-
-  let tabId = await findGrokTab(excludeIds);
-  if (tabId) {
-    try {
-      const response = await chrome.tabs.sendMessage(tabId, { type: "PING" });
-      if (response?.status === "alive") {
-        slot.grokTabId = tabId;
-        chrome.tabs.update(tabId, { active: true });
-        return tabId;
-      }
-    } catch { /* dead tab */ }
-  }
 
   const tab = await chrome.tabs.create({
     url: "https://grok.com/imagine",
     active: true,
   });
-  tabId = tab.id;
-  slot.grokTabId = tabId; // Protect from orphan cleanup during page load
+  const tabId = tab.id;
+  slot.grokTabId = tabId; // Register immediately before any await
 
   await new Promise((resolve) => {
     const listener = (updatedTabId, changeInfo) => {
@@ -1793,6 +1766,8 @@ async function ensureGrokTabForSlot(slotId) {
   });
 
   await new Promise((r) => setTimeout(r, 3000));
+
+  console.log(`[TikTok Flow] ${slotId}: Fresh Grok tab ${tabId} ready`);
   return tabId;
 }
 
@@ -2096,10 +2071,7 @@ function releaseProcessingSlot(slotId, lockId) {
   }
   // Only close tabs if the job is fully complete (content script is done).
   // If content script is still working (channel-closed recovery), keep the tab alive.
-  // Clean up orphan tabs BEFORE deleting the slot.
-  // Only closes tabs not owned by ANY active slot — never touches a slot's active project.
-  closeOrphanTabs();
-
+  // Release the slot immediately — don't touch tabs here.
   activeSlots.delete(slotId);
   console.log(`[TikTok Flow] Slot released: ${slotId}, remaining: ${activeSlots.size}/${MAX_CONCURRENT_JOBS}`);
 
