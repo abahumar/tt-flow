@@ -66,19 +66,21 @@ async function syncSettingsFromDB() {
 }
 
 // ---- Grok Tab Management ----
-async function findGrokTab() {
+async function findGrokTab(excludeTabIds = new Set()) {
   try {
     const tabs = await chrome.tabs.query({
       url: ["https://grok.com/imagine*"],
     });
-    if (tabs.length > 0) return tabs[0].id;
+    for (const tab of tabs) {
+      if (!excludeTabIds.has(tab.id)) return tab.id;
+    }
   } catch (e) {
     console.warn("[TikTok Flow] Grok tabs.query failed:", e);
   }
   try {
     const allTabs = await chrome.tabs.query({});
     for (const tab of allTabs) {
-      if (tab.url && tab.url.includes("grok.com/imagine")) {
+      if (tab.url && tab.url.includes("grok.com/imagine") && !excludeTabIds.has(tab.id)) {
         return tab.id;
       }
     }
@@ -88,8 +90,8 @@ async function findGrokTab() {
   return null;
 }
 
-async function ensureGrokTab() {
-  let tabId = await findGrokTab();
+async function ensureGrokTab(excludeTabIds = new Set()) {
+  let tabId = await findGrokTab(excludeTabIds);
 
   if (tabId) {
     try {
@@ -127,9 +129,11 @@ async function ensureGrokTab() {
   return tabId;
 }
 
-async function healthCheckGrok() {
+async function healthCheckGrok(tabId) {
   try {
-    const tabId = await findGrokTab();
+    if (!tabId) {
+      tabId = await findGrokTab();
+    }
     if (!tabId) return { ok: false, error: "No Grok tab found" };
     const res = await new Promise((resolve, reject) => {
       const t = setTimeout(() => reject(new Error("timeout")), 5000);
@@ -254,8 +258,8 @@ async function handleJobFailure(jobId, errorMessage, job) {
 }
 
 // Health check: verify Google Flow tab is alive and responsive
-async function healthCheckGoogleFlow() {
-  const tabId = await findGoogleFlowTab();
+async function healthCheckGoogleFlow(tabId) {
+  if (!tabId) tabId = await findGoogleFlowTab();
   if (!tabId) return { ok: false, error: "No Google Flow tab found" };
 
   try {
@@ -1399,13 +1403,22 @@ async function fetchCurrentJob() {
   try {
     const res = await fetch(`${API_BASE}/jobs`);
     const jobs = await res.json();
-    // Check if auto-post is enabled to determine if "ready" jobs are actionable
     const { autoPostEnabled } =
       await chrome.storage.local.get("autoPostEnabled");
     const activeStatuses = autoPostEnabled
       ? ["generating_image", "generating_video", "ready", "posting"]
       : ["generating_image", "generating_video", "posting"];
-    return jobs.find((j) => activeStatuses.includes(j.status)) || null;
+    // Get all job IDs currently active in any slot
+    const activeJobIds = new Set();
+    for (const [, slot] of activeSlots) {
+      if (slot.jobId) activeJobIds.add(slot.jobId);
+    }
+    return jobs.find(
+      (j) =>
+        activeStatuses.includes(j.status) &&
+        !activeJobIds.has(j.id) &&
+        !contentScriptActiveJobs.has(j.id),
+    ) || null;
   } catch {
     return null;
   }
@@ -1602,26 +1615,26 @@ async function postGalleryVideo(galleryId) {
 // ---- Google Flow Tab & Job Automation ----
 
 // Find an existing Google Flow tab
-async function findGoogleFlowTab() {
-  // Strategy 1: Try chrome.tabs.query with match patterns
+async function findGoogleFlowTab(excludeTabIds = new Set()) {
   try {
     const tabs = await chrome.tabs.query({
       url: ["https://labs.google/fx/*", "https://labs.google/flow/*"],
     });
-    if (tabs.length > 0) return tabs[0].id;
+    for (const tab of tabs) {
+      if (!excludeTabIds.has(tab.id)) return tab.id;
+    }
   } catch (e) {
     console.warn("[TikTok Flow] tabs.query with url pattern failed:", e);
   }
 
-  // Strategy 2: Query all tabs and check URL manually
-  // (handles redirects, SPA routing, subpaths we didn't anticipate)
   try {
     const allTabs = await chrome.tabs.query({});
     for (const tab of allTabs) {
       if (
         tab.url &&
         (tab.url.includes("labs.google/fx") ||
-          tab.url.includes("labs.google/flow"))
+          tab.url.includes("labs.google/flow")) &&
+        !excludeTabIds.has(tab.id)
       ) {
         return tab.id;
       }
@@ -1634,8 +1647,8 @@ async function findGoogleFlowTab() {
 }
 
 // Open Google Flow and wait for it to be ready
-async function ensureGoogleFlowTab() {
-  let tabId = await findGoogleFlowTab();
+async function ensureGoogleFlowTab(excludeTabIds = new Set()) {
+  let tabId = await findGoogleFlowTab(excludeTabIds);
 
   if (tabId) {
     // Tab exists — check if content script is alive
@@ -1678,6 +1691,46 @@ async function ensureGoogleFlowTab() {
   // Extra wait for SPA to initialize
   await new Promise((r) => setTimeout(r, 5000));
 
+  return tabId;
+}
+
+// Get a Google Flow tab for a specific slot.
+async function ensureFlowTabForSlot(slotId) {
+  const slot = activeSlots.get(slotId);
+  if (!slot) return null;
+
+  if (slot.flowTabId) {
+    const health = await healthCheckGoogleFlow(slot.flowTabId);
+    if (health.ok) return slot.flowTabId;
+    console.log(`[TikTok Flow] Slot ${slotId}: flow tab ${slot.flowTabId} dead, creating new one`);
+    slot.flowTabId = null;
+  }
+
+  const excludeIds = getOtherSlotTabIds(slotId);
+  const tabId = await ensureGoogleFlowTab(excludeIds);
+  if (tabId) {
+    slot.flowTabId = tabId;
+  }
+  return tabId;
+}
+
+// Get a Grok tab for a specific slot.
+async function ensureGrokTabForSlot(slotId) {
+  const slot = activeSlots.get(slotId);
+  if (!slot) return null;
+
+  if (slot.grokTabId) {
+    const health = await healthCheckGrok(slot.grokTabId);
+    if (health.ok) return slot.grokTabId;
+    console.log(`[TikTok Flow] Slot ${slotId}: grok tab ${slot.grokTabId} dead, creating new one`);
+    slot.grokTabId = null;
+  }
+
+  const excludeIds = getOtherSlotTabIds(slotId);
+  const tabId = await ensureGrokTab(excludeIds);
+  if (tabId) {
+    slot.grokTabId = tabId;
+  }
   return tabId;
 }
 
@@ -2225,23 +2278,17 @@ async function handlePhaseComplete(jobId, nextStatus) {
 }
 
 async function processNextJob() {
-  if (isProcessingJob || !autoModeEnabled || isPaused) return;
+  if (!autoModeEnabled || isPaused) return;
 
-  const lockId = acquireProcessingLock("process-next-job");
-  if (!lockId) return; // Another caller won the race
+  const slot = acquireProcessingSlot("process-next-job");
+  if (!slot) return; // All slots busy
+
+  const { slotId, lockId } = slot;
 
   try {
-    // Check for active jobs (already in-progress)
     const currentJob = await fetchCurrentJob();
 
-    if (!currentJob || contentScriptActiveJobs.has(currentJob.id)) {
-      if (currentJob && contentScriptActiveJobs.has(currentJob.id)) {
-        console.log(
-          `[TikTok Flow] Skipping job ${currentJob.id} — content script is still handling it`,
-        );
-        return; // Don't start another job; wait for JOB_PHASE_COMPLETE
-      }
-      // Try to start the next pending job (video or image-only)
+    if (!currentJob) {
       const startBody = {};
       if (currentCustomPromptId)
         startBody.customPromptId = currentCustomPromptId;
@@ -2253,28 +2300,38 @@ async function processNextJob() {
       const data = await res.json();
       if (!data.id) {
         console.log("[TikTok Flow] No jobs to process");
-        return; // finally will release lock
+        return;
       }
-      // Immediately process the newly started job instead of waiting for next alarm
       console.log(
-        "[TikTok Flow] Started job via start-auto:",
+        `[TikTok Flow] ${slotId}: Started job via start-auto:`,
         data.id,
         "— processing immediately",
       );
-      processingJobId = data.id;
+      const s = activeSlots.get(slotId);
+      if (s) s.jobId = data.id;
       if (data.status === "generating_image") {
         if (data.imageOnly) {
-          await processImageOnlyJob(data);
+          if (isProcessingImageOnly) {
+            console.log(`[TikTok Flow] ${slotId}: Image-only already running, deferring job ${data.id}`);
+            return;
+          }
+          isProcessingImageOnly = true;
+          try {
+            await processImageOnlyJob(data, { slotId, lockId });
+          } finally {
+            isProcessingImageOnly = false;
+          }
         } else {
-          await processImageGeneration(data);
+          await processImageGeneration(data, { slotId, lockId });
         }
       }
       return;
     }
 
-    processingJobId = currentJob.id;
+    const s = activeSlots.get(slotId);
+    if (s) s.jobId = currentJob.id;
     console.log(
-      "[TikTok Flow] Processing job:",
+      `[TikTok Flow] ${slotId}: Processing job:`,
       currentJob.id,
       "status:",
       currentJob.status,
@@ -2282,21 +2339,30 @@ async function processNextJob() {
 
     if (currentJob.status === "generating_image") {
       if (currentJob.imageOnly) {
-        await processImageOnlyJob(currentJob);
+        if (isProcessingImageOnly) {
+          console.log(`[TikTok Flow] ${slotId}: Image-only already running, deferring job ${currentJob.id}`);
+          if (s) s.jobId = null;
+          return;
+        }
+        isProcessingImageOnly = true;
+        try {
+          await processImageOnlyJob(currentJob, { slotId, lockId });
+        } finally {
+          isProcessingImageOnly = false;
+        }
       } else {
-        await processImageGeneration(currentJob);
+        await processImageGeneration(currentJob, { slotId, lockId });
       }
     } else if (currentJob.status === "generating_video") {
-      await processVideoGeneration(currentJob);
+      await processVideoGeneration(currentJob, { slotId, lockId });
     } else if (currentJob.status === "posting") {
       await processPosting(currentJob);
     } else if (currentJob.status === "ready") {
-      // Check auto-post — if enabled, transition to posting
       const { autoPostEnabled } =
         await chrome.storage.local.get("autoPostEnabled");
       if (autoPostEnabled) {
         console.log(
-          "[TikTok Flow] Job ready + auto-post on, starting posting:",
+          `[TikTok Flow] ${slotId}: Job ready + auto-post on, starting posting:`,
           currentJob.id,
         );
         await fetch(`${API_BASE}/jobs/${currentJob.id}`, {
@@ -2311,21 +2377,20 @@ async function processNextJob() {
         const freshJob = await freshRes.json();
         await processPosting(freshJob);
       }
-      // If auto-post off, do nothing — job stays at ready for manual trigger
     }
   } catch (err) {
-    console.error("[TikTok Flow] Job processing error:", err);
+    console.error(`[TikTok Flow] ${slotId}: Job processing error:`, err);
   } finally {
-    releaseProcessingLock(lockId);
-    // releaseProcessingLock handles scheduling next job
+    releaseProcessingSlot(slotId, lockId);
   }
 }
 
 // ---- Grok Video Generation ----
 // Routes video gen to Grok when videoEngine is "grok".
 // Image generation still uses Google Flow; only the video phase switches.
-async function processVideoGenerationViaGrok(job) {
-  console.log("[TikTok Flow] === GROK video generation for job:", job.id);
+async function processVideoGenerationViaGrok(job, ctx) {
+  const { slotId, lockId } = ctx;
+  console.log(`[TikTok Flow] ${slotId}: === GROK video generation for job:`, job.id);
 
   // Fetch the image to send as reference
   let referenceImageDataUrl = null;
@@ -2358,7 +2423,7 @@ async function processVideoGenerationViaGrok(job) {
   }
 
   // Ensure Grok tab is open
-  const grokTabId = await ensureGrokTab();
+  const grokTabId = await ensureGrokTabForSlot(slotId);
   if (!grokTabId) {
     await handleJobFailure(
       job.id,
@@ -2752,8 +2817,9 @@ async function updateJobStatusFromBg(jobId, data) {
   }
 }
 
-async function processImageGeneration(job) {
-  console.log("[TikTok Flow] === Image generation for job:", job.id);
+async function processImageGeneration(job, ctx) {
+  const { slotId, lockId } = ctx;
+  console.log(`[TikTok Flow] ${slotId}: === Image generation for job:`, job.id);
 
   // Detect multi-scene job — route to dedicated handler
   let scenePrompts = [];
@@ -2764,29 +2830,23 @@ async function processImageGeneration(job) {
   }
   if (scenePrompts.length > 1) {
     console.log(
-      "[TikTok Flow] Multi-scene job detected:",
+      `[TikTok Flow] ${slotId}: Multi-scene job detected:`,
       scenePrompts.length,
       "scenes",
     );
-    await processMultiSceneJob(job, scenePrompts);
+    await processMultiSceneJob(job, scenePrompts, ctx);
     return;
   }
 
-  // Health check before starting
-  const health = await healthCheckGoogleFlow();
-  let flowTabId = health.ok ? health.tabId : null;
-
+  // Get or create a Flow tab for this slot
+  let flowTabId = await ensureFlowTabForSlot(slotId);
   if (!flowTabId) {
-    console.warn("[TikTok Flow] Health check failed:", health.error);
-    flowTabId = await ensureGoogleFlowTab();
-    if (!flowTabId) {
-      await handleJobFailure(
-        job.id,
-        "Could not open Google Flow tab: " + health.error,
-        job,
-      );
-      return;
-    }
+    await handleJobFailure(
+      job.id,
+      "Could not open Google Flow tab",
+      job,
+    );
+    return;
   }
 
   // Navigate to Flow gallery BEFORE sending GENERATE_IMAGE.
@@ -3063,7 +3123,7 @@ async function processImageGeneration(job) {
           console.log(
             "[TikTok Flow] Job already advanced to generating_video — continuing.",
           );
-          await processVideoGeneration(freshJob);
+          await processVideoGeneration(freshJob, ctx);
           return;
         }
         if (freshJob.status === "ready" || freshJob.status === "posted") {
@@ -3107,7 +3167,7 @@ async function processImageGeneration(job) {
         const freshJob = await freshRes.json();
         if (freshJob.status === "generating_video") {
           console.log("[TikTok Flow] Immediately starting video generation...");
-          await processVideoGeneration(freshJob);
+          await processVideoGeneration(freshJob, ctx);
         }
       } catch (fetchErr) {
         console.warn(
@@ -3125,43 +3185,18 @@ async function processImageGeneration(job) {
 // ---- Multi-Scene Job Processing ----
 // Processes all scenes within one job: image + video for each scene sequentially.
 // Scene 1 uses product + studio refs. Scene 2+ uses Scene 1's generated image as reference.
-async function processMultiSceneJob(job, scenePrompts) {
+async function processMultiSceneJob(job, scenePrompts, ctx) {
+  const { slotId, lockId } = ctx;
   console.log(
-    "[TikTok Flow] === Multi-scene job:",
+    `[TikTok Flow] ${slotId}: === Multi-scene job:`,
     job.id,
     "scenes:",
     scenePrompts.length,
   );
 
-  const health = await healthCheckGoogleFlow();
-  if (!health.ok) {
-    const flowTabId = await ensureGoogleFlowTab();
-    if (!flowTabId) {
-      await handleJobFailure(job.id, "Could not open Google Flow tab", job);
-      return;
-    }
-  }
-
-  // Re-check health to get verified tabId with alive content script
-  let flowTabId = null;
-  for (let ping = 0; ping < 10; ping++) {
-    const h = await healthCheckGoogleFlow();
-    if (h.ok) {
-      flowTabId = h.tabId;
-      break;
-    }
-    console.log(
-      "[TikTok Flow] Waiting for content script... attempt",
-      ping + 1,
-    );
-    await new Promise((r) => setTimeout(r, 3000));
-  }
+  let flowTabId = await ensureFlowTabForSlot(slotId);
   if (!flowTabId) {
-    await handleJobFailure(
-      job.id,
-      "Google Flow content script not responding",
-      job,
-    );
+    await handleJobFailure(job.id, "Could not open Google Flow tab", job);
     return;
   }
 
@@ -3418,28 +3453,14 @@ async function processMultiSceneJob(job, scenePrompts) {
 // ---- Standalone Image-Only Job Processing ----
 // Duplicates the video creation flow but stops after image generation.
 // Completely standalone — no video generation step.
-async function processImageOnlyJob(job) {
-  console.log("[TikTok Flow] === Standalone image-only job:", job.id);
+async function processImageOnlyJob(job, ctx) {
+  const { slotId, lockId } = ctx;
+  console.log(`[TikTok Flow] ${slotId}: === Standalone image-only job:`, job.id);
 
-  // Step 1: Ensure Google Flow tab is open and content script is alive
-  let flowTabId = await findGoogleFlowTab();
-  if (flowTabId) {
-    const health = await healthCheckGoogleFlow();
-    if (!health.ok) {
-      console.warn(
-        "[TikTok Flow] Google Flow tab found but not responsive, reopening...",
-      );
-      flowTabId = null;
-    }
-  }
-
+  let flowTabId = await ensureFlowTabForSlot(slotId);
   if (!flowTabId) {
-    console.log("[TikTok Flow] Opening Google Flow tab for image-only job...");
-    flowTabId = await ensureGoogleFlowTab();
-    if (!flowTabId) {
-      await handleJobFailure(job.id, "Could not open Google Flow tab", job);
-      return;
-    }
+    await handleJobFailure(job.id, "Could not open Google Flow tab", job);
+    return;
   }
 
   // Focus the tab
@@ -3551,30 +3572,38 @@ async function processImageOnlyJob(job) {
   }
 }
 
-async function processVideoGeneration(job) {
-  console.log("[TikTok Flow] === Video generation for job:", job.id);
+async function processVideoGeneration(job, ctx) {
+  const { slotId, lockId } = ctx;
+  console.log(`[TikTok Flow] ${slotId}: === Video generation for job:`, job.id);
 
   // ---- Check video engine setting: route to Grok if configured ----
   const videoEngine = await getVideoEngine();
   if (videoEngine === "grok") {
-    console.log("[TikTok Flow] Video engine is GROK — routing to Grok...");
-    await processVideoGenerationViaGrok(job);
+    console.log(`[TikTok Flow] ${slotId}: Video engine is GROK — routing to Grok...`);
+    await processVideoGenerationViaGrok(job, ctx);
     return;
   }
 
   // Detect gallery-image jobs (no product, came from gallery push)
   const isGalleryImageJob = !job.productId && job.imageUrl;
 
-  // Health check: verify tab is still alive
-  const health = await healthCheckGoogleFlow();
-  if (!health.ok) {
+  // Get the slot's Flow tab
+  let flowTabId = null;
+  const slot = activeSlots.get(slotId);
+  if (slot && slot.flowTabId) {
+    const health = await healthCheckGoogleFlow(slot.flowTabId);
+    if (health.ok) {
+      flowTabId = slot.flowTabId;
+    }
+  }
+
+  if (!flowTabId) {
     if (isGalleryImageJob) {
-      // For gallery jobs, we can open a new tab since we're starting fresh
       console.warn(
-        "[TikTok Flow] Health check failed, opening new tab for gallery video job...",
+        `[TikTok Flow] ${slotId}: Health check failed, opening new tab for gallery video job...`,
       );
-      const newTabId = await ensureGoogleFlowTab();
-      if (!newTabId) {
+      flowTabId = await ensureFlowTabForSlot(slotId);
+      if (!flowTabId) {
         await handleJobFailure(
           job.id,
           "Could not open Google Flow tab for gallery video job",
@@ -3584,31 +3613,15 @@ async function processVideoGeneration(job) {
       }
     } else {
       console.warn(
-        "[TikTok Flow] Health check failed before video gen:",
-        health.error,
+        `[TikTok Flow] ${slotId}: Health check failed before video gen`,
       );
       await handleJobFailure(
         job.id,
-        "Google Flow tab lost before video generation: " + health.error,
+        "Google Flow tab lost before video generation",
         job,
       );
       return;
     }
-  }
-
-  const flowTabId = isGalleryImageJob
-    ? health.ok
-      ? health.tabId
-      : await findGoogleFlowTab()
-    : await findGoogleFlowTab();
-
-  if (!flowTabId) {
-    await handleJobFailure(
-      job.id,
-      "Google Flow tab not found. Keep the tab open during generation.",
-      job,
-    );
-    return;
   }
 
   // Focus the tab
