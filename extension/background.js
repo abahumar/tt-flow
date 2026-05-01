@@ -253,11 +253,7 @@ async function handleJobFailure(jobId, errorMessage, job) {
 
   // Proceed to next job in queue after a short delay
   if (autoModeEnabled && !isPaused) {
-    setTimeout(() => {
-      if (!isProcessingJob) {
-        processNextJob();
-      }
-    }, 3000);
+    setTimeout(processNextJob, 3000);
   }
 }
 
@@ -816,7 +812,7 @@ function handleMessage(message, sender, sendResponse) {
           });
           sendResponse({ ok: true });
           // Trigger processing if auto mode is on
-          if (autoModeEnabled && !isPaused && !isProcessingJob) {
+          if (autoModeEnabled && !isPaused && activeSlots.size < MAX_CONCURRENT_JOBS) {
             setTimeout(processNextJob, 1000);
           }
         } catch (err) {
@@ -3879,7 +3875,7 @@ async function processVideoGeneration(job, ctx) {
       );
 
       // Check if auto-post is enabled — trigger posting inline
-      // (JOB_PHASE_COMPLETE from content script is blocked by isProcessingJob guard)
+      // (JOB_PHASE_COMPLETE from content script is blocked when all slots are busy)
       const { autoPostEnabled } =
         await chrome.storage.local.get("autoPostEnabled");
       if (autoPostEnabled) {
