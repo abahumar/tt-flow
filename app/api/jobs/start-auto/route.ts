@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import {
-  generateImagePrompt,
-  generateVideoPrompt,
-  VideoType,
-} from "@/lib/prompt-templates";
 
 const VALID_VIDEO_TYPES = [
   "fungsi_produk",
@@ -30,11 +25,12 @@ export async function POST(request: NextRequest) {
 
   // Use a transaction to atomically find + claim the next pending job.
   // Two concurrent callers cannot claim the same job.
-  const job = await prisma.$transaction(async (tx) => {
+  let job;
+  try {
+    job = await prisma.$transaction(async (tx) => {
     const pendingJobs = await tx.videoJob.findMany({
       where: { status: "pending" },
       orderBy: [{ sceneIndex: "asc" }, { createdAt: "asc" }],
-      include: { product: true },
     });
 
     let nextJob = null;
@@ -64,6 +60,17 @@ export async function POST(request: NextRequest) {
       include: { product: true },
     });
   });
+  } catch (err: any) {
+    // Transaction failed (e.g. serialization conflict with concurrent claimer).
+    // Return 409 so the caller can retry.
+    if (err?.code === "P2034") {
+      return NextResponse.json(
+        { error: "Transaction conflict, retry" },
+        { status: 409 },
+      );
+    }
+    throw err;
+  }
 
   if (!job) {
     return NextResponse.json(
@@ -72,7 +79,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Apply custom prompt overrides (outside transaction — read-only after claim)
+  // Apply custom prompt overrides (outside transaction — job already claimed, no race)
   if (customPromptId) {
     const customPrompt = await prisma.customPrompt.findUnique({
       where: { id: customPromptId },
