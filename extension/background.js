@@ -1899,75 +1899,98 @@ async function ensureTikTokShopShowcaseTab() {
 }
 
 // ---- Job Processing Automation ----
-let isProcessingJob = false;
-let processingLockId = null; // Unique token for current processing session
-let processingJobId = null; // Track which job is being processed
+const MAX_CONCURRENT_JOBS = 2;
+// activeSlots: Map<slotId, { lockId, jobId, flowTabId, grokTabId }>
+const activeSlots = new Map();
+let nextSlotNum = 1;
 let autoModeEnabled = false;
 let isPaused = false;
 let currentCustomPromptId = null;
-let pendingPhaseComplete = null; // Queue for JOB_PHASE_COMPLETE events that arrive while busy
+// Queued phase-complete events (array — was single object)
+const pendingPhaseCompleteQueue = [];
 // Jobs where the message channel closed but the content script is still working.
-// These are skipped by processNextJob — JOB_PHASE_COMPLETE will handle continuation.
 const contentScriptActiveJobs = new Set();
+// Only one image-only job at a time (sequential gating)
+let isProcessingImageOnly = false;
 
-// Acquire the processing lock. Returns a unique lock ID if acquired, null if already held.
-function acquireProcessingLock(reason) {
-  if (isProcessingJob) {
+// Get tab IDs owned by all slots except the given one.
+// Used so a new slot opens its own dedicated tab instead of stealing another slot's tab.
+function getOtherSlotTabIds(mySlotId) {
+  const ids = new Set();
+  for (const [sid, slot] of activeSlots) {
+    if (sid !== mySlotId) {
+      if (slot.flowTabId) ids.add(slot.flowTabId);
+      if (slot.grokTabId) ids.add(slot.grokTabId);
+    }
+  }
+  return ids;
+}
+
+// Find which slot is handling a given jobId
+function findSlotByJobId(jobId) {
+  for (const [sid, slot] of activeSlots) {
+    if (slot.jobId === jobId) return sid;
+  }
+  return null;
+}
+
+// Acquire a processing slot. Returns {slotId, lockId} or null if all slots busy.
+function acquireProcessingSlot(reason) {
+  if (activeSlots.size >= MAX_CONCURRENT_JOBS) {
     console.log(
-      `[TikTok Flow] Lock denied (${reason}): already held by ${processingLockId}`,
+      `[TikTok Flow] All ${MAX_CONCURRENT_JOBS} slots busy — denied: ${reason}`,
     );
     return null;
   }
-  isProcessingJob = true;
-  processingLockId = `${reason}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  console.log(`[TikTok Flow] Lock acquired: ${processingLockId}`);
-  return processingLockId;
+  const slotId = `slot-${nextSlotNum++}`;
+  const lockId = `${reason}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  activeSlots.set(slotId, { lockId, jobId: null, flowTabId: null, grokTabId: null });
+  console.log(`[TikTok Flow] Slot acquired: ${slotId} (${lockId}), active: ${activeSlots.size}/${MAX_CONCURRENT_JOBS}`);
+  return { slotId, lockId };
 }
 
-// Release the processing lock. Only the holder can release it.
-function releaseProcessingLock(lockId) {
-  if (processingLockId !== lockId) {
-    console.warn(
-      `[TikTok Flow] Lock release denied: expected ${processingLockId}, got ${lockId}`,
-    );
+// Release a processing slot.
+function releaseProcessingSlot(slotId, lockId) {
+  const slot = activeSlots.get(slotId);
+  if (!slot) {
+    console.warn(`[TikTok Flow] Slot release: slot ${slotId} not found`);
     return false;
   }
-  console.log(`[TikTok Flow] Lock released: ${processingLockId}`);
-  const wasProcessingAJob = processingJobId !== null;
-  isProcessingJob = false;
-  processingLockId = null;
-  processingJobId = null;
+  if (slot.lockId !== lockId) {
+    console.warn(`[TikTok Flow] Slot release denied: expected ${slot.lockId}, got ${lockId}`);
+    return false;
+  }
+  const wasProcessingAJob = slot.jobId !== null;
+  activeSlots.delete(slotId);
+  console.log(`[TikTok Flow] Slot released: ${slotId}, remaining: ${activeSlots.size}/${MAX_CONCURRENT_JOBS}`);
 
-  // Process any queued phase-complete event
-  if (pendingPhaseComplete) {
-    const pending = pendingPhaseComplete;
-    pendingPhaseComplete = null;
-    console.log(
-      `[TikTok Flow] Processing queued phase-complete: job ${pending.jobId}`,
-    );
+  // Process any queued phase-complete events
+  if (pendingPhaseCompleteQueue.length > 0) {
+    const pending = pendingPhaseCompleteQueue.shift();
+    console.log(`[TikTok Flow] Processing queued phase-complete: job ${pending.jobId}`);
     setTimeout(
-      () => handlePhaseCompleteWithLock(pending.jobId, pending.nextStatus),
+      () => handlePhaseCompleteWithSlot(pending.jobId, pending.nextStatus),
       100,
     );
-  } else if (wasProcessingAJob && autoModeEnabled && !isPaused) {
-    // Only re-schedule immediately if we actually processed a job.
-    // When idle (no jobs found), the 24s keepAlive alarm handles periodic polling.
+  }
+
+  // Try to fill available slots
+  if (autoModeEnabled && !isPaused && activeSlots.size < MAX_CONCURRENT_JOBS) {
     setTimeout(processNextJob, 3000);
   }
   return true;
 }
 
-// Force-release the lock (for DISABLE_AUTO_MODE or emergency recovery)
-function forceReleaseProcessingLock(reason) {
-  if (isProcessingJob) {
+// Force-release ALL slots (for DISABLE_AUTO_MODE or emergency recovery)
+function forceReleaseAllSlots(reason) {
+  if (activeSlots.size > 0) {
     console.warn(
-      `[TikTok Flow] Force-releasing lock (${reason}): was ${processingLockId}`,
+      `[TikTok Flow] Force-releasing all ${activeSlots.size} slots (${reason}):`,
+      [...activeSlots.keys()].join(", "),
     );
   }
-  isProcessingJob = false;
-  processingLockId = null;
-  processingJobId = null;
-  pendingPhaseComplete = null;
+  activeSlots.clear();
+  pendingPhaseCompleteQueue.length = 0;
 }
 
 // Restore auto mode state from storage on service worker startup
