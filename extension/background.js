@@ -37,7 +37,7 @@ async function getVideoEngine() {
 // The DB (Setting table) is the single source of truth.
 // This function pulls settings from the DB and mirrors them into chrome.storage.local
 // so background.js always reads consistent values.
-const SYNCED_SETTING_KEYS = ["autoPostEnabled", "videoEngine", "videoModel"];
+const SYNCED_SETTING_KEYS = ["autoPostEnabled", "videoEngine", "videoModel", "parallelJobs"];
 
 async function syncSettingsFromDB() {
   try {
@@ -47,7 +47,6 @@ async function syncSettingsFromDB() {
     const map = {};
     for (const { key, value } of settings) {
       if (SYNCED_SETTING_KEYS.includes(key)) {
-        // Convert "true"/"false" strings to booleans for autoPostEnabled
         if (key === "autoPostEnabled") {
           map[key] = value === "true";
         } else {
@@ -57,6 +56,15 @@ async function syncSettingsFromDB() {
     }
     if (Object.keys(map).length > 0) {
       await chrome.storage.local.set(map);
+      // Update module-level MAX_CONCURRENT_JOBS from synced setting
+      if (map.parallelJobs !== undefined) {
+        const n = parseInt(map.parallelJobs, 10);
+        MAX_CONCURRENT_JOBS = n === 2 ? 2 : 1;
+        if (MAX_CONCURRENT_JOBS > activeSlots.size) {
+          // Slots increased — try to fill them
+          setTimeout(processNextJob, 2000);
+        }
+      }
       console.log("[TikTok Flow] Settings synced from DB:", map);
     }
   } catch (e) {
@@ -1952,7 +1960,7 @@ async function ensureTikTokShopShowcaseTab() {
 }
 
 // ---- Job Processing Automation ----
-const MAX_CONCURRENT_JOBS = 2;
+let MAX_CONCURRENT_JOBS = 1; // Default: 1 job at a time. Updated by syncSettingsFromDB.
 // activeSlots: Map<slotId, { lockId, jobId, flowTabId, grokTabId }>
 const activeSlots = new Map();
 let nextSlotNum = 1;

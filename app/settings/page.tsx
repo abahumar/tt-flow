@@ -351,6 +351,53 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {/* Parallel Jobs Toggle */}
+      <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6">
+        <div>
+          <h2 className="text-lg font-semibold">Performance</h2>
+          <p className="text-xs text-gray-500">
+            Control how many video generation jobs run at the same time
+          </p>
+        </div>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-700">
+              Parallel video generation
+            </p>
+            <p className="text-xs text-gray-500">
+              Run 2 jobs simultaneously (one per browser tab). Default is 1 job
+              at a time. Enable this to double throughput. Requires the Chrome
+              extension to refresh its settings (~1 min).
+            </p>
+          </div>
+          <button
+            onClick={async () => {
+              const newValue =
+                settings["parallelJobs"] === "2" ? "1" : "2";
+              setSettings((s) => ({ ...s, parallelJobs: newValue }));
+              await fetch("/api/settings", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ parallelJobs: newValue }),
+              });
+            }}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              settings["parallelJobs"] === "2"
+                ? "bg-rose-500"
+                : "bg-gray-200"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transform transition-transform ${
+                settings["parallelJobs"] === "2"
+                  ? "translate-x-6"
+                  : "translate-x-1"
+              }`}
+            />
+          </button>
+        </div>
+      </div>
+
       {/* Avatar Images Section */}
       <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6">
         <div>
