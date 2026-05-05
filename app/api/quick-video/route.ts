@@ -17,6 +17,7 @@ const DEFAULT_PRESET = {
   hookFontSize: 48,
   overlayFontSize: 28,
   temperature: 1.5,
+  autoQueue: false,
 };
 
 const FORMAT_SCENES: Record<string, number> = {
@@ -215,6 +216,7 @@ export async function POST(req: NextRequest) {
     preview = false,
     editedContent,
     specialInstruction: bodySpecialInstruction = "",
+    forceAutoQueue = false,
   } = body;
 
   if (!productId) {
@@ -538,7 +540,7 @@ export async function POST(req: NextRequest) {
     : variationSeed.split("—")[0].trim();
 
   // ─── PREVIEW MODE: return AI content for editing, don't create job yet ───
-  if (preview) {
+  if (preview && !forceAutoQueue) {
     return NextResponse.json({
       preview: true,
       hookTitle: aiData.hookTitle || "",
