@@ -111,6 +111,8 @@ interface PresetConfig {
   hookFontSize: number;
   overlayFontSize: number;
   temperature: number;
+  autoQueue: boolean;
+  jobsPerClick: number;
 }
 
 const DEFAULT_PRESET: PresetConfig = {
@@ -126,6 +128,8 @@ const DEFAULT_PRESET: PresetConfig = {
   hookFontSize: 48,
   overlayFontSize: 28,
   temperature: 1.5,
+  autoQueue: false,
+  jobsPerClick: 1,
 };
 
 const AVATARS: Record<string, string> = {
@@ -207,6 +211,11 @@ export default function QuickVideoPage() {
 
   // Avatar images from Settings
   const [avatarImages, setAvatarImages] = useState<Record<string, string>>({});
+
+  // Bulk selection and progress
+  const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
+  const [bulkProgress, setBulkProgress] = useState<Record<string, { done: number; total: number; error?: string }>>({});
+  const [bulkRunning, setBulkRunning] = useState(false);
 
   // Mini USP editor state per product
   const [uspEdits, setUspEdits] = useState<Record<string, string>>({});
@@ -441,14 +450,13 @@ export default function QuickVideoPage() {
     setSavingPreset(false);
   };
 
-  const handleQuickVideo = async (productId: string) => {
+  const handleQuickVideoSingle = async (productId: string) => {
     setGenerating(productId);
     setErrors((e) => {
       const next = { ...e };
       delete next[productId];
       return next;
     });
-    // Clear previous result when regenerating
     setResults((r) => {
       const next = { ...r };
       delete next[productId];
@@ -456,28 +464,135 @@ export default function QuickVideoPage() {
     });
 
     try {
+      const body: Record<string, unknown> = {
+        productId,
+        customImage: customImages[productId]?.filename || "",
+        modelImage: modelFilename || "",
+        specialInstruction: specialInstructionEdits[productId]?.trim() || undefined,
+      };
+      // When autoQueue is off, request preview for admin review/edit
+      if (!preset.autoQueue) {
+        body.preview = true;
+      }
       const res = await fetch("/api/quick-video", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          productId,
-          customImage: customImages[productId]?.filename || "",
-          modelImage: modelFilename || "",
-          preview: true,
-          specialInstruction: specialInstructionEdits[productId]?.trim() || undefined,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) {
         setErrors((e) => ({ ...e, [productId]: data.error }));
-      } else {
+      } else if (data.preview) {
         setPreviews((p) => ({ ...p, [productId]: data }));
+      } else {
+        // autoQueue: job was created directly, no preview
+        setResults((r) => ({ ...r, [productId]: data }));
+        if (data.matrixCombo) {
+          fetch(`/api/products/${productId}/matrix`)
+            .then((r) => r.json())
+            .then((d) => setMatrices((m) => ({ ...m, [productId]: d })))
+            .catch(() => {});
+        }
       }
     } catch {
       setErrors((e) => ({ ...e, [productId]: "Network error" }));
     } finally {
       setGenerating(null);
     }
+  };
+
+  const handleQuickVideo = async (productId: string) => {
+    const n = preset.jobsPerClick ?? 1;
+    // N=1: use existing single-job flow (respects autoQueue + preview)
+    if (n === 1) {
+      await handleQuickVideoSingle(productId);
+      return;
+    }
+
+    // N>1: always direct-queue, sequential calls
+    setGenerating(productId);
+    setErrors((e) => { const next = { ...e }; delete next[productId]; return next; });
+    setResults((r) => { const next = { ...r }; delete next[productId]; return next; });
+    setBulkProgress((bp) => ({ ...bp, [productId]: { done: 0, total: n } }));
+
+    for (let i = 0; i < n; i++) {
+      try {
+        const res = await fetch("/api/quick-video", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            productId,
+            customImage: customImages[productId]?.filename || "",
+            modelImage: modelFilename || "",
+            specialInstruction: specialInstructionEdits[productId]?.trim() || undefined,
+            forceAutoQueue: true,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setBulkProgress((bp) => ({ ...bp, [productId]: { done: i, total: n, error: data.error } }));
+          setErrors((e) => ({ ...e, [productId]: `Job ${i + 1}/${n} failed: ${data.error}` }));
+          break;
+        }
+        setBulkProgress((bp) => ({ ...bp, [productId]: { done: i + 1, total: n } }));
+        if (data.matrixCombo) {
+          fetch(`/api/products/${productId}/matrix`).then((r) => r.json())
+            .then((d) => setMatrices((m) => ({ ...m, [productId]: d }))).catch(() => {});
+        }
+        if (i === n - 1) setResults((r) => ({ ...r, [productId]: data }));
+      } catch {
+        setBulkProgress((bp) => ({ ...bp, [productId]: { done: i, total: n, error: "Network error" } }));
+        setErrors((e) => ({ ...e, [productId]: `Job ${i + 1}/${n} network error` }));
+        break;
+      }
+    }
+    setGenerating(null);
+  };
+
+  const handleBulkGenerate = async () => {
+    if (selectedProducts.size === 0 || bulkRunning) return;
+    setBulkRunning(true);
+    const n = preset.jobsPerClick ?? 1;
+
+    for (const productId of Array.from(selectedProducts)) {
+      setGenerating(productId);
+      setErrors((e) => { const next = { ...e }; delete next[productId]; return next; });
+      setBulkProgress((bp) => ({ ...bp, [productId]: { done: 0, total: n } }));
+
+      for (let i = 0; i < n; i++) {
+        try {
+          const res = await fetch("/api/quick-video", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              productId,
+              customImage: customImages[productId]?.filename || "",
+              modelImage: modelFilename || "",
+              specialInstruction: specialInstructionEdits[productId]?.trim() || undefined,
+              forceAutoQueue: true,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            setBulkProgress((bp) => ({ ...bp, [productId]: { done: i, total: n, error: data.error } }));
+            setErrors((e) => ({ ...e, [productId]: `Job ${i + 1}/${n} failed: ${data.error}` }));
+            break;
+          }
+          setBulkProgress((bp) => ({ ...bp, [productId]: { done: i + 1, total: n } }));
+          if (data.matrixCombo) {
+            fetch(`/api/products/${productId}/matrix`).then((r) => r.json())
+              .then((d) => setMatrices((m) => ({ ...m, [productId]: d }))).catch(() => {});
+          }
+          if (i === n - 1) setResults((r) => ({ ...r, [productId]: data }));
+        } catch {
+          setBulkProgress((bp) => ({ ...bp, [productId]: { done: i, total: n, error: "Network error" } }));
+          setErrors((e) => ({ ...e, [productId]: `Job ${i + 1}/${n} network error` }));
+          break;
+        }
+      }
+      setGenerating(null);
+    }
+    setBulkRunning(false);
   };
 
   const handleConfirmVideo = async (productId: string) => {
@@ -712,6 +827,44 @@ export default function QuickVideoPage() {
               />
               Scene Caption Overlay
             </label>
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={preset.autoQueue}
+                onChange={(e) =>
+                  setPreset((p) => ({
+                    ...p,
+                    autoQueue: e.target.checked,
+                  }))
+                }
+                className="h-4 w-4 rounded border-gray-300 text-green-500 focus:ring-green-500"
+              />
+              <span>
+                Auto Queue
+                <span className="ml-1 text-[10px] text-gray-400">
+                  — skip review, queue directly
+                </span>
+              </span>
+            </label>
+            <div className="flex items-center gap-2 text-sm">
+              <label className="font-medium text-gray-700">Jobs per Click</label>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={preset.jobsPerClick}
+                onChange={(e) =>
+                  setPreset((p) => ({
+                    ...p,
+                    jobsPerClick: Math.max(1, Math.min(10, Number(e.target.value) || 1)),
+                  }))
+                }
+                className="w-16 rounded-lg border border-gray-300 px-2 py-1 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+              />
+              {preset.jobsPerClick > 1 && (
+                <span className="text-[10px] text-gray-400">— always auto-queue, no preview</span>
+              )}
+            </div>
           </div>
 
           {/* Hook Title Font Size & Background Color */}
@@ -888,6 +1041,46 @@ export default function QuickVideoPage() {
           </Link>
         </div>
       ) : (
+        <>
+        {/* Bulk toolbar */}
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5">
+          <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700">
+            <input
+              type="checkbox"
+              checked={selectedProducts.size === products.length && products.length > 0}
+              ref={(el) => {
+                if (el) el.indeterminate = selectedProducts.size > 0 && selectedProducts.size < products.length;
+              }}
+              onChange={(e) =>
+                setSelectedProducts(e.target.checked ? new Set(products.map((pr) => pr.id)) : new Set())
+              }
+              className="h-4 w-4 rounded border-gray-300 text-amber-500 focus:ring-amber-500"
+            />
+            Select All
+          </label>
+          {selectedProducts.size > 0 && (
+            <>
+              <span className="text-xs text-gray-500">
+                {selectedProducts.size} product{selectedProducts.size > 1 ? "s" : ""} selected
+              </span>
+              <button
+                onClick={handleBulkGenerate}
+                disabled={bulkRunning || !hasGeminiKey}
+                className="ml-auto flex items-center gap-2 rounded-lg bg-rose-500 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-rose-600 disabled:opacity-50"
+              >
+                {bulkRunning ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                {bulkRunning
+                  ? "Running..."
+                  : `Bulk Generate (${selectedProducts.size} × ${preset.jobsPerClick} jobs)`}
+              </button>
+            </>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {products.map((p) => {
             const images: string[] = JSON.parse(p.images || "[]");
@@ -907,7 +1100,17 @@ export default function QuickVideoPage() {
                 }`}
               >
                 {/* Product header */}
-                <div className="flex gap-3 p-4">
+                <div className="flex gap-3 p-4 items-start">
+                  <input
+                    type="checkbox"
+                    checked={selectedProducts.has(p.id)}
+                    onChange={(e) => setSelectedProducts((prev) => {
+                      const next = new Set(prev);
+                      e.target.checked ? next.add(p.id) : next.delete(p.id);
+                      return next;
+                    })}
+                    className="mt-1 h-4 w-4 shrink-0 rounded border-gray-300 text-amber-500 focus:ring-amber-500 cursor-pointer"
+                  />
                   <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-gray-100">
                     {images[0] ? (
                       <img
@@ -1304,7 +1507,6 @@ export default function QuickVideoPage() {
                       </p>
                     )}
 
-                    {/* Confirm button */}
                     <button
                       onClick={() => handleConfirmVideo(p.id)}
                       disabled={confirming === p.id}
@@ -1317,6 +1519,13 @@ export default function QuickVideoPage() {
                       )}
                       {confirming === p.id ? "Queuing..." : "Queue Video"}
                     </button>
+                  </div>
+                )}
+
+                {/* Bulk progress indicator */}
+                {bulkProgress[p.id] && !result && !errors[p.id] && (
+                  <div className="border-t border-amber-100 bg-amber-50 px-4 py-2.5 text-xs text-amber-700">
+                    Generating {bulkProgress[p.id].done}/{bulkProgress[p.id].total} jobs...
                   </div>
                 )}
 
@@ -1376,18 +1585,23 @@ export default function QuickVideoPage() {
                       <Sparkles className="h-4 w-4" />
                     )}
                     {isGenerating
-                      ? "Generating..."
+                      ? preset.jobsPerClick > 1
+                        ? `Generating... (${bulkProgress[p.id]?.done ?? 0}/${preset.jobsPerClick})`
+                        : "Generating..."
                       : result
                         ? "Regenerate"
                         : previews[p.id]
                           ? "Regenerate Script"
-                          : "Quick Video"}
+                          : preset.jobsPerClick > 1
+                            ? `Quick Video ×${preset.jobsPerClick}`
+                            : "Quick Video"}
                   </button>
                 </div>
               </div>
             );
           })}
         </div>
+        </>
       )}
 
       {/* Footer info */}
@@ -1399,8 +1613,10 @@ export default function QuickVideoPage() {
           <span className="font-semibold">
             {GENRES[preset.genre] || preset.genre}
           </span>{" "}
-          genre → Job queued in Automation → Chrome Extension processes
-          (image→video→combine).
+          genre →{" "}
+          {preset.autoQueue
+            ? "Job queued directly in Automation → Chrome Extension processes (image→video→combine)."
+            : "Review & edit content → Click &quot;Queue Video&quot; → Job queued in Automation → Chrome Extension processes (image→video→combine)."}
         </p>
         <p className="mt-1">
           Set per-product avatar or change defaults via the{" "}

@@ -630,6 +630,10 @@ VARIASI PEMBUKAAN SCENE 1 (HOOK):
 - Setiap kali generate, pilih pembukaan yang BERBEZA. Jangan ulang pattern yang sama.
 - SEKALI LAGI: JANGAN start dengan "Wei korang". Gunakan variasi lain.
 
+NO OVERCLAIM (CRITICAL — DILARANG KERAS):
+- DILARANG guna perkataan yang membuat jaminan mutlak atau overclaim: "confirm", "terbukti", "dijamin", "guaranteed", "100% berkesan", "mesti berjaya", "pasti", "confirm kurus", "confirm cantik", "confirm sembuh".
+- Gantikan dengan bahasa yang enthusiastic tapi honest: "ramai yang suka", "memang berkesan untuk ramai orang", "patut try", "best gila", "korang kena try".
+
 CRITICAL WORD LIMIT PER SCENE:
 - Each scene generates ONE ~8 second video clip.
 - Dialog per scene SHOULD be around 20 words (roughly 8 seconds of natural speech).
