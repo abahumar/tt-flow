@@ -15,6 +15,7 @@ import {
   AlertCircle,
   RefreshCw,
   Upload,
+  Download,
   X,
   ImageIcon,
   Pencil,
@@ -177,6 +178,74 @@ const FORMAT_SCENES: Record<string, number> = {
   complete: 5,
 };
 
+function escapeCsvField(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
+function parseCSV(text: string): { title: string; url: string; usp: string; miniUsps: string }[] {
+  const rows: string[][] = [];
+  let currentRow: string[] = [];
+  let currentField = "";
+  let inQuotes = false;
+  let i = 0;
+
+  while (i < text.length) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"' && text[i + 1] === '"') {
+        currentField += '"';
+        i += 2;
+      } else if (ch === '"') {
+        inQuotes = false;
+        i++;
+      } else {
+        currentField += ch;
+        i++;
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true;
+        i++;
+      } else if (ch === ',') {
+        currentRow.push(currentField);
+        currentField = "";
+        i++;
+      } else if (ch === '\n' || (ch === '\r' && text[i + 1] === '\n')) {
+        currentRow.push(currentField);
+        currentField = "";
+        rows.push(currentRow);
+        currentRow = [];
+        i += ch === '\r' ? 2 : 1;
+      } else if (ch === '\r') {
+        currentRow.push(currentField);
+        currentField = "";
+        rows.push(currentRow);
+        currentRow = [];
+        i++;
+      } else {
+        currentField += ch;
+        i++;
+      }
+    }
+  }
+  if (currentField || currentRow.length > 0) {
+    currentRow.push(currentField);
+    rows.push(currentRow);
+  }
+
+  // Skip header row; map columns: 0=title, 1=url, 2=usp, 3=miniUsps
+  return rows.slice(1).flatMap((cols) => {
+    const url = (cols[1] ?? "").trim();
+    if (!url) return [];
+    return [{
+      title: (cols[0] ?? "").trim(),
+      url,
+      usp: (cols[2] ?? "").trim(),
+      miniUsps: (cols[3] ?? "").trim(),
+    }];
+  });
+}
+
 export default function QuickVideoPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -222,6 +291,10 @@ export default function QuickVideoPage() {
   const [savingUsp, setSavingUsp] = useState<string | null>(null);
   const [specialInstructionEdits, setSpecialInstructionEdits] = useState<Record<string, string>>({});
   const [savingSpecialInstruction, setSavingSpecialInstruction] = useState<string | null>(null);
+
+  // CSV import/export
+  const [isImporting, setIsImporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const uploadFile = async (file: File): Promise<string> => {
     const formData = new FormData();
@@ -356,6 +429,73 @@ export default function QuickVideoPage() {
     } finally {
       setSavingSpecialInstruction(null);
     }
+  };
+
+  const handleExportCsv = () => {
+    const selected = products.filter((p) => selectedProducts.has(p.id));
+    const header = "title,url,usp,miniUsps";
+    const rows = selected.map((p) =>
+      [escapeCsvField(p.title), escapeCsvField(p.url), escapeCsvField(p.usp), escapeCsvField(p.miniUsps)].join(",")
+    );
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const date = new Date().toISOString().slice(0, 10);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `products-export-${date}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportCsv = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsImporting(true);
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const text = ev.target?.result as string;
+      if (!text) { setIsImporting(false); return; }
+      const rows = parseCSV(text);
+      let created = 0;
+      let updated = 0;
+      for (const row of rows) {
+        try {
+          const res = await fetch("/api/products/scrape", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ manual: { title: row.title, url: row.url, usp: row.usp } }),
+          });
+          if (res.status === 201) {
+            const product = await res.json();
+            await fetch(`/api/products/${product.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ miniUsps: row.miniUsps }),
+            });
+            created++;
+          } else if (res.status === 409) {
+            const data = await res.json();
+            const productId = data.product?.id;
+            if (productId) {
+              await fetch(`/api/products/${productId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ usp: row.usp, miniUsps: row.miniUsps }),
+              });
+              updated++;
+            }
+          }
+        } catch {
+          // skip failed rows
+        }
+      }
+      await fetchProducts();
+      alert(`Import complete: ${created} new, ${updated} updated`);
+      setIsImporting(false);
+    };
+    reader.readAsText(file);
+    e.target.value = "";
   };
 
   // Sync saved miniUsps from products into uspEdits when products load or change
@@ -1058,11 +1198,37 @@ export default function QuickVideoPage() {
             />
             Select All
           </label>
+          <button
+            onClick={() => importInputRef.current?.click()}
+            disabled={isImporting}
+            className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+          >
+            {isImporting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Upload className="h-3.5 w-3.5" />
+            )}
+            {isImporting ? "Importing…" : "Import CSV"}
+          </button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".csv"
+            className="hidden"
+            onChange={handleImportCsv}
+          />
           {selectedProducts.size > 0 && (
             <>
               <span className="text-xs text-gray-500">
                 {selectedProducts.size} product{selectedProducts.size > 1 ? "s" : ""} selected
               </span>
+              <button
+                onClick={handleExportCsv}
+                className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export CSV
+              </button>
               <button
                 onClick={handleBulkGenerate}
                 disabled={bulkRunning || !hasGeminiKey}
