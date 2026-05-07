@@ -333,6 +333,36 @@ document
   .getElementById("scrapeBtn")
   .addEventListener("click", handleScrapeCurrentPage);
 
+document.getElementById("testCreateBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("testCreateBtn");
+  const result = document.getElementById("testCreateResult");
+  btn.disabled = true;
+  btn.textContent = "⏳ Clicking Create...";
+  result.textContent = "";
+  try {
+    const [tab] = await chrome.tabs.query({ url: "https://labs.google/*" });
+    if (!tab) {
+      result.textContent = "❌ No Google Flow tab found — open labs.google/fx/tools/flow first";
+      return;
+    }
+    const res = await new Promise((resolve) => {
+      chrome.runtime.sendMessage({ type: "CLICK_CREATE_BUTTON", tabId: tab.id }, (r) => {
+        resolve(r || { error: chrome.runtime.lastError?.message || "No response" });
+      });
+    });
+    if (res?.success) {
+      result.textContent = `✅ Clicked: "${res.text}"`;
+    } else {
+      result.textContent = `❌ ${res?.error || "Unknown error"}`;
+    }
+  } catch (err) {
+    result.textContent = `❌ ${err.message}`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "🖼️ Test: Click Create (Image)";
+  }
+});
+
 // Event delegation for dynamically rendered buttons
 document.body.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-action]");

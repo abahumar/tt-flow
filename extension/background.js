@@ -624,6 +624,93 @@ function handleMessage(message, sender, sendResponse) {
         .catch((err) => sendResponse({ error: err.message }));
       return true;
 
+    case "CLICK_CREATE_BUTTON":
+      // Click Create via chrome.debugger — the only way to produce isTrusted=true
+      // mouse events that React and native listeners will accept.
+      // Previous attempt had wrong CDP params (button:"left" on mouseMoved caused issues).
+      (async () => {
+        const tabId = message.tabId || sender.tab?.id;
+        if (!tabId) { sendResponse({ error: "No tab ID" }); return; }
+        const debuggee = { tabId };
+        try {
+          await chrome.debugger.attach(debuggee, "1.3");
+          // Wait for the InfoBar to appear and the viewport to settle
+          await new Promise(r => setTimeout(r, 300));
+
+          // Focus the Slate editor first (Google Flow may guard on editor being active),
+          // then scroll the Create button into view and capture its coordinates.
+          const coordResult = await chrome.debugger.sendCommand(debuggee, "Runtime.evaluate", {
+            expression: `(() => {
+              const slateEditor = document.querySelector('[data-slate-editor="true"]');
+              if (slateEditor) slateEditor.focus();
+
+              // The Create button is always the next sibling of the model-selector button
+              // (aria-haspopup="menu"). This is more reliable than searching by text,
+              // which can match other hidden "Create" spans earlier in the DOM.
+              const modelBtn = document.querySelector('button[aria-haspopup="menu"][data-state]');
+              let btn = modelBtn ? modelBtn.nextElementSibling : null;
+              // Fallback: search by arrow_forward icon + hidden Create span
+              if (!btn || btn.tagName !== "BUTTON") {
+                btn = null;
+                for (const b of document.querySelectorAll("button")) {
+                  if (
+                    b.querySelector("i")?.textContent?.includes("arrow_forward") &&
+                    b.querySelector("span")?.textContent?.trim() === "Create"
+                  ) { btn = b; break; }
+                }
+              }
+
+              if (!btn) return JSON.stringify({ found: false });
+              btn.scrollIntoView({ block: "center", behavior: "instant" });
+              const rect = btn.getBoundingClientRect();
+              const promptText = slateEditor ? slateEditor.textContent?.trim() : null;
+              return JSON.stringify({
+                found: true,
+                x: rect.left + rect.width / 2,
+                y: rect.top + rect.height / 2,
+                promptText,
+                disabled: btn.disabled,
+              });
+            })()`,
+            returnByValue: true,
+          });
+
+          const coord = JSON.parse(coordResult?.result?.value || "{}");
+          console.log("[TikTok Flow] CLICK_CREATE_BUTTON coord:", JSON.stringify(coord));
+          if (!coord.found) { sendResponse({ error: "Create button not found" }); return; }
+
+          // Small pause so scrollIntoView completes before we dispatch events
+          await new Promise(r => setTimeout(r, 100));
+
+          const { x, y } = coord;
+          // Correct CDP sequence for a left click:
+          // mouseMoved: button=none, buttons=0 (hover)
+          // mousePressed: button=left, buttons=1
+          // mouseReleased: button=left, buttons=0
+          await chrome.debugger.sendCommand(debuggee, "Input.dispatchMouseEvent", {
+            type: "mouseMoved", x, y,
+            button: "none", buttons: 0, modifiers: 0, clickCount: 0, pointerType: "mouse",
+          });
+          await chrome.debugger.sendCommand(debuggee, "Input.dispatchMouseEvent", {
+            type: "mousePressed", x, y,
+            button: "left", buttons: 1, modifiers: 0, clickCount: 1, pointerType: "mouse",
+          });
+          await new Promise(r => setTimeout(r, 80));
+          await chrome.debugger.sendCommand(debuggee, "Input.dispatchMouseEvent", {
+            type: "mouseReleased", x, y,
+            button: "left", buttons: 0, modifiers: 0, clickCount: 1, pointerType: "mouse",
+          });
+
+          const info = `cdp-click at (${Math.round(x)},${Math.round(y)}) | prompt="${(coord.promptText || "").substring(0, 40)}"`;
+          sendResponse({ success: true, text: info });
+        } catch (err) {
+          sendResponse({ error: err.message });
+        } finally {
+          try { await chrome.debugger.detach(debuggee); } catch {}
+        }
+      })();
+      return true;
+
     case "HEALTH_CHECK":
       healthCheckGoogleFlow().then(sendResponse);
       return true;
@@ -3213,27 +3300,35 @@ async function processImageGeneration(job, ctx) {
   }
 
   try {
-    const result = await new Promise((resolve) => {
-      chrome.tabs.sendMessage(
-        flowTabId,
-        {
-          type: "GENERATE_IMAGE",
-          payload: {
-            jobId: job.id,
-            prompt: job.imagePrompt,
-            productImages: productImages,
-            studioReferenceImages: studioReferenceImages,
+    const result = await Promise.race([
+      new Promise((resolve) => {
+        chrome.tabs.sendMessage(
+          flowTabId,
+          {
+            type: "GENERATE_IMAGE",
+            payload: {
+              jobId: job.id,
+              prompt: job.imagePrompt,
+              productImages: productImages,
+              studioReferenceImages: studioReferenceImages,
+            },
           },
-        },
-        (response) => {
-          if (chrome.runtime.lastError) {
-            resolve({ error: chrome.runtime.lastError.message });
-          } else {
-            resolve(response || { error: "No response from content script" });
-          }
-        },
-      );
-    });
+          (response) => {
+            if (chrome.runtime.lastError) {
+              resolve({ error: chrome.runtime.lastError.message });
+            } else {
+              resolve(response || { error: "No response from content script" });
+            }
+          },
+        );
+      }),
+      new Promise((resolve) =>
+        setTimeout(
+          () => resolve({ error: "sendMessage timeout — content script did not respond within 5 minutes" }),
+          5 * 60 * 1000,
+        )
+      ),
+    ]);
 
     if (result.error) {
       // The message channel can close during long operations (image gen takes minutes)
@@ -3630,26 +3725,34 @@ async function processImageOnlyJob(job, ctx) {
 
   // Step 3: Send standalone image generation message to content script
   try {
-    const result = await new Promise((resolve) => {
-      chrome.tabs.sendMessage(
-        flowTabId,
-        {
-          type: "GENERATE_IMAGE_ONLY",
-          payload: {
-            jobId: job.id,
-            prompt: job.imagePrompt,
-            referenceImages: referenceImages,
+    const result = await Promise.race([
+      new Promise((resolve) => {
+        chrome.tabs.sendMessage(
+          flowTabId,
+          {
+            type: "GENERATE_IMAGE_ONLY",
+            payload: {
+              jobId: job.id,
+              prompt: job.imagePrompt,
+              referenceImages: referenceImages,
+            },
           },
-        },
-        (response) => {
-          if (chrome.runtime.lastError) {
-            resolve({ error: chrome.runtime.lastError.message });
-          } else {
-            resolve(response || { error: "No response from content script" });
-          }
-        },
-      );
-    });
+          (response) => {
+            if (chrome.runtime.lastError) {
+              resolve({ error: chrome.runtime.lastError.message });
+            } else {
+              resolve(response || { error: "No response from content script" });
+            }
+          },
+        );
+      }),
+      new Promise((resolve) =>
+        setTimeout(
+          () => resolve({ error: "sendMessage timeout — content script did not respond within 5 minutes" }),
+          5 * 60 * 1000,
+        )
+      ),
+    ]);
 
     if (result.error) {
       console.warn("[TikTok Flow] Image-only result has error:", result.error);

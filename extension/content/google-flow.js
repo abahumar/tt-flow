@@ -888,31 +888,34 @@ function findPromptInput() {
 // Google Flow "Create" button has text "Create" and arrow_forward icon
 function findGenerateButton() {
   const strategies = [
-    // 1. Button containing "Create" text with an icon (arrow_forward)
+    // 1. Sibling of model-selector button (most reliable — matches known HTML structure)
+    // Structure: div > button[aria-haspopup="menu"] + button(Create)
     () => {
-      const buttons = document.querySelectorAll("button");
-      for (const btn of buttons) {
-        const text = btn.textContent.trim();
+      const modelBtn = document.querySelector('button[aria-haspopup="menu"][data-state]');
+      if (!modelBtn) return null;
+      const sib = modelBtn.nextElementSibling;
+      if (sib && sib.tagName === "BUTTON") return sib;
+      return null;
+    },
+    // 2. Button with arrow_forward icon AND visually-hidden "Create" span
+    () => {
+      for (const btn of document.querySelectorAll("button")) {
         if (
-          text.includes("Create") &&
-          (btn.querySelector("span.material-symbols-outlined") ||
-            text.includes("arrow_forward"))
-        ) {
-          return btn;
-        }
+          btn.querySelector("i")?.textContent?.includes("arrow_forward") &&
+          btn.querySelector("span")?.textContent?.trim() === "Create"
+        ) return btn;
       }
       return null;
     },
-    // 2. Button with exact text "Create" (excluding "New project" etc.)
+    // 3. Button with exact text "Create" after stripping icon text
     () => {
-      const buttons = document.querySelectorAll("button");
-      for (const btn of buttons) {
+      for (const btn of document.querySelectorAll("button")) {
         const text = btn.textContent.replace(/arrow_forward/g, "").trim();
         if (text === "Create") return btn;
       }
       return null;
     },
-    // 3. Button near the prompt input area
+    // 4. Button near the prompt input area
     () => {
       const promptEl = findPromptInput();
       if (!promptEl) return null;
@@ -1677,27 +1680,42 @@ async function fillPrompt(promptEl, text) {
 }
 
 // ---- Wait for a generated image result ----
-async function waitForImageResult(timeout = 180000) {
+async function waitForImageResult(timeout = 150000) {
   console.log("[TikTok Flow] Watching for generated image...");
   const before = snapshotMedia();
 
   // Poll + observe for new images
   const start = Date.now();
+  let lastProgressLog = 0;
   while (Date.now() - start < timeout) {
+    const elapsed = Math.round((Date.now() - start) / 1000);
+    if (elapsed - lastProgressLog >= 15) {
+      console.log(`[TikTok Flow] Still waiting for image result... ${elapsed}s / ${Math.round(timeout / 1000)}s`);
+      lastProgressLog = elapsed;
+    }
+
     const allImages = document.querySelectorAll("img");
     for (const img of allImages) {
       if (before.images.has(img.src)) continue;
-      // Filter: must be a meaningful generated image
-      if (
-        img.src &&
-        img.src.startsWith("http") &&
-        img.naturalWidth > 200 &&
-        img.naturalHeight > 200
-      ) {
-        console.log(
-          "[TikTok Flow] New image detected:",
-          img.src.substring(0, 100),
-        );
+      if (!img.src) continue;
+
+      // Accept http: and blob: URLs (Google Flow now serves generated images as blob: URLs)
+      const isValidSrc = img.src.startsWith("http") || img.src.startsWith("blob:");
+      if (!isValidSrc) continue;
+
+      // Check natural dimensions (fully loaded) OR rendered dimensions (lazy/progressive load)
+      const rect = img.getBoundingClientRect();
+      const hasNaturalSize = img.naturalWidth > 100 && img.naturalHeight > 100;
+      const hasRenderedSize = rect.width > 100 && rect.height > 100;
+
+      if (hasNaturalSize || hasRenderedSize) {
+        console.log("[TikTok Flow] New image detected:", img.src.substring(0, 100));
+        return img;
+      }
+
+      // blob: URL that's visible at all — assume valid (dimensions may be 0 before decode)
+      if (img.src.startsWith("blob:") && rect.width > 0) {
+        console.log("[TikTok Flow] New blob image detected (visible):", img.src.substring(0, 60));
         return img;
       }
     }
@@ -1715,25 +1733,28 @@ async function waitForImageResult(timeout = 180000) {
       }
     }
 
-    // Check for download links that appeared
+    // Check for image download links (blob: or image file extension) — means generation completed
     const downloadLinks = document.querySelectorAll(
       'a[download], a[href*="download"], button[aria-label*="download" i]',
     );
-    if (downloadLinks.length > 0) {
-      console.log(
-        "[TikTok Flow] Download link appeared, generation likely complete",
-      );
-      // Find the associated image
-      for (const img of allImages) {
-        if (!before.images.has(img.src) && img.src && img.naturalWidth > 100) {
-          return img;
+    for (const link of downloadLinks) {
+      const href = link.href || link.getAttribute("href") || "";
+      const isImageDownload =
+        href.startsWith("blob:") ||
+        /\.(png|jpg|jpeg|webp|gif)/i.test(href);
+      if (isImageDownload && !before.videos.has(href)) {
+        console.log("[TikTok Flow] Image download link appeared:", href.substring(0, 80));
+        // Return associated new image if any, otherwise return the link as signal
+        for (const img of allImages) {
+          if (!before.images.has(img.src) && img.src) return img;
         }
+        return link;
       }
     }
 
     await sleep(3000);
   }
-  throw new Error("Timeout waiting for image generation result");
+  throw new Error(`Timeout waiting for image generation result (${Math.round(timeout / 1000)}s)`);
 }
 
 // ---- Wait for a generated video result ----
@@ -2229,8 +2250,8 @@ async function generateImage({
       await sleep(1000);
     }
     if (!switched) {
-      console.warn(
-        "[TikTok Flow] Could not switch to Image tab after 3 attempts — proceeding anyway",
+      throw new Error(
+        "Could not switch to Image mode in Google Flow — the UI may have changed. Check extension console for details and update Image tab selectors in content/google-flow.js",
       );
     }
 
@@ -2357,8 +2378,16 @@ async function generateImage({
     simulateClick(promptEl);
     await sleep(300);
     await fillPrompt(promptEl, prompt);
+    await sleep(1000); // Let React process the Slate input before looking for Create
 
-    // Step 5: Click Create button (retry up to 5 times)
+    // Step 5: Click Create button via main world (trusted click) with simulateClick fallback
+    const activeModeBefore = document.querySelector(
+      'button[data-state="active"].flow_tab_slider_trigger, button[aria-selected="true"]',
+    );
+    console.log(
+      "[TikTok Flow] Active mode before Create:",
+      activeModeBefore?.textContent?.trim() || "unknown",
+    );
     let createBtn = null;
     for (let attempt = 0; attempt < 5; attempt++) {
       await sleep(500);
@@ -2374,12 +2403,24 @@ async function generateImage({
     if (!createBtn) {
       throw new Error("Could not find Create button. The UI may have changed.");
     }
-    simulateClick(createBtn);
+    // Use main-world click (trusted) — synthetic events are ignored by Google Flow
+    const clickResult = await new Promise((resolve) => {
+      chrome.runtime.sendMessage({ type: "CLICK_CREATE_BUTTON" }, (res) => {
+        resolve(res || { error: chrome.runtime.lastError?.message || "No response" });
+      });
+    });
+    if (clickResult?.success) {
+      console.log("[TikTok Flow] Create clicked via main world:", clickResult.text);
+    } else {
+      console.warn("[TikTok Flow] Main-world click failed:", clickResult?.error, "— trying simulateClick fallback");
+      createBtn.scrollIntoView({ block: "center", behavior: "instant" });
+      simulateClick(createBtn);
+    }
     console.log("[TikTok Flow] Create clicked, waiting for image result...");
 
     // Step 6: Wait for the generated image
     await sleep(3000);
-    const resultEl = await waitForImageResult(180000); // 3 min timeout
+    const resultEl = await waitForImageResult(150000); // 150s timeout
 
     // Step 7: Extract URL
     const imageUrl = extractMediaUrl(resultEl);
@@ -2488,8 +2529,8 @@ async function generateImageOnly({ jobId, prompt, referenceImages }) {
       await sleep(1000);
     }
     if (!switched) {
-      console.warn(
-        "[TikTok Flow] Could not switch to Image tab after 3 attempts — proceeding anyway",
+      throw new Error(
+        "Could not switch to Image mode in Google Flow — the UI may have changed. Check extension console for details and update Image tab selectors in content/google-flow.js",
       );
     }
 
@@ -2584,8 +2625,16 @@ async function generateImageOnly({ jobId, prompt, referenceImages }) {
     simulateClick(promptEl);
     await sleep(300);
     await fillPrompt(promptEl, prompt);
+    await sleep(1000); // Let React process the Slate input before looking for Create
 
-    // Step 6: Click Create button (retry up to 5 times)
+    // Step 6: Click Create button via main world (trusted click) with simulateClick fallback
+    const activeModeBefore = document.querySelector(
+      'button[data-state="active"].flow_tab_slider_trigger, button[aria-selected="true"]',
+    );
+    console.log(
+      "[TikTok Flow] Active mode before Create:",
+      activeModeBefore?.textContent?.trim() || "unknown",
+    );
     let createBtn = null;
     for (let attempt = 0; attempt < 5; attempt++) {
       await sleep(500);
@@ -2601,12 +2650,24 @@ async function generateImageOnly({ jobId, prompt, referenceImages }) {
     if (!createBtn) {
       throw new Error("Could not find Create button. The UI may have changed.");
     }
-    simulateClick(createBtn);
+    // Use main-world click (trusted) — synthetic events are ignored by Google Flow
+    const clickResult = await new Promise((resolve) => {
+      chrome.runtime.sendMessage({ type: "CLICK_CREATE_BUTTON" }, (res) => {
+        resolve(res || { error: chrome.runtime.lastError?.message || "No response" });
+      });
+    });
+    if (clickResult?.success) {
+      console.log("[TikTok Flow] Create clicked via main world:", clickResult.text);
+    } else {
+      console.warn("[TikTok Flow] Main-world click failed:", clickResult?.error, "— trying simulateClick fallback");
+      createBtn.scrollIntoView({ block: "center", behavior: "instant" });
+      simulateClick(createBtn);
+    }
     console.log("[TikTok Flow] Create clicked, waiting for image result...");
 
     // Step 7: Wait for the generated image
     await sleep(3000);
-    const resultEl = await waitForImageResult(180000); // 3 min timeout
+    const resultEl = await waitForImageResult(150000); // 150s timeout
 
     // Step 8: Extract URL
     const imageUrl = extractMediaUrl(resultEl);
@@ -3935,8 +3996,9 @@ async function generateMultiScene({
       simulateClick(promptEl);
       await sleep(300);
       await fillPrompt(promptEl, scene.imagePrompt);
+      await sleep(1000); // Let React process Slate input before clicking Create
 
-      // Click Create for image
+      // Click Create for image via main world (trusted click)
       let createBtn = null;
       for (let attempt = 0; attempt < 5; attempt++) {
         await sleep(500);
@@ -3946,14 +4008,25 @@ async function generateMultiScene({
       }
       if (!createBtn)
         throw new Error(`Scene ${si + 1}: Create button not found`);
-      simulateClick(createBtn);
-      console.log(`[TikTok Flow] Scene ${si + 1}: Image Create clicked`);
+      const sceneClickResult = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ type: "CLICK_CREATE_BUTTON" }, (res) => {
+          resolve(res || { error: chrome.runtime.lastError?.message || "No response" });
+        });
+      });
+      if (sceneClickResult?.success) {
+        console.log(`[TikTok Flow] Scene ${si + 1}: Image Create clicked via main world`);
+      } else {
+        console.warn(`[TikTok Flow] Scene ${si + 1}: Main-world click failed:`, sceneClickResult?.error, "— trying simulateClick fallback");
+        createBtn.scrollIntoView({ block: "center", behavior: "instant" });
+        simulateClick(createBtn);
+        console.log(`[TikTok Flow] Scene ${si + 1}: Image Create clicked (simulateClick fallback)`);
+      }
 
       // Wait for UI to transition before polling for result
       await sleep(3000);
 
       // Wait for image result
-      const imgResultEl = await waitForImageResult(180000);
+      const imgResultEl = await waitForImageResult(150000);
       const imageUrl = extractMediaUrl(imgResultEl);
       if (!imageUrl)
         throw new Error(
