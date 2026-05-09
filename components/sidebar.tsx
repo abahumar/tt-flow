@@ -15,6 +15,7 @@ import {
   PenTool,
   Sparkles,
   Bolt,
+  Home,
 } from "lucide-react";
 
 const nav: {
@@ -26,7 +27,8 @@ const nav: {
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/products", label: "Katalog Produk", icon: ShoppingBag },
   { href: "/quick-video", label: "Quick Video", icon: Bolt, badge: "BETA" },
-  { href: "/custom-video", label: "Custom Video", icon: Package, badge: "NEW" },
+  { href: "/home-video", label: "Home Video", icon: Home, badge: "NEW" },
+  { href: "/custom-video", label: "Custom Video", icon: Package },
   { href: "/tools", label: "Prompt Tools", icon: Wand2 },
   { href: "/content-tools", label: "Content Tools", icon: PenTool },
   { href: "/image-tools", label: "Image Tools", icon: ImageIcon },
