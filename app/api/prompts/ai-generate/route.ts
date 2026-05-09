@@ -101,9 +101,9 @@ const AVATAR_DNA: Record<string, string[]> = {
     "A radiant 26-year-old Malay beauty enthusiast with a natural glow-up look. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Skincare-obsessed influencer energy.",
   ],
   woman_chinese_casual: [
-    "A friendly 24-year-old Chinese Malaysian woman with shoulder-length straight black hair and a warm smile. Casual trendy outfit. Approachable, relatable girl-next-door energy.",
-    "A stylish 22-year-old Chinese Malaysian woman with long hair and subtle makeup. Modern minimalist fashion sense. Sweet, bubbly personality with a confident edge.",
-    "A cheerful 26-year-old Chinese Malaysian woman with a bob cut and natural look. Effortlessly chic casual style. Warm, easygoing energy with a creative flair.",
+    "A friendly 23-year-old Malay woman with bright eyes and a radiant smile. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Fresh, girl-next-door energy with a trendy modest fashion sense.",
+    "A cheerful 25-year-old Malay woman with a soft warm glow and subtle lip tint. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Sweet and approachable with a modern modest style.",
+    "A confident 27-year-old Malay woman with elegant posture and minimal gold jewelry. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Clean, put-together modest fashion influencer vibe.",
   ],
   woman_malay_homecook: [
     "A cheerful 35-year-old Malay suri rumah with a warm maternal smile, wearing a simple apron over her outfit. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Homely, kitchen-expert energy.",

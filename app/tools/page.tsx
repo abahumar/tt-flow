@@ -114,8 +114,8 @@ const AVATARS = [
   },
   {
     id: "woman_malay_freehair",
-    label: "Wanita Melayu (Moden)",
-    emoji: "👩",
+    label: "Wanita Melayu 3 (Bertudung)",
+    emoji: "🧕",
   },
   {
     id: "woman_malay_corporate",
@@ -164,8 +164,8 @@ const AVATARS = [
   },
   {
     id: "woman_chinese_casual",
-    label: "Wanita Cina (Casual)",
-    emoji: "👩",
+    label: "Wanita Melayu 2 (Bertudung)",
+    emoji: "🧕",
   },
   {
     id: "woman_malay_homecook",

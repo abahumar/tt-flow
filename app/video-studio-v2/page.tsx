@@ -134,7 +134,7 @@ const GENRES = [
 
 const PERSONAS = [
   { id: "woman_malay_hijab", label: "Wanita Melayu (Bertudung)", icon: User },
-  { id: "woman_malay_freehair", label: "Wanita Melayu (Moden)", icon: User },
+  { id: "woman_malay_freehair", label: "Wanita Melayu 3 (Bertudung)", icon: User },
   {
     id: "woman_malay_corporate",
     label: "Wanita Melayu (Korporat)",
@@ -152,7 +152,7 @@ const PERSONAS = [
   },
   { id: "woman_malay_mother", label: "Ibu Muda Melayu", icon: User },
   { id: "woman_malay_beauty", label: "Beauty Influencer", icon: User },
-  { id: "woman_chinese_casual", label: "Wanita Cina (Casual)", icon: User },
+  { id: "woman_chinese_casual", label: "Wanita Melayu 2 (Bertudung)", icon: User },
   { id: "woman_malay_homecook", label: "Suri Rumah / Home Cook", icon: User },
   { id: "man_malay_father", label: "Ayah Muda", icon: User },
   { id: "couple_malay", label: "Pasangan Melayu (Couple)", icon: User },

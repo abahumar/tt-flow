@@ -135,7 +135,7 @@ const DEFAULT_PRESET: PresetConfig = {
 
 const AVATARS: Record<string, string> = {
   woman_malay_hijab: "🧕 Wanita Melayu (Bertudung)",
-  woman_malay_freehair: "👩 Wanita Melayu (Moden)",
+  woman_malay_freehair: "🧕 Wanita Melayu 3 (Bertudung)",
   woman_malay_corporate: "👩‍💼 Wanita Melayu (Korporat)",
   woman_malay_elder: "👵 Makcik Melayu (50+)",
   man_malay_casual: "👨 Lelaki Melayu (Casual)",
@@ -145,7 +145,7 @@ const AVATARS: Record<string, string> = {
   woman_malay_student: "🎓 Wanita Melayu (Student/Gen Z)",
   woman_malay_mother: "👩‍👧 Ibu Muda Melayu",
   woman_malay_beauty: "💄 Beauty Influencer",
-  woman_chinese_casual: "👩 Wanita Cina (Casual)",
+  woman_chinese_casual: "🧕 Wanita Melayu 2 (Bertudung)",
   woman_malay_homecook: "🍳 Suri Rumah / Home Cook",
   man_malay_father: "👨‍👦 Ayah Muda",
   couple_malay: "💑 Pasangan Melayu (Couple)",
