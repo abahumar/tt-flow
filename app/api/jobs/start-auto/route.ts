@@ -69,7 +69,12 @@ export async function POST(request: NextRequest) {
         { status: 409 },
       );
     }
-    throw err;
+    // Any other DB error: return JSON so the caller never receives an HTML error page.
+    console.error("[jobs/start-auto] DB error:", err);
+    return NextResponse.json(
+      { error: "Database error", detail: err?.message },
+      { status: 500 },
+    );
   }
 
   if (!job) {
