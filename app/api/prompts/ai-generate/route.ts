@@ -51,9 +51,9 @@ const AVATAR_DNA: Record<string, string[]> = {
     "A confident 27-year-old Malay woman with minimal gold jewelry. Clean, put-together modest fashion influencer vibe. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers).",
   ],
   woman_malay_freehair: [
-    "A trendy 20-year-old Malay woman with shoulder-length wavy hair. Energetic and approachable vibe. Hijabi with modern fashion-forward styling, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers).",
-    "A stylish 21-year-old Malay woman with long straight black hair and wispy bangs. Cool streetwear aesthetic with a playful, youthful energy. Hijabi with trendy modern look, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers).",
-    "A vibrant 19-year-old Malay woman with a messy bun and hoop earrings. Effortlessly trendy Y2K-inspired look with a fun, carefree attitude. Hijabi with edgy modern styling, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers).",
+    "A trendy 20-year-old Malay woman with bright eyes and an energetic smile. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Modern fashion-forward modest style with a youthful, approachable vibe.",
+    "A stylish 21-year-old Malay woman with defined brows and a playful expression. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Cool streetwear-inspired modest look with a fun, confident energy.",
+    "A vibrant 19-year-old Malay woman with a warm glow and a carefree smile. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Effortlessly trendy Y2K-inspired modest fashion with edgy, youthful attitude.",
   ],
   woman_malay_corporate: [
     "A professional 30-year-old Malay woman with a confident posture. Sophisticated and authoritative look. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers).",
