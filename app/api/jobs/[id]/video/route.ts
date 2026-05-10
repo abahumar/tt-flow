@@ -128,17 +128,21 @@ export async function POST(
                 hookBgColor: config.hookBgColor || "E91E63",
                 hookTextColor: config.hookTextColor || "FFFFFF",
                 hookFontSize: config.hookFontSize || 48,
+                hookStyle: ["background", "stroke"].includes(config.hookStyle) ? config.hookStyle : undefined,
+                hookPosition: ["top", "center", "bottom"].includes(config.hookPosition) ? config.hookPosition : undefined,
               });
             } else if (hasHook) {
               addHookOverlay({
                 inputPath: processedPath,
                 outputPath: overlayedPath,
                 title: hookTitle,
-                subtitle: config.hookSubtitle || undefined,
+                subtitle: config.hookSubtitle ?? undefined,
                 displayDuration: 0.5,
                 bgColor: config.hookBgColor || "E91E63",
                 textColor: config.hookTextColor || "FFFFFF",
                 hookFontSize: config.hookFontSize || 48,
+                hookStyle: ["background", "stroke"].includes(config.hookStyle) ? config.hookStyle : undefined,
+                hookPosition: ["top", "center", "bottom"].includes(config.hookPosition) ? config.hookPosition : undefined,
               });
             } else if (hasOverlay) {
               addTextOverlay(processedPath, overlayedPath, {
@@ -237,6 +241,8 @@ export async function POST(
               hookBgColor: config.hookBgColor || "E91E63",
               hookTextColor: config.hookTextColor || "FFFFFF",
               hookFontSize: config.hookFontSize || 36,
+              hookStyle: ["background", "stroke"].includes(config.hookStyle) ? config.hookStyle : undefined,
+              hookPosition: ["top", "center", "bottom"].includes(config.hookPosition) ? config.hookPosition : undefined,
             });
 
             const combinedVideoUrl = `http://localhost:3000/api/jobs/${id}/video?type=combined`;

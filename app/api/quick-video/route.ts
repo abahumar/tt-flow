@@ -18,6 +18,8 @@ const DEFAULT_PRESET = {
   overlayFontSize: 28,
   temperature: 1.5,
   autoQueue: false,
+  hookStyle: "background" as "background" | "stroke",
+  hookPosition: "top" as "top" | "center" | "bottom",
 };
 
 const FORMAT_SCENES: Record<string, number> = {
@@ -157,6 +159,8 @@ async function createVideoJob(
     hookFontSize: preset.hookFontSize,
     overlays,
     overlayFontSize: preset.overlayFontSize,
+    hookStyle: preset.hookStyle ?? "background",
+    hookPosition: preset.hookPosition ?? "top",
   });
 
   const scene1 = variations[0];

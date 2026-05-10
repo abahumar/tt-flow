@@ -114,6 +114,8 @@ interface PresetConfig {
   temperature: number;
   autoQueue: boolean;
   jobsPerClick: number;
+  hookStyle: "background" | "stroke";
+  hookPosition: "top" | "center" | "bottom";
 }
 
 const DEFAULT_PRESET: PresetConfig = {
@@ -131,6 +133,8 @@ const DEFAULT_PRESET: PresetConfig = {
   temperature: 1.5,
   autoQueue: false,
   jobsPerClick: 1,
+  hookStyle: "background",
+  hookPosition: "top",
 };
 
 const AVATARS: Record<string, string> = {
@@ -1007,71 +1011,132 @@ export default function QuickVideoPage() {
             </div>
           </div>
 
-          {/* Hook Title Font Size & Background Color */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {/* Hook Title Appearance */}
+          <div className="space-y-3 rounded-lg border border-amber-100 bg-white p-3">
+            <p className="text-xs font-semibold text-amber-700">Hook Title Appearance</p>
+
+            {/* Hook Style */}
+            <div>
+              <span className="mb-1.5 block text-xs font-medium text-gray-600">Hook Style</span>
+              <div className="flex gap-4">
+                {(["background", "stroke"] as const).map((style) => (
+                  <label key={style} className="flex cursor-pointer items-center gap-1.5">
+                    <input
+                      type="radio"
+                      name="hookStyle"
+                      value={style}
+                      checked={preset.hookStyle === style}
+                      onChange={() => setPreset((p) => ({ ...p, hookStyle: style }))}
+                      className="accent-amber-500"
+                    />
+                    <span className="text-xs text-gray-700">
+                      {style === "background" ? "Background Color" : "Stroke Text"}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* BG + Text color — only when background style */}
+            {preset.hookStyle === "background" && (
+              <div className="flex flex-wrap gap-4">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">
+                    Background Color
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={`#${preset.hookBgColor}`}
+                      onChange={(e) =>
+                        setPreset((p) => ({
+                          ...p,
+                          hookBgColor: e.target.value.replace("#", ""),
+                        }))
+                      }
+                      className="h-9 w-10 cursor-pointer rounded border border-gray-300"
+                    />
+                    <span className="text-xs text-gray-500">#{preset.hookBgColor}</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">
+                    Text Color
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={`#${preset.hookTextColor}`}
+                      onChange={(e) =>
+                        setPreset((p) => ({
+                          ...p,
+                          hookTextColor: e.target.value.replace("#", ""),
+                        }))
+                      }
+                      className="h-9 w-10 cursor-pointer rounded border border-gray-300"
+                    />
+                    <span className="text-xs text-gray-500">#{preset.hookTextColor}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Position — only when stroke style */}
+            {preset.hookStyle === "stroke" && (
+              <div>
+                <span className="mb-1.5 block text-xs font-medium text-gray-600">Position</span>
+                <div className="flex gap-4">
+                  {(["top", "center", "bottom"] as const).map((pos) => (
+                    <label key={pos} className="flex cursor-pointer items-center gap-1.5">
+                      <input
+                        type="radio"
+                        name="hookPosition"
+                        value={pos}
+                        checked={preset.hookPosition === pos}
+                        onChange={() => setPreset((p) => ({ ...p, hookPosition: pos }))}
+                        className="accent-amber-500"
+                      />
+                      <span className="text-xs capitalize text-gray-700">{pos}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Font Size — always visible */}
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-600">
                 Hook Font Size
               </label>
               <input
                 type="number"
-                min={20}
-                max={80}
+                min={24}
+                max={96}
                 value={preset.hookFontSize}
                 onChange={(e) =>
                   setPreset((p) => ({
                     ...p,
-                    hookFontSize: Math.max(
-                      20,
-                      Math.min(80, Number(e.target.value) || 48),
-                    ),
+                    hookFontSize: Math.max(24, Math.min(96, Number(e.target.value) || 48)),
                   }))
                 }
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                className="w-28 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
               />
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">
-                Hook Background Color
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={`#${preset.hookBgColor}`}
-                  onChange={(e) =>
-                    setPreset((p) => ({
-                      ...p,
-                      hookBgColor: e.target.value.replace("#", ""),
-                    }))
-                  }
-                  className="h-9 w-10 cursor-pointer rounded border border-gray-300"
-                />
-                <span className="text-xs text-gray-500">
-                  #{preset.hookBgColor}
-                </span>
+
+            {/* Live preview */}
+            {preset.enableHook && (
+              <div
+                className="rounded px-2 py-1.5 text-center text-xs font-bold"
+                style={{
+                  backgroundColor: preset.hookStyle === "background" ? `#${preset.hookBgColor}` : "transparent",
+                  color: preset.hookStyle === "background" ? `#${preset.hookTextColor}` : "#111",
+                  fontSize: `${Math.round(preset.hookFontSize * 0.25)}px`,
+                  WebkitTextStroke: preset.hookStyle === "stroke" ? "0.5px #111" : undefined,
+                }}
+              >
+                HOOK TITLE PREVIEW
               </div>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">
-                Hook Text Color
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={`#${preset.hookTextColor}`}
-                  onChange={(e) =>
-                    setPreset((p) => ({
-                      ...p,
-                      hookTextColor: e.target.value.replace("#", ""),
-                    }))
-                  }
-                  className="h-9 w-10 cursor-pointer rounded border border-gray-300"
-                />
-                <span className="text-xs text-gray-500">
-                  #{preset.hookTextColor}
-                </span>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* AI Temperature Slider */}

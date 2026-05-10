@@ -52,9 +52,9 @@ const AVATAR_DNA: Record<string, string[]> = {
     "A polished 34-year-old Malay man with a clean fade haircut and frameless glasses. Modern tech-CEO sophisticated vibe.",
   ],
   woman_malay_student: [
-    "A fresh-faced 20-year-old Malay university student with a bright curious smile. Hijabi with a sporty casual style, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Feet fully covered — wearing sneakers or closed-toe flats, never bare feet. Youthful Gen Z energy.",
-    "A bubbly 19-year-old Malay girl with round glasses and a playful grin. Hijabi with a cute oversized hoodie look, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Feet fully covered — wearing sneakers or closed-toe flats, never bare feet. Student budget-queen energy.",
-    "A trendy 21-year-old Malay student with a minimalist aesthetic. Hijabi with clean pastel tones, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Feet fully covered — wearing sneakers or closed-toe flats, never bare feet.",
+    "A fresh-faced 20-year-old Malay university student with a bright curious smile. Hijabi, wearing a neat baju kurung casual, inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Feet fully covered — wearing sneakers or closed-toe flats, never bare feet. Youthful Gen Z energy.",
+    "A bubbly 19-year-old Malay girl with round glasses and a playful grin. Hijabi, wearing a simple pastel baju kurung, inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Feet fully covered — wearing sneakers or closed-toe flats, never bare feet. Student budget-queen energy.",
+    "A trendy 21-year-old Malay student with a minimalist aesthetic. Hijabi, wearing a simple baju kurung in clean pastel tones, inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Feet fully covered — wearing sneakers or closed-toe flats, never bare feet.",
   ],
   woman_malay_mother: [
     "A loving 30-year-old Malay young mother with a warm, nurturing smile. Hijabi, wearing inner sleeve stop below the wrist. Full modest coverage (no skin visible except face and fingers). Feet fully covered — wearing closed-toe flats or socks, never bare feet. Practical and relatable busy-mom energy.",
@@ -87,9 +87,9 @@ const AVATAR_DNA: Record<string, string[]> = {
     "A strong 34-year-old Malay father with a well-groomed beard and calm confident demeanor. Smart-casual polo shirt. Protective, reliable family-man energy.",
   ],
   couple_malay: [
-    "A sweet Malay couple in their mid-20s. The woman is hijabi with inner sleeve stop below the wrist, full modest coverage, feet fully covered with closed-toe shoes or socks. The man has a neat haircut and trimmed beard. Matching casual outfits. Wholesome, in-love couple energy.",
-    "An adorable Malay couple, both 26. She wears a pastel hijab with full modest coverage, feet fully covered with closed-toe shoes or socks. He has a textured crop and clean-shaven face. Coordinated earth-tone outfits. Sweet couple aesthetic.",
-    "A trendy Malay couple in their late 20s. She is hijabi with full modest coverage, feet fully covered with closed-toe shoes or socks. He sports a buzz cut with subtle stubble. Stylish streetwear-coordinated look.",
+    "A sweet Malay couple in their mid-20s. The woman is hijabi wearing a neat baju kurung casual, inner sleeve stop below the wrist, full modest coverage, feet fully covered with closed-toe shoes or socks. The man has a neat haircut and trimmed beard. Wholesome, in-love couple energy.",
+    "An adorable Malay couple, both 26. She wears a pastel baju kurung with full modest coverage, inner sleeve stop below the wrist, feet fully covered with closed-toe shoes or socks. He has a textured crop and clean-shaven face. Sweet couple aesthetic.",
+    "A trendy Malay couple in their late 20s. She is hijabi wearing a smart casual baju kurung, full modest coverage, inner sleeve stop below the wrist, feet fully covered with closed-toe shoes or socks. He sports a buzz cut with subtle stubble. Coordinated casual look.",
   ],
   hands_only: [
     "No face visible. Close-up of well-manicured feminine hands interacting with the product. Clean, aesthetic background. Satisfying ASMR-style product showcase.",
@@ -197,6 +197,7 @@ function buildPrompt(params: {
   targetAudience: string;
   avatarDna: string;
   genre: string;
+  location?: string;
   sceneCount: number;
   hasImage: boolean;
   hasModelImage: boolean;
@@ -209,6 +210,7 @@ function buildPrompt(params: {
     targetAudience,
     avatarDna,
     genre,
+    location,
     sceneCount,
     hasImage,
     hasModelImage,
@@ -259,14 +261,20 @@ BACKGROUND RULES — CRITICAL (must look like a real Malaysian home, NOT a studi
 - Typical Malaysian home details: potted plants on floor or windowsill, framed family photos on walls, rattan furniture accents
 - Warm, lived-in feel — NOT a showroom, NOT plain white walls, NOT generic interiors
 - Lighting: natural window light only — NOT ring light, NOT studio flash, NOT artificial spot lighting
+${location ? `
+PRODUCT LOCATION CONSTRAINT (CRITICAL):
+- The product MUST be placed in: ${location}
+- ALL scenes MUST be set in this location. Do not place the product in any other room or area.
+- The roomContext for EVERY scene MUST reflect "${location}".
+- Do NOT use recommendedRooms analysis to override this — the user has specified the exact location.` : ''}
 
 MUSLIMAH COMPLIANCE (CRITICAL — applies to ALL women models):
 - Women MUST wear inner sleeves extending below the wrist at all times — no wrist or arm skin visible
 - Women's feet MUST be covered at all times — wearing closed-toe shoes, flats, heels, sneakers, or socks
 - NEVER show bare feet, open-toed sandals, ankles, wrists, or arms on any women model
 - This applies to ALL scenes including sitting, lounging, and close-up shots
-- If the furniture interaction requires the model to sit or recline (sofa, bed, rocking chair), describe her as wearing socks or house slippers — feet still covered
-- Every image prompt for women MUST include the phrase "wearing inner sleeve stop below the wrist"
+- Model is ALWAYS inside the house — she MUST wear room shoes (house slippers) in EVERY scene. Never bare feet, never outdoor shoes, never just socks.
+- Every image prompt for women MUST include the phrase "wearing inner sleeve stop below the wrist" and "wearing room shoes (house slippers)"
 
 MODEL INTERACTION RULES:
 - Model stands beside, gestures toward, or naturally interacts with the furniture
@@ -280,7 +288,7 @@ MODEL INTERACTION RULES:
   * Plant stand: placing a potted plant on it, adjusting decor around it
 - Model NEVER wears the furniture. No clothing or wearable logic applies.
 - Model faces camera naturally — warm, approachable, NOT stiff or catalogue-posed
-- Model wears appropriate casual home attire (baju kurung casual, modest home outfit — nothing too formal)
+- Women models MUST ALWAYS wear baju kurung — casual or smart casual baju kurung only. No other outfit type is allowed.
 
 IMAGE PROMPT RULES (for Google Flow):
 - Always 9:16 vertical composition
@@ -288,10 +296,15 @@ IMAGE PROMPT RULES (for Google Flow):
 - For close-up scenes: describe what is being shown (e.g. "close-up of the metal frame joint, hands gripping the bar to show sturdiness")
 - Append to every image prompt: "9:16 vertical composition, real Malaysian home interior, natural window light, authentic UGC smartphone look"
 
+MODEL CONSISTENCY RULE (CRITICAL — applies to ALL scenes):
+- Scene 1 MUST include an explicit outfit anchor: choose ONE specific baju kurung color and style and write it as a short phrase, e.g. "wearing a soft teal baju kurung casual" or "wearing a dusty rose smart-casual baju kurung"
+- Every Scene 2, 3, 4 image prompt MUST copy that exact outfit phrase from Scene 1 verbatim — do NOT change the color, style, or wording in any subsequent scene
+- This ensures the model looks identical across all scenes. Changing even one word of the outfit phrase causes the AI image generator to change the clothing.
+
 REFERENCE IMAGE USAGE (CRITICAL):
 ${hasModelImage
-  ? `- A MODEL REFERENCE PHOTO is uploaded to Google Flow. In EVERY scene's image prompt, include the model's age and general type from the AVATAR description above, then append "from image reference" — e.g. "A friendly 25-year-old Malay woman in hijab from image reference, seated on..." or "A warm 50-year-old Malay makcik from image reference, standing beside...". The age MUST always be included so the image generator knows the character's age range. DO NOT re-describe face features, skin tone, or outfit in detail — the reference photo covers those.`
-  : `- No model reference photo. Describe the model fully in Scene 1 using the AVATAR details above including exact age. Scenes 2+ must keep the same appearance — repeat the age and general description.`
+  ? `- A MODEL REFERENCE PHOTO is uploaded to Google Flow. In EVERY scene's image prompt, include the model's age and general type from the AVATAR description above, then append "from image reference" — e.g. "A friendly 25-year-old Malay woman in hijab from image reference, seated on..." or "A warm 50-year-old Malay makcik from image reference, standing beside...". The age MUST always be included so the image generator knows the character's age range. DO NOT re-describe face features or skin tone — the reference photo covers those. ALWAYS include the outfit anchor phrase (from MODEL CONSISTENCY RULE above) in every scene regardless.`
+  : `- No model reference photo. Describe the model fully in Scene 1 using the AVATAR details above including exact age and the outfit anchor phrase. Scenes 2+ must copy the exact outfit anchor phrase from Scene 1 and repeat the age and general description.`
 }
 ${hasImage
   ? `- A PRODUCT REFERENCE PHOTO is uploaded to Google Flow. In EVERY scene's image prompt, describe the furniture briefly and append "from image reference" directly after — e.g. "a 3-tier black metal rack from image reference, placed in...". Do NOT re-invent the product details — match what is visible in the reference photo.`
@@ -327,6 +340,18 @@ HOOK TITLE:
 - Max 6 words, ALL CAPS, punchy — for the video's text overlay card
 - Example: "RAK MURAH BILIK JADI CANTIK!" or "KATIL BARU BILIK AUTO UPGRADE!"
 
+VIDEO PROMPT RULES (CRITICAL — furniture videos):
+- DEFAULT: static camera, NO movement — describe the scene as a still, locked-off shot. e.g. "Static shot. Model stands beside the rack, smiling at camera."
+- Movement is ONLY allowed when the model performs a specific physical action on the furniture:
+  * Opening/closing a drawer or cabinet door → describe the hand action, camera stays static
+  * Pulling out a shelf or tray → describe the pull motion
+  * Sitting down onto a sofa or bed → describe the sit motion
+  * Pushing a trolley → describe the push motion
+- Camera itself MUST remain static in ALL scenes — no pan, no zoom, no dolly, no tilt, no handheld shake
+- Write videoPrompt as: "[Camera: static locked-off] [Model action if any]. [Scene description]."
+- Example (no action): "Camera: static locked-off. Model stands beside the 3-tier rack, smiling warmly at camera."
+- Example (with action): "Camera: static locked-off. Model opens the top drawer slowly, revealing the interior."
+
 Return ONLY valid JSON — no markdown fences, no extra text:
 {
   "analysis": {
@@ -346,7 +371,7 @@ Return ONLY valid JSON — no markdown fences, no extra text:
       "roomContext": "bedroom | study | living room | kitchen | hallway | patio",
       "dialog": "BM casual dialog...",
       "imagePrompt": "Full detailed image prompt for Google Flow...",
-      "videoPrompt": "Camera motion / action description...",
+      "videoPrompt": "Camera: static locked-off. [Model action if any]. [Scene description].",
       "overlayText": "Short overlay caption max 6 words"
     }
   ]
@@ -369,6 +394,8 @@ interface AppearanceSettings {
   hookTextColor: string;
   hookFontSize: number;
   overlayFontSize: number;
+  hookStyle?: "background" | "stroke";
+  hookPosition?: "top" | "center" | "bottom";
 }
 
 const DEFAULT_APPEARANCE: AppearanceSettings = {
@@ -377,6 +404,8 @@ const DEFAULT_APPEARANCE: AppearanceSettings = {
   hookTextColor: "FFFFFF",
   hookFontSize: 48,
   overlayFontSize: 28,
+  hookStyle: "background",
+  hookPosition: "top",
 };
 
 // Append dialog to videoPrompt so Google Flow renders the correct spoken text
@@ -418,6 +447,8 @@ async function createVideoJob(
     hookFontSize: appearance.hookFontSize,
     overlays,
     overlayFontSize: appearance.overlayFontSize,
+    hookStyle: appearance.hookStyle ?? "background",
+    hookPosition: appearance.hookPosition ?? "top",
   });
 
   return fetch(`${baseUrl}/api/jobs`, {
@@ -447,10 +478,12 @@ export async function POST(req: NextRequest) {
     customUsp = "",         // optional USP override (user-entered in left panel)
     avatar = "woman_malay_hijab",
     genre = "softsell",
+    location = "",
     sceneCount = 4,
     preview = true,
     editedContent,
     appearanceSettings,
+    forceAutoQueue = false,
   } = body;
 
   if (!productId && !customProduct?.title) {
@@ -529,8 +562,8 @@ export async function POST(req: NextRequest) {
   const protocol = host.startsWith("localhost") ? "http" : "https";
   const baseUrl = `${protocol}://${host}`;
 
-  // Resolve avatar custom image: modelImage override → avatar_images setting for this avatarId
-  const avatarId = productData.avatarId || avatar;
+  // Resolve avatar: user's explicit selection takes precedence over product's stored avatarId
+  const avatarId = avatar || productData.avatarId || "woman_malay_hijab";
   let effectiveModelImage = body.modelImage || "";
   if (!effectiveModelImage && avatarId !== "product_only" && avatarId !== "hands_only") {
     try {
@@ -601,6 +634,7 @@ export async function POST(req: NextRequest) {
     targetAudience: productData.targetAudience,
     avatarDna,
     genre,
+    location: location || undefined,
     sceneCount: Number(sceneCount),
     hasImage: !!imageData,
     hasModelImage: !!effectiveModelImage,
@@ -654,7 +688,7 @@ export async function POST(req: NextRequest) {
   // Append dialog to videoPrompt so Google Flow renders the correct spoken text
   const scenes = attachDialog(aiData.scenes);
 
-  if (preview) {
+  if (preview && !forceAutoQueue) {
     return NextResponse.json({
       preview: true,
       analysis: aiData.analysis || {},

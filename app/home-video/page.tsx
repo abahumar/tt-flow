@@ -63,6 +63,8 @@ interface AppearanceSettings {
   hookTextColor: string;
   hookFontSize: number;
   overlayFontSize: number;
+  hookStyle: "background" | "stroke";        // default: "background"
+  hookPosition: "top" | "center" | "bottom"; // default: "top"
 }
 
 const DEFAULT_APPEARANCE: AppearanceSettings = {
@@ -71,6 +73,8 @@ const DEFAULT_APPEARANCE: AppearanceSettings = {
   hookTextColor: "FFFFFF",
   hookFontSize: 48,
   overlayFontSize: 28,
+  hookStyle: "background",
+  hookPosition: "top",
 };
 
 const AVATARS: { id: string; label: string }[] = [
@@ -135,6 +139,7 @@ export default function HomeVideoPage() {
 
   const [avatar, setAvatar] = useState("woman_malay_hijab");
   const [genre, setGenre] = useState("softsell");
+  const [location, setLocation] = useState<string>("");
   const [sceneCount, setSceneCount] = useState(2);
 
   const [loading, setLoading] = useState(false);
@@ -162,6 +167,11 @@ export default function HomeVideoPage() {
   const [savingAppearance, setSavingAppearance] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [jobsPerClick, setJobsPerClick] = useState(1);
+  const [autoQueue, setAutoQueue] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number; error?: string } | null>(null);
+  const [queuedCount, setQueuedCount] = useState(0);
+
   const fetchProducts = useCallback(async () => {
     setLoadingProducts(true);
     try {
@@ -184,7 +194,8 @@ export default function HomeVideoPage() {
         const entry = settings.find((s) => s.key === "home_video_settings");
         if (entry?.value) {
           try {
-            setAppearance({ ...DEFAULT_APPEARANCE, ...JSON.parse(entry.value) });
+            const savedSettings = JSON.parse(entry.value);
+            setAppearance({ ...DEFAULT_APPEARANCE, ...savedSettings });
           } catch {}
         }
         const avatarEntry = settings.find((s) => s.key === "avatar_images");
@@ -244,39 +255,45 @@ export default function HomeVideoPage() {
   const isReadyToGenerate =
     productMode === "catalog" ? !!selectedProduct : !!customProductTitle.trim();
 
+  const buildBasePayload = (preview: boolean) => {
+    const base = {
+      customImage: customImageFilename || "",
+      customUsp: customUsp.trim() || undefined,
+      avatar,
+      genre,
+      location: location || undefined,
+      sceneCount,
+      preview,
+      appearanceSettings: appearance,
+    };
+    return productMode === "catalog"
+      ? { ...base, productId: selectedProduct!.id }
+      : {
+          ...base,
+          customProduct: {
+            title: customProductTitle.trim(),
+            description: customProductDesc.trim(),
+            price: customProductPrice.trim(),
+          },
+        };
+  };
+
   const handleGenerate = async () => {
     if (!isReadyToGenerate) return;
+    if (jobsPerClick > 1) { await handleGenerateMulti(); return; }
+    if (autoQueue) { await handleGenerateDirect(); return; }
+
     setLoading(true);
     setError(null);
     setPreviewData(null);
     setJobId(null);
-
-    const basePayload = {
-      customImage: customImageFilename || "",
-      customUsp: customUsp.trim() || undefined,
-      avatar: (productMode === "catalog" ? selectedProduct?.avatarId : null) || avatar,
-      genre,
-      sceneCount,
-      preview: true,
-    };
-
-    const payload =
-      productMode === "catalog"
-        ? { ...basePayload, productId: selectedProduct!.id }
-        : {
-            ...basePayload,
-            customProduct: {
-              title: customProductTitle.trim(),
-              description: customProductDesc.trim(),
-              price: customProductPrice.trim(),
-            },
-          };
+    setBulkProgress(null);
 
     try {
       const res = await fetch("/api/home-video", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(buildBasePayload(true)),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Generation failed");
@@ -290,6 +307,68 @@ export default function HomeVideoPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGenerateDirect = async () => {
+    setLoading(true);
+    setError(null);
+    setPreviewData(null);
+    setJobId(null);
+    setBulkProgress(null);
+    setQueuedCount(0);
+
+    try {
+      const res = await fetch("/api/home-video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...buildBasePayload(false), forceAutoQueue: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Generation failed");
+      setJobId(data.jobId);
+      setQueuedCount(1);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Generation failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGenerateMulti = async () => {
+    setLoading(true);
+    setError(null);
+    setPreviewData(null);
+    setJobId(null);
+    setQueuedCount(0);
+    setBulkProgress({ done: 0, total: jobsPerClick });
+
+    const payload = { ...buildBasePayload(false), forceAutoQueue: true };
+
+    for (let i = 0; i < jobsPerClick; i++) {
+      try {
+        const res = await fetch("/api/home-video", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setBulkProgress((bp) => bp ? { ...bp, done: i, error: data.error } : bp);
+          setError(`Job ${i + 1}/${jobsPerClick} failed: ${data.error || "Unknown error"}`);
+          break;
+        }
+        setBulkProgress((bp) => bp ? { ...bp, done: i + 1 } : bp);
+        setQueuedCount(i + 1);
+        if (i === jobsPerClick - 1) setJobId(data.jobId);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Network error";
+        setBulkProgress((bp) => bp ? { ...bp, done: i, error: msg } : bp);
+        setError(`Job ${i + 1}/${jobsPerClick} network error`);
+        break;
+      }
+    }
+
+    setLoading(false);
   };
 
   const handleConfirmQueue = async () => {
@@ -306,6 +385,7 @@ export default function HomeVideoPage() {
     const base = {
       customImage: customImageFilename || "",
       customUsp: customUsp.trim() || undefined,
+      avatar,
       genre,
       preview: false,
       appearanceSettings: appearance,
@@ -553,7 +633,7 @@ export default function HomeVideoPage() {
               Avatar
             </label>
             <select
-              value={selectedProduct?.avatarId || avatar}
+              value={avatar}
               onChange={(e) => setAvatar(e.target.value)}
               className="w-full rounded-md border border-gray-200 py-1.5 px-2 text-sm text-gray-700 focus:border-emerald-400 focus:outline-none"
             >
@@ -564,15 +644,12 @@ export default function HomeVideoPage() {
               ))}
             </select>
             {(() => {
-              const effectiveAvatar = selectedProduct?.avatarId || avatar;
-              const hasPhoto = !!avatarImages[effectiveAvatar];
+              const hasPhoto = !!avatarImages[avatar];
               return (
                 <p className="mt-1 text-[10px] text-gray-400">
-                  {selectedProduct?.avatarId
-                    ? `Using product avatar: ${selectedProduct.avatarId}${hasPhoto ? " · custom photo" : ""}`
-                    : hasPhoto
-                      ? "Custom photo will be used as model reference"
-                      : "Prompt-generated model (no custom photo)"}
+                  {hasPhoto
+                    ? "Custom photo will be used as model reference"
+                    : "Prompt-generated model (no custom photo)"}
                 </p>
               );
             })()}
@@ -598,6 +675,36 @@ export default function HomeVideoPage() {
                 </button>
               ))}
             </div>
+          </section>
+
+          {/* Product Location */}
+          <section>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Product Location{" "}
+              <span className="normal-case font-normal text-gray-400">(optional)</span>
+            </label>
+            <select
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              className="w-full rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+            >
+              <option value="">Not specified</option>
+              <optgroup label="Indoor">
+                <option value="Living Room">Living Room</option>
+                <option value="Bedroom">Bedroom</option>
+                <option value="Kitchen">Kitchen</option>
+                <option value="Dining Room">Dining Room</option>
+                <option value="Bathroom">Bathroom</option>
+                <option value="Study / Home Office">Study / Home Office</option>
+                <option value="Kids Room">Kids Room</option>
+              </optgroup>
+              <optgroup label="Outdoor">
+                <option value="Garden">Garden</option>
+                <option value="Balcony">Balcony</option>
+                <option value="Patio">Patio</option>
+                <option value="Entrance / Foyer">Entrance / Foyer</option>
+              </optgroup>
+            </select>
           </section>
 
           {/* Scene Count */}
@@ -662,41 +769,89 @@ export default function HomeVideoPage() {
                   </button>
                 </label>
 
-                {/* Hook BG Color */}
-                <label className="flex items-center justify-between gap-2">
-                  <span className="text-xs text-gray-600">Hook BG</span>
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="color"
-                      value={`#${appearance.hookBgColor}`}
-                      onChange={(e) =>
-                        updateAppearance({ hookBgColor: e.target.value.replace("#", "") })
-                      }
-                      className="h-6 w-8 cursor-pointer rounded border border-gray-200 p-0.5"
-                    />
-                    <span className="font-mono text-[10px] text-gray-400">
-                      #{appearance.hookBgColor}
-                    </span>
+                {/* Hook Style */}
+                <div>
+                  <span className="mb-1.5 block text-xs text-gray-600">Hook Style</span>
+                  <div className="flex flex-col gap-1">
+                    {(["background", "stroke"] as const).map((style) => (
+                      <label key={style} className="flex cursor-pointer items-center gap-2">
+                        <input
+                          type="radio"
+                          name="hookStyle"
+                          value={style}
+                          checked={appearance.hookStyle === style}
+                          onChange={() => updateAppearance({ hookStyle: style })}
+                          className="accent-emerald-600"
+                        />
+                        <span className="text-xs text-gray-700">
+                          {style === "background" ? "Background Color" : "Stroke Text"}
+                        </span>
+                      </label>
+                    ))}
                   </div>
-                </label>
+                </div>
 
-                {/* Hook Text Color */}
-                <label className="flex items-center justify-between gap-2">
-                  <span className="text-xs text-gray-600">Hook Text</span>
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="color"
-                      value={`#${appearance.hookTextColor}`}
-                      onChange={(e) =>
-                        updateAppearance({ hookTextColor: e.target.value.replace("#", "") })
-                      }
-                      className="h-6 w-8 cursor-pointer rounded border border-gray-200 p-0.5"
-                    />
-                    <span className="font-mono text-[10px] text-gray-400">
-                      #{appearance.hookTextColor}
-                    </span>
+                {/* Hook BG Color — only when background style */}
+                {appearance.hookStyle === "background" && (
+                  <label className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-gray-600">Hook BG</span>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="color"
+                        value={`#${appearance.hookBgColor}`}
+                        onChange={(e) =>
+                          updateAppearance({ hookBgColor: e.target.value.replace("#", "") })
+                        }
+                        className="h-6 w-8 cursor-pointer rounded border border-gray-200 p-0.5"
+                      />
+                      <span className="font-mono text-[10px] text-gray-400">
+                        #{appearance.hookBgColor}
+                      </span>
+                    </div>
+                  </label>
+                )}
+
+                {/* Hook Text Color — only when background style */}
+                {appearance.hookStyle === "background" && (
+                  <label className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-gray-600">Hook Text</span>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="color"
+                        value={`#${appearance.hookTextColor}`}
+                        onChange={(e) =>
+                          updateAppearance({ hookTextColor: e.target.value.replace("#", "") })
+                        }
+                        className="h-6 w-8 cursor-pointer rounded border border-gray-200 p-0.5"
+                      />
+                      <span className="font-mono text-[10px] text-gray-400">
+                        #{appearance.hookTextColor}
+                      </span>
+                    </div>
+                  </label>
+                )}
+
+                {/* Hook Position — only when stroke style */}
+                {appearance.hookStyle === "stroke" && (
+                  <div>
+                    <span className="mb-1.5 block text-xs text-gray-600">Position</span>
+                    <div className="flex flex-col gap-1">
+                      {(["top", "center", "bottom"] as const).map((pos) => (
+                        <label key={pos} className="flex cursor-pointer items-center gap-2">
+                          <input
+                            type="radio"
+                            name="hookPosition"
+                            value={pos}
+                            checked={appearance.hookPosition === pos}
+                            onChange={() => updateAppearance({ hookPosition: pos })}
+                            className="accent-emerald-600"
+                          />
+                          <span className="text-xs capitalize text-gray-700">{pos}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
-                </label>
+                )}
 
                 {/* Hook Font Size */}
                 <label className="flex items-center justify-between gap-2">
@@ -739,9 +894,10 @@ export default function HomeVideoPage() {
                   <div
                     className="mt-1 rounded px-2 py-1.5 text-center text-xs font-bold"
                     style={{
-                      backgroundColor: `#${appearance.hookBgColor}`,
-                      color: `#${appearance.hookTextColor}`,
+                      backgroundColor: appearance.hookStyle === "background" ? `#${appearance.hookBgColor}` : "transparent",
+                      color: appearance.hookStyle === "background" ? `#${appearance.hookTextColor}` : "#111",
                       fontSize: `${Math.round(appearance.hookFontSize * 0.25)}px`,
+                      WebkitTextStroke: appearance.hookStyle === "stroke" ? "0.5px #111" : undefined,
                     }}
                   >
                     {editedHookTitle || "HOOK TITLE PREVIEW"}
@@ -753,6 +909,50 @@ export default function HomeVideoPage() {
 
           {/* Generate */}
           <div className="mt-auto">
+            {/* Multi-job controls */}
+            <div className="mb-2 flex flex-col gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2.5">
+              {/* Auto Queue toggle */}
+              <label className="flex cursor-pointer items-center justify-between">
+                <span className="text-xs text-gray-600">
+                  Auto Queue
+                  <span className="ml-1 text-[10px] text-gray-400">— skip preview</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setAutoQueue((v) => !v)}
+                  className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                    autoQueue ? "bg-emerald-500" : "bg-gray-300"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                      autoQueue ? "translate-x-4" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </label>
+
+              {/* Jobs per Click */}
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-600">Jobs per Click</span>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={jobsPerClick}
+                    onChange={(e) =>
+                      setJobsPerClick(Math.max(1, Math.min(10, Number(e.target.value) || 1)))
+                    }
+                    className="w-14 rounded border border-gray-200 px-1.5 py-0.5 text-center text-xs focus:border-emerald-400 focus:outline-none"
+                  />
+                  {jobsPerClick > 1 && (
+                    <span className="text-[10px] text-gray-400">always auto</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <button
               onClick={handleGenerate}
               disabled={!isReadyToGenerate || loading}
@@ -761,12 +961,20 @@ export default function HomeVideoPage() {
               {loading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Analyzing furniture…
+                  {bulkProgress
+                    ? `Generating ${bulkProgress.done}/${bulkProgress.total}…`
+                    : autoQueue
+                      ? "Generating & queueing…"
+                      : "Analyzing furniture…"}
                 </>
               ) : (
                 <>
                   <Sparkles className="h-4 w-4" />
-                  Generate Scenes
+                  {jobsPerClick > 1
+                    ? `Generate ×${jobsPerClick} Jobs`
+                    : autoQueue
+                      ? "Generate & Queue"
+                      : "Generate Scenes"}
                 </>
               )}
             </button>
@@ -790,9 +998,13 @@ export default function HomeVideoPage() {
                 <CheckCircle2 className="h-5 w-5 text-green-600" />
                 <div>
                   <p className="text-sm font-semibold text-green-800">
-                    Job queued successfully!
+                    {queuedCount > 1
+                      ? `${queuedCount} jobs queued successfully!`
+                      : "Job queued successfully!"}
                   </p>
-                  <p className="text-xs text-green-600">Job ID: {jobId}</p>
+                  <p className="text-xs text-green-600">
+                    {queuedCount > 1 ? `Last job ID: ${jobId}` : `Job ID: ${jobId}`}
+                  </p>
                 </div>
               </div>
               <Link
@@ -822,10 +1034,29 @@ export default function HomeVideoPage() {
           {loading && (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 text-gray-400">
               <Loader2 className="h-10 w-10 animate-spin text-emerald-500" />
-              <p className="text-sm font-medium text-gray-600">
-                Analyzing furniture &amp; generating scenes…
-              </p>
-              <p className="text-xs">This takes 10–20 seconds</p>
+              {bulkProgress ? (
+                <>
+                  <p className="text-sm font-medium text-gray-600">
+                    Generating {bulkProgress.done}/{bulkProgress.total} jobs…
+                  </p>
+                  <div className="h-1.5 w-48 overflow-hidden rounded-full bg-gray-200">
+                    <div
+                      className="h-full rounded-full bg-emerald-500 transition-all"
+                      style={{ width: `${(bulkProgress.done / bulkProgress.total) * 100}%` }}
+                    />
+                  </div>
+                  <p className="text-xs">Each job generates fresh AI content</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium text-gray-600">
+                    {autoQueue
+                      ? "Generating & queueing…"
+                      : "Analyzing furniture & generating scenes…"}
+                  </p>
+                  <p className="text-xs">This takes 10–20 seconds</p>
+                </>
+              )}
             </div>
           )}
 
@@ -1071,12 +1302,15 @@ export default function HomeVideoPage() {
                         key={p.id}
                         onClick={() => {
                           setSelectedProduct(p);
+                          if (p.avatarId) setAvatar(p.avatarId);
                           setShowPicker(false);
                           setPickerSearch("");
                           // Reset previous generation when product changes
                           setPreviewData(null);
                           setJobId(null);
                           setError(null);
+                          setBulkProgress(null);
+                          setQueuedCount(0);
                         }}
                         className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors hover:border-emerald-400 hover:bg-emerald-50 ${
                           selectedProduct?.id === p.id
