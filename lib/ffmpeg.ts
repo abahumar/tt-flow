@@ -46,6 +46,9 @@ export interface CombineOptions {
   hookFontSize?: number; // font size for hook title text, default 36
   hookStyle?: "background" | "stroke"; // default: "background"
   hookPosition?: "top" | "center" | "bottom"; // default: "top"
+  hookStrokeTextColor?: string;   // hex without #, default "FFFFFF"
+  hookStrokeBorderColor?: string; // hex without #, default "000000"
+  hookStrokeBorderW?: number;     // default 8
 }
 
 // Strip emojis — FFmpeg drawtext cannot render emoji glyphs
@@ -134,7 +137,7 @@ function buildMultilineDrawtext(opts: {
 }
 
 /**
- * Build stacked drawtext filters for stroke style (white text, black border, no box).
+ * Build stacked drawtext filters for stroke style (customizable text/border colors and width, no box).
  * Each line is positioned relative to a Y anchor derived from hookPosition.
  */
 function buildStrokeDrawtext(opts: {
@@ -145,13 +148,18 @@ function buildStrokeDrawtext(opts: {
   hookPosition: "top" | "center" | "bottom";
   lineSpacing: number;
   enableExpr?: string;
+  strokeTextColor?: string;   // hex without #, default "FFFFFF"
+  strokeBorderColor?: string; // hex without #, default "000000"
+  strokeBorderW?: number;     // default 8
 }): string {
   const { text, maxChars, fontOpt, fontSize, hookPosition, lineSpacing, enableExpr } = opts;
+  const strokeTextColor = opts.strokeTextColor ?? "FFFFFF";
+  const strokeBorderColor = opts.strokeBorderColor ?? "000000";
+  const strokeBorderW = opts.strokeBorderW ?? 8;
 
   const lines = splitLines(text, maxChars);
-  const borderW = 8;
   // borderw adds visual padding above and below each glyph; include it in line height
-  const lineHeight = fontSize + borderW * 2 + lineSpacing;
+  const lineHeight = fontSize + strokeBorderW * 2 + lineSpacing;
   const totalHeight = lines.length * lineHeight;
   const enablePart = enableExpr ? `:enable='${enableExpr}'` : "";
 
@@ -174,7 +182,7 @@ function buildStrokeDrawtext(opts: {
       const escaped = escapeDrawtext(line);
       const offsetY = Math.round(-totalHeight / 2 + i * lineHeight);
       const sign = offsetY >= 0 ? "+" : "";
-      return `drawtext=${fontOpt}text='${escaped}':fontcolor=white:fontsize=${fontSize}:borderw=${borderW}:bordercolor=black:box=0:x=(w-text_w)/2:y=${yAnchor}${sign}${offsetY}${enablePart}`;
+      return `drawtext=${fontOpt}text='${escaped}':fontcolor=#${strokeTextColor}:fontsize=${fontSize}:borderw=${strokeBorderW}:bordercolor=#${strokeBorderColor}:box=0:x=(w-text_w)/2:y=${yAnchor}${sign}${offsetY}${enablePart}`;
     })
     .join(",");
 }
@@ -220,6 +228,9 @@ export function addHookOverlay(options: {
   hookFontSize?: number; // font size for hook title, default 48
   hookStyle?: "background" | "stroke"; // default: "background"
   hookPosition?: "top" | "center" | "bottom"; // default: "top"
+  hookStrokeTextColor?: string;   // hex without #, default "FFFFFF"
+  hookStrokeBorderColor?: string; // hex without #, default "000000"
+  hookStrokeBorderW?: number;     // default 8
 }): void {
   const {
     inputPath,
@@ -232,6 +243,9 @@ export function addHookOverlay(options: {
     hookFontSize = 48,
     hookStyle = "background",
     hookPosition = "top",
+    hookStrokeTextColor,
+    hookStrokeBorderColor,
+    hookStrokeBorderW,
   } = options;
 
   const fontPath = getFontPath();
@@ -240,7 +254,7 @@ export function addHookOverlay(options: {
   let filter: string;
 
   if (hookStyle === "stroke") {
-    // Stroke style: white text with thick black border, no background box
+    // Stroke style: customizable text/border colors, no background box
     filter = buildStrokeDrawtext({
       text: title,
       maxChars: 25,
@@ -249,6 +263,9 @@ export function addHookOverlay(options: {
       hookPosition,
       lineSpacing: -4,
       enableExpr: `lt(t,${displayDuration})`,
+      strokeTextColor: hookStrokeTextColor,
+      strokeBorderColor: hookStrokeBorderColor,
+      strokeBorderW: hookStrokeBorderW,
     });
 
     // Subtitle below title in stroke style (no background box)
@@ -256,7 +273,9 @@ export function addHookOverlay(options: {
       const subtitleSize = Math.round(hookFontSize * 0.5625);
       const escapedSub = escapeDrawtext(stripEmojis(subtitle));
       const subtitleY = getStrokeSubtitleY(hookPosition);
-      filter += `,drawtext=${fontOpt}text='${escapedSub}':fontcolor=white:fontsize=${subtitleSize}:borderw=6:bordercolor=black:box=0:x=(w-text_w)/2:y=${subtitleY}:enable='lt(t,${displayDuration})'`;
+      const sTextColor = hookStrokeTextColor ?? "FFFFFF";
+      const sBorderColor = hookStrokeBorderColor ?? "000000";
+      filter += `,drawtext=${fontOpt}text='${escapedSub}':fontcolor=#${sTextColor}:fontsize=${subtitleSize}:borderw=6:bordercolor=#${sBorderColor}:box=0:x=(w-text_w)/2:y=${subtitleY}:enable='lt(t,${displayDuration})'`;
     }
   } else {
     // Background style (default): colored background strip
@@ -301,6 +320,9 @@ export function addHookAndOverlay(options: {
   hookFontSize?: number;
   hookStyle?: "background" | "stroke"; // default: "background"
   hookPosition?: "top" | "center" | "bottom"; // default: "top"
+  hookStrokeTextColor?: string;   // hex without #, default "FFFFFF"
+  hookStrokeBorderColor?: string; // hex without #, default "000000"
+  hookStrokeBorderW?: number;     // default 8
 }): void {
   const {
     inputPath,
@@ -314,6 +336,9 @@ export function addHookAndOverlay(options: {
     hookFontSize = 48,
     hookStyle = "background",
     hookPosition = "top",
+    hookStrokeTextColor,
+    hookStrokeBorderColor,
+    hookStrokeBorderW,
   } = options;
 
   const fontPath = getFontPath();
@@ -322,7 +347,7 @@ export function addHookAndOverlay(options: {
   let filter: string;
 
   if (hookStyle === "stroke") {
-    // Stroke style: white text with thick black border, no background box
+    // Stroke style: customizable text/border colors, no background box
     filter = buildStrokeDrawtext({
       text: hookTitle,
       maxChars: 25,
@@ -331,13 +356,18 @@ export function addHookAndOverlay(options: {
       hookPosition,
       lineSpacing: -4,
       enableExpr: `lt(t,${hookDuration})`,
+      strokeTextColor: hookStrokeTextColor,
+      strokeBorderColor: hookStrokeBorderColor,
+      strokeBorderW: hookStrokeBorderW,
     });
 
     if (hookSubtitle) {
       const subtitleSize = Math.round(hookFontSize * 0.5625);
       const escapedSub = escapeDrawtext(stripEmojis(hookSubtitle));
       const subtitleY = getStrokeSubtitleY(hookPosition);
-      filter += `,drawtext=${fontOpt}text='${escapedSub}':fontcolor=white:fontsize=${subtitleSize}:borderw=6:bordercolor=black:box=0:x=(w-text_w)/2:y=${subtitleY}:enable='lt(t,${hookDuration})'`;
+      const sTextColor = hookStrokeTextColor ?? "FFFFFF";
+      const sBorderColor = hookStrokeBorderColor ?? "000000";
+      filter += `,drawtext=${fontOpt}text='${escapedSub}':fontcolor=#${sTextColor}:fontsize=${subtitleSize}:borderw=6:bordercolor=#${sBorderColor}:box=0:x=(w-text_w)/2:y=${subtitleY}:enable='lt(t,${hookDuration})'`;
     }
   } else {
     // Background style (default): colored background strip
@@ -496,6 +526,9 @@ export function combineSceneVideos(options: CombineOptions): string {
     hookFontSize = 36,
     hookStyle = "background",
     hookPosition = "top",
+    hookStrokeTextColor,
+    hookStrokeBorderColor,
+    hookStrokeBorderW,
   } = options;
 
   const tempFiles: string[] = [];
@@ -548,6 +581,9 @@ export function combineSceneVideos(options: CombineOptions): string {
           hookFontSize,
           hookStyle,
           hookPosition,
+          hookStrokeTextColor,
+          hookStrokeBorderColor,
+          hookStrokeBorderW,
         });
         tempFiles.push(comboPath);
         currentPath = comboPath;
@@ -565,6 +601,9 @@ export function combineSceneVideos(options: CombineOptions): string {
           hookFontSize,
           hookStyle,
           hookPosition,
+          hookStrokeTextColor,
+          hookStrokeBorderColor,
+          hookStrokeBorderW,
         });
         tempFiles.push(hookPath);
         currentPath = hookPath;

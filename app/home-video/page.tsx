@@ -65,6 +65,9 @@ interface AppearanceSettings {
   overlayFontSize: number;
   hookStyle: "background" | "stroke";        // default: "background"
   hookPosition: "top" | "center" | "bottom"; // default: "top"
+  hookStrokeTextColor: string;   // default: "FFFFFF"
+  hookStrokeBorderColor: string; // default: "000000"
+  hookStrokeBorderW: number;     // default: 8
 }
 
 const DEFAULT_APPEARANCE: AppearanceSettings = {
@@ -75,6 +78,9 @@ const DEFAULT_APPEARANCE: AppearanceSettings = {
   overlayFontSize: 28,
   hookStyle: "background",
   hookPosition: "top",
+  hookStrokeTextColor: "FFFFFF",
+  hookStrokeBorderColor: "000000",
+  hookStrokeBorderW: 8,
 };
 
 const AVATARS: { id: string; label: string }[] = [
@@ -851,6 +857,66 @@ export default function HomeVideoPage() {
                       ))}
                     </div>
                   </div>
+                )}
+
+                {/* Stroke Text Color — only when stroke style */}
+                {appearance.hookStyle === "stroke" && (
+                  <label className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-gray-600">Stroke Text</span>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="color"
+                        value={`#${appearance.hookStrokeTextColor}`}
+                        onChange={(e) =>
+                          updateAppearance({ hookStrokeTextColor: e.target.value.replace("#", "") })
+                        }
+                        className="h-6 w-8 cursor-pointer rounded border border-gray-200 p-0.5"
+                      />
+                      <span className="font-mono text-[10px] text-gray-400">
+                        #{appearance.hookStrokeTextColor}
+                      </span>
+                    </div>
+                  </label>
+                )}
+
+                {/* Stroke Border Color — only when stroke style */}
+                {appearance.hookStyle === "stroke" && (
+                  <label className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-gray-600">Stroke Border</span>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="color"
+                        value={`#${appearance.hookStrokeBorderColor}`}
+                        onChange={(e) =>
+                          updateAppearance({ hookStrokeBorderColor: e.target.value.replace("#", "") })
+                        }
+                        className="h-6 w-8 cursor-pointer rounded border border-gray-200 p-0.5"
+                      />
+                      <span className="font-mono text-[10px] text-gray-400">
+                        #{appearance.hookStrokeBorderColor}
+                      </span>
+                    </div>
+                  </label>
+                )}
+
+                {/* Stroke Width — only when stroke style */}
+                {appearance.hookStyle === "stroke" && (
+                  <label className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-gray-600">Stroke Width</span>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        min={1}
+                        max={20}
+                        value={appearance.hookStrokeBorderW}
+                        onChange={(e) =>
+                          updateAppearance({ hookStrokeBorderW: Number(e.target.value) })
+                        }
+                        className="w-14 rounded border border-gray-200 px-1.5 py-0.5 text-center text-xs"
+                      />
+                      <span className="text-[10px] text-gray-400">px</span>
+                    </div>
+                  </label>
                 )}
 
                 {/* Hook Font Size */}

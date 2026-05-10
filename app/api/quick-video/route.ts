@@ -20,6 +20,9 @@ const DEFAULT_PRESET = {
   autoQueue: false,
   hookStyle: "background" as "background" | "stroke",
   hookPosition: "top" as "top" | "center" | "bottom",
+  hookStrokeTextColor: "FFFFFF",
+  hookStrokeBorderColor: "000000",
+  hookStrokeBorderW: 8,
 };
 
 const FORMAT_SCENES: Record<string, number> = {
@@ -161,6 +164,9 @@ async function createVideoJob(
     overlayFontSize: preset.overlayFontSize,
     hookStyle: preset.hookStyle ?? "background",
     hookPosition: preset.hookPosition ?? "top",
+    hookStrokeTextColor: preset.hookStrokeTextColor ?? "FFFFFF",
+    hookStrokeBorderColor: preset.hookStrokeBorderColor ?? "000000",
+    hookStrokeBorderW: preset.hookStrokeBorderW ?? 8,
   });
 
   const scene1 = variations[0];

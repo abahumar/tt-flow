@@ -396,6 +396,9 @@ interface AppearanceSettings {
   overlayFontSize: number;
   hookStyle?: "background" | "stroke";
   hookPosition?: "top" | "center" | "bottom";
+  hookStrokeTextColor?: string;
+  hookStrokeBorderColor?: string;
+  hookStrokeBorderW?: number;
 }
 
 const DEFAULT_APPEARANCE: AppearanceSettings = {
@@ -406,6 +409,9 @@ const DEFAULT_APPEARANCE: AppearanceSettings = {
   overlayFontSize: 28,
   hookStyle: "background",
   hookPosition: "top",
+  hookStrokeTextColor: "FFFFFF",
+  hookStrokeBorderColor: "000000",
+  hookStrokeBorderW: 8,
 };
 
 // Append dialog to videoPrompt so Google Flow renders the correct spoken text
@@ -449,6 +455,9 @@ async function createVideoJob(
     overlayFontSize: appearance.overlayFontSize,
     hookStyle: appearance.hookStyle ?? "background",
     hookPosition: appearance.hookPosition ?? "top",
+    hookStrokeTextColor: appearance.hookStrokeTextColor ?? "FFFFFF",
+    hookStrokeBorderColor: appearance.hookStrokeBorderColor ?? "000000",
+    hookStrokeBorderW: appearance.hookStrokeBorderW ?? 8,
   });
 
   return fetch(`${baseUrl}/api/jobs`, {

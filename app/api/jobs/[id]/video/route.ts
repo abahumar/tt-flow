@@ -130,6 +130,9 @@ export async function POST(
                 hookFontSize: config.hookFontSize || 48,
                 hookStyle: ["background", "stroke"].includes(config.hookStyle) ? config.hookStyle : undefined,
                 hookPosition: ["top", "center", "bottom"].includes(config.hookPosition) ? config.hookPosition : undefined,
+                hookStrokeTextColor: typeof config.hookStrokeTextColor === "string" ? config.hookStrokeTextColor : undefined,
+                hookStrokeBorderColor: typeof config.hookStrokeBorderColor === "string" ? config.hookStrokeBorderColor : undefined,
+                hookStrokeBorderW: typeof config.hookStrokeBorderW === "number" ? config.hookStrokeBorderW : undefined,
               });
             } else if (hasHook) {
               addHookOverlay({
@@ -143,6 +146,9 @@ export async function POST(
                 hookFontSize: config.hookFontSize || 48,
                 hookStyle: ["background", "stroke"].includes(config.hookStyle) ? config.hookStyle : undefined,
                 hookPosition: ["top", "center", "bottom"].includes(config.hookPosition) ? config.hookPosition : undefined,
+                hookStrokeTextColor: typeof config.hookStrokeTextColor === "string" ? config.hookStrokeTextColor : undefined,
+                hookStrokeBorderColor: typeof config.hookStrokeBorderColor === "string" ? config.hookStrokeBorderColor : undefined,
+                hookStrokeBorderW: typeof config.hookStrokeBorderW === "number" ? config.hookStrokeBorderW : undefined,
               });
             } else if (hasOverlay) {
               addTextOverlay(processedPath, overlayedPath, {
@@ -243,6 +249,9 @@ export async function POST(
               hookFontSize: config.hookFontSize || 36,
               hookStyle: ["background", "stroke"].includes(config.hookStyle) ? config.hookStyle : undefined,
               hookPosition: ["top", "center", "bottom"].includes(config.hookPosition) ? config.hookPosition : undefined,
+              hookStrokeTextColor: typeof config.hookStrokeTextColor === "string" ? config.hookStrokeTextColor : undefined,
+              hookStrokeBorderColor: typeof config.hookStrokeBorderColor === "string" ? config.hookStrokeBorderColor : undefined,
+              hookStrokeBorderW: typeof config.hookStrokeBorderW === "number" ? config.hookStrokeBorderW : undefined,
             });
 
             const combinedVideoUrl = `http://localhost:3000/api/jobs/${id}/video?type=combined`;

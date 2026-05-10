@@ -116,6 +116,9 @@ interface PresetConfig {
   jobsPerClick: number;
   hookStyle: "background" | "stroke";
   hookPosition: "top" | "center" | "bottom";
+  hookStrokeTextColor: string;   // default: "FFFFFF"
+  hookStrokeBorderColor: string; // default: "000000"
+  hookStrokeBorderW: number;     // default: 8
 }
 
 const DEFAULT_PRESET: PresetConfig = {
@@ -135,6 +138,9 @@ const DEFAULT_PRESET: PresetConfig = {
   jobsPerClick: 1,
   hookStyle: "background",
   hookPosition: "top",
+  hookStrokeTextColor: "FFFFFF",
+  hookStrokeBorderColor: "000000",
+  hookStrokeBorderW: 8,
 };
 
 const AVATARS: Record<string, string> = {
@@ -1100,6 +1106,74 @@ export default function QuickVideoPage() {
                     </label>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Stroke Text Color — only when stroke style */}
+            {preset.hookStyle === "stroke" && (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">
+                  Stroke Text Color
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={`#${preset.hookStrokeTextColor}`}
+                    onChange={(e) =>
+                      setPreset((p) => ({
+                        ...p,
+                        hookStrokeTextColor: e.target.value.replace("#", ""),
+                      }))
+                    }
+                    className="h-9 w-10 cursor-pointer rounded border border-gray-300"
+                  />
+                  <span className="text-xs text-gray-500">#{preset.hookStrokeTextColor}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Stroke Border Color — only when stroke style */}
+            {preset.hookStyle === "stroke" && (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">
+                  Stroke Border Color
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={`#${preset.hookStrokeBorderColor}`}
+                    onChange={(e) =>
+                      setPreset((p) => ({
+                        ...p,
+                        hookStrokeBorderColor: e.target.value.replace("#", ""),
+                      }))
+                    }
+                    className="h-9 w-10 cursor-pointer rounded border border-gray-300"
+                  />
+                  <span className="text-xs text-gray-500">#{preset.hookStrokeBorderColor}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Stroke Width — only when stroke style */}
+            {preset.hookStyle === "stroke" && (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">
+                  Stroke Width
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={preset.hookStrokeBorderW}
+                  onChange={(e) =>
+                    setPreset((p) => ({
+                      ...p,
+                      hookStrokeBorderW: Number(e.target.value),
+                    }))
+                  }
+                  className="w-28 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                />
               </div>
             )}
 
