@@ -167,7 +167,7 @@ function buildStrokeDrawtext(opts: {
   let yAnchor: string;
   switch (hookPosition) {
     case "top":
-      yAnchor = "h*0.08";
+      yAnchor = "h*0.28";
       break;
     case "center":
       yAnchor = "h/2";
@@ -191,7 +191,7 @@ function buildStrokeDrawtext(opts: {
 function getStrokeSubtitleY(hookPosition: "top" | "center" | "bottom"): string {
   switch (hookPosition) {
     case "top":
-      return "h*0.20";
+      return "h*0.40";
     case "center":
       return "h*0.55";
     case "bottom":
