@@ -162,7 +162,7 @@ function buildStrokeDrawtext(opts: {
       yAnchor = "h*0.08";
       break;
     case "center":
-      yAnchor = "(h-text_h)/2";
+      yAnchor = "h/2";
       break;
     case "bottom":
       yAnchor = "h*0.72";

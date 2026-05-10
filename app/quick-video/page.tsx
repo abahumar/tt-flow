@@ -1131,7 +1131,7 @@ export default function QuickVideoPage() {
                   backgroundColor: preset.hookStyle === "background" ? `#${preset.hookBgColor}` : "transparent",
                   color: preset.hookStyle === "background" ? `#${preset.hookTextColor}` : "#111",
                   fontSize: `${Math.round(preset.hookFontSize * 0.25)}px`,
-                  WebkitTextStroke: preset.hookStyle === "stroke" ? "0.5px #111" : undefined,
+                  WebkitTextStroke: preset.hookStyle === "stroke" ? "2px #111" : undefined,
                 }}
               >
                 HOOK TITLE PREVIEW

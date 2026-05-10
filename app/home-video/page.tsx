@@ -897,7 +897,7 @@ export default function HomeVideoPage() {
                       backgroundColor: appearance.hookStyle === "background" ? `#${appearance.hookBgColor}` : "transparent",
                       color: appearance.hookStyle === "background" ? `#${appearance.hookTextColor}` : "#111",
                       fontSize: `${Math.round(appearance.hookFontSize * 0.25)}px`,
-                      WebkitTextStroke: appearance.hookStyle === "stroke" ? "0.5px #111" : undefined,
+                      WebkitTextStroke: appearance.hookStyle === "stroke" ? "2px #111" : undefined,
                     }}
                   >
                     {editedHookTitle || "HOOK TITLE PREVIEW"}
