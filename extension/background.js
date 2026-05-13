@@ -1193,27 +1193,15 @@ function handleMessage(message, sender, sendResponse) {
       (async () => {
         try {
           const { jobId, imageBase64, mimeType, sceneIndex } = payload;
-          const binaryStr = atob(imageBase64);
-          const bytes = new Uint8Array(binaryStr.length);
-          for (let i = 0; i < binaryStr.length; i++) {
-            bytes[i] = binaryStr.charCodeAt(i);
-          }
-          const blob = new Blob([bytes], { type: mimeType || "image/png" });
-          const ext = (mimeType || "image/png").split("/")[1] || "png";
-          const formData = new FormData();
-          formData.append(
-            "image",
-            new File([blob], `image.${ext}`, {
-              type: mimeType || "image/png",
-            }),
-          );
-          if (typeof sceneIndex === "number") {
-            formData.append("sceneIndex", String(sceneIndex));
-          }
+
+          // Send as JSON/base64 to avoid multipart interception by Next.js action handler
+          const body = { imageBase64, mimeType: mimeType || "image/png" };
+          if (typeof sceneIndex === "number") body.sceneIndex = sceneIndex;
 
           const resp = await fetch(`${API_BASE}/jobs/${jobId}/image`, {
             method: "POST",
-            body: formData,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
           });
 
           if (!resp.ok) {

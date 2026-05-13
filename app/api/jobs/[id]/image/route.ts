@@ -4,7 +4,7 @@ import { writeFile, mkdir, readFile } from "fs/promises";
 import { existsSync } from "fs";
 import { join } from "path";
 
-const IMAGE_DIR = join(process.cwd(), "data", "images", "generated");
+const IMAGE_DIR = "/data/images/generated";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,33 +30,34 @@ export async function POST(
   try {
     await ensureImageDir();
 
-    const formData = await req.formData();
-    const imageFile = formData.get("image") as File | null;
+    const body = await req.json() as {
+      imageBase64: string;
+      mimeType?: string;
+      sceneIndex?: number;
+    };
 
-    if (!imageFile) {
+    if (!body.imageBase64) {
       return NextResponse.json(
-        { error: "No image file provided" },
+        { error: "No image data provided" },
         { status: 400 },
       );
     }
 
-    // Check for optional sceneIndex (multi-scene jobs)
-    const sceneIndexStr = formData.get("sceneIndex") as string | null;
-    const sceneIndex =
-      sceneIndexStr !== null ? parseInt(sceneIndexStr, 10) : -1;
+    const mimeType = body.mimeType || "image/png";
+    const sceneIndex = typeof body.sceneIndex === "number" ? body.sceneIndex : -1;
     const isMultiScene = sceneIndex >= 0;
 
     const ext =
-      imageFile.type === "image/jpeg"
+      mimeType === "image/jpeg"
         ? "jpg"
-        : imageFile.type === "image/webp"
+        : mimeType === "image/webp"
           ? "webp"
           : "png";
     const filename = isMultiScene
       ? `${id}-s${sceneIndex}.${ext}`
       : `${id}.${ext}`;
     const filepath = join(IMAGE_DIR, filename);
-    const buffer = Buffer.from(await imageFile.arrayBuffer());
+    const buffer = Buffer.from(body.imageBase64, "base64");
     await writeFile(filepath, buffer);
 
     console.log(
