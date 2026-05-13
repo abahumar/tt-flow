@@ -4,7 +4,7 @@ import { writeFile, mkdir, readFile } from "fs/promises";
 import { existsSync } from "fs";
 import { join } from "path";
 
-const IMAGE_DIR = "/data/images/generated";
+const IMAGE_DIR = join(process.cwd(), "data", "images", "generated");
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,9 +64,12 @@ export async function POST(
     );
 
     // Update job's main imageUrl only for scene 0 or non-multi-scene
+    const host = req.headers.get("host") || "localhost:3000";
+    const proto = req.headers.get("x-forwarded-proto") || "http";
+    const baseUrl = `${proto}://${host}`;
     const imageServeUrl = isMultiScene
-      ? `http://localhost:3000/api/jobs/${id}/image?scene=${sceneIndex}`
-      : `http://localhost:3000/api/jobs/${id}/image`;
+      ? `${baseUrl}/api/jobs/${id}/image?scene=${sceneIndex}`
+      : `${baseUrl}/api/jobs/${id}/image`;
     if (!isMultiScene || sceneIndex === 0) {
       await prisma.videoJob.update({
         where: { id },

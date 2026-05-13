@@ -1,4 +1,14 @@
-const API_BASE = "http://localhost:3000/api";
+let API_BASE = "http://localhost:3000/api";
+
+chrome.storage.local.get(["apiBase"], (res) => {
+  if (res.apiBase) API_BASE = res.apiBase;
+});
+
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  if (namespace === "local" && changes.apiBase) {
+    API_BASE = changes.apiBase.newValue || "http://localhost:3000/api";
+  }
+});
 
 // Add region/locale params to bypass TikTok security checks
 function addScrapeParams(urlStr) {

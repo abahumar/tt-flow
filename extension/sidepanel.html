@@ -264,6 +264,7 @@
       <div class="tab" data-tab="video">Video</div>
       <div class="tab" data-tab="tiktok">TikTok</div>
       <div class="tab" data-tab="history">History</div>
+      <div class="tab" data-tab="settings">⚙️</div>
     </div>
 
     <div id="tab-image" class="content">
@@ -296,6 +297,40 @@
         <div class="empty-state">
           <p>Job history will appear here.</p>
         </div>
+      </div>
+    </div>
+
+    <div id="tab-settings" class="content" style="display: none">
+      <div class="status-card">
+        <h3 style="margin-bottom: 10px">Server Connection</h3>
+        <label style="display: block; font-size: 12px; color: #6b7280; margin-bottom: 4px">
+          API Base URL
+        </label>
+        <input
+          id="apiBaseInput"
+          type="text"
+          placeholder="http://localhost:3000/api"
+          style="
+            width: 100%;
+            padding: 6px 10px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            font-size: 12px;
+            margin-bottom: 8px;
+            box-sizing: border-box;
+          "
+        />
+        <button
+          id="saveApiBaseBtn"
+          class="btn btn-primary"
+          style="width: 100%; justify-content: center"
+        >
+          Save
+        </button>
+        <div id="apiBaseSaveMsg" style="font-size: 11px; color: #059669; min-height: 16px; margin-top: 6px"></div>
+        <p style="font-size: 11px; color: #9ca3af; margin-top: 8px">
+          Change this if the webapp runs on a different port or machine. The background script reloads the value immediately after saving.
+        </p>
       </div>
     </div>
 
@@ -349,10 +384,9 @@
           >
             <option value="Veo 3.1 - Lite">Veo 3.1 - Lite</option>
             <option value="Veo 3.1 - Fast">Veo 3.1 - Fast</option>
-            <option value="Veo 3.1 - Fast [Lower Priority]">
-              Veo 3.1 - Fast [Lower Priority]
-            </option>
             <option value="Veo 3.1 - Quality">Veo 3.1 - Quality</option>
+            <option value="Veo 3.1 - Lite [Lower Priority]">Veo 3.1 - Lite [Lower Priority]</option>
+            <option value="Veo 3.1 - Fast [Lower Priority]">Veo 3.1 - Fast [Lower Priority]</option>
           </select>
         </label>
         <label

@@ -1,5 +1,19 @@
-const API_BASE = "http://localhost:3000/api";
+let API_BASE = "http://localhost:3000/api";
 let currentTab = "image";
+
+// Load configured API base from storage on startup
+chrome.storage.local.get(["apiBase"], (res) => {
+  if (res.apiBase) API_BASE = res.apiBase;
+  // Populate settings input if already on settings tab
+  const input = document.getElementById("apiBaseInput");
+  if (input) input.value = res.apiBase || "";
+});
+
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  if (namespace === "local" && changes.apiBase) {
+    API_BASE = changes.apiBase.newValue || "http://localhost:3000/api";
+  }
+});
 let pollInterval = null;
 
 // Helper: push a setting change to the DB (fire-and-forget)
@@ -383,6 +397,27 @@ document.body.addEventListener("click", (e) => {
       handleStopPost();
       break;
   }
+});
+
+// Settings tab: load saved API base into input when tab is opened
+document.querySelector('[data-tab="settings"]').addEventListener("click", () => {
+  chrome.storage.local.get(["apiBase"], (res) => {
+    const input = document.getElementById("apiBaseInput");
+    if (input) input.value = res.apiBase || "";
+  });
+});
+
+// Settings tab: save API base URL
+document.getElementById("saveApiBaseBtn").addEventListener("click", () => {
+  const input = document.getElementById("apiBaseInput");
+  const msg = document.getElementById("apiBaseSaveMsg");
+  const raw = (input.value || "").trim();
+  const value = raw || "http://localhost:3000/api";
+  chrome.storage.local.set({ apiBase: value }, () => {
+    API_BASE = value;
+    msg.textContent = `Saved: ${value}`;
+    setTimeout(() => (msg.textContent = ""), 3000);
+  });
 });
 
 // Start
