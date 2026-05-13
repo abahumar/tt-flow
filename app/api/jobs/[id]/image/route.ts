@@ -4,7 +4,7 @@ import { writeFile, mkdir, readFile } from "fs/promises";
 import { existsSync } from "fs";
 import { join } from "path";
 
-const IMAGE_DIR = "/data/images/generated";
+const IMAGE_DIR = join(process.cwd(), "data", "images", "generated");
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,13 +21,14 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-
-  const job = await prisma.videoJob.findUnique({ where: { id } });
-  if (!job) {
-    return NextResponse.json({ error: "Job not found" }, { status: 404 });
-  }
-
   try {
+    console.log(`[Image] POST /api/jobs/${id}/image`);
+
+    const job = await prisma.videoJob.findUnique({ where: { id } });
+    if (!job) {
+      return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
+
     await ensureImageDir();
 
     const body = await req.json() as {
